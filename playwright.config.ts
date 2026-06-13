@@ -24,8 +24,11 @@ export default defineConfig({
         reuseExistingServer: true,
         timeout: 120_000,
         env: {
+          CRON_SECRET: process.env.CRON_SECRET ?? "test-cron-secret",
           NEXT_PUBLIC_STICKY_DEMO_MODE:
             process.env.NEXT_PUBLIC_STICKY_DEMO_MODE ?? "true",
+          SUPABASE_SECRET_KEY: "",
+          SUPABASE_SERVICE_ROLE_KEY: "",
         },
       }
     : undefined,

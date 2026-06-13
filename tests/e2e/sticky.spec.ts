@@ -1,5 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
+const TEST_CRON_SECRET = process.env.CRON_SECRET ?? "test-cron-secret";
+
 async function expectNoConsoleErrors(page: Page, run: () => Promise<void>) {
   const errors: string[] = [];
   page.on("console", (message) => {
@@ -540,6 +542,30 @@ test.describe("Sticky workspace", () => {
   test("recurrence cron route is not publicly invokable", async ({ request }) => {
     const response = await request.get("/api/recurrence/catch-up");
     expect([401, 503]).toContain(response.status());
+  });
+
+  test("recurrence cron route stays disabled without an admin secret", async ({ request }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "cron credential check only needs one browser project");
+
+    const baseURL = String(testInfo.project.use.baseURL ?? "");
+    test.skip(
+      !/^(http:\/\/)?(localhost|127\.0\.0\.1)(:\d+)?/.test(baseURL),
+      "disabled cron check only runs against the local test server",
+    );
+
+    const response = await request.get("/api/recurrence/catch-up?limit=1", {
+      headers: {
+        Authorization: `Bearer ${TEST_CRON_SECRET}`,
+      },
+    });
+
+    expect(response.status()).toBe(200);
+    expect(response.headers()["cache-control"]).toContain("no-store");
+    expect(await response.json()).toMatchObject({
+      ok: true,
+      disabled: true,
+      reason: "Supabase server secret is not configured.",
+    });
   });
 
   test("generated social preview images are available", async ({ page, request }, testInfo) => {
