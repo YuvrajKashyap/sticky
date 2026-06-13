@@ -27,9 +27,9 @@ This runbook is for deploying Sticky to `sticky.yuvrajkashyap.com`.
 - Vercel Authentication / Deployment Protection is disabled for this project
   (`ssoProtection: null`) so generated production URLs can be smoke-tested.
 - Target domain `sticky.yuvrajkashyap.com` appears in the latest deployment's
-  alias list, but `vercel domains inspect sticky.yuvrajkashyap.com` currently
-  reports that the active `yuvraj-kashyaps-projects` scope does not have access
-  to the domain. DNS is still not resolving.
+  alias list and `vercel domains inspect sticky.yuvrajkashyap.com` finds it
+  under `yuvraj-kashyaps-projects/sticky`. DNS is still not resolving because
+  Porkbun needs the Vercel-provided A record.
 - Owner access: `sticky.allowed_emails` contains one active owner row, verified
   after adding update tracking to the allowlist table.
 - Recurrence: model, RLS, UI controls, schedule summaries, completion-driven
@@ -341,16 +341,16 @@ vercel domains add sticky.yuvrajkashyap.com --scope yuvraj-kashyaps-projects
 vercel domains inspect sticky.yuvrajkashyap.com --scope yuvraj-kashyaps-projects
 ```
 
-Prior Vercel instruction captured for Porkbun:
+Current Vercel instruction captured for Porkbun:
 
 ```text
 A sticky.yuvrajkashyap.com 76.76.21.21
 ```
 
-Current direct domain inspection returns an access error for the active
-`yuvraj-kashyaps-projects` scope even though the latest deployment still lists
-the custom-domain alias. Resolve that Vercel domain ownership/scope mismatch,
-apply the returned DNS record in Porkbun, wait for propagation, then re-run:
+Current direct domain inspection finds `sticky.yuvrajkashyap.com` under the
+active `yuvraj-kashyaps-projects` scope and attached to project `sticky`, but
+warns that the domain is not configured properly. Apply the returned DNS record
+in Porkbun, wait for propagation, then re-run:
 
 ```powershell
 vercel domains inspect sticky.yuvrajkashyap.com --scope yuvraj-kashyaps-projects
@@ -388,6 +388,9 @@ Latest smoke evidence:
   `200` with the `Sticky` page title.
 - `https://sticky-green.vercel.app` returns HTTP `200` with the `Sticky` page
   title.
+- `vercel inspect https://sticky-green.vercel.app` reports production deployment
+  `dpl_8n8QF7cSKvaMx1Vg5SXB3j8FSJk9` as `Ready` with
+  `sticky.yuvrajkashyap.com` in the alias list.
 - `https://sticky-green.vercel.app/?auth_error=Magic%20link%20expired` returns
   HTTP `200`, renders the signed-out auth shell, and shows the callback error.
 - `https://sticky-h0o547tao-yuvraj-kashyaps-projects.vercel.app/auth/callback?error_description=smoke`
