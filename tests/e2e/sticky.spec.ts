@@ -541,4 +541,20 @@ test.describe("Sticky workspace", () => {
     const response = await request.get("/api/recurrence/catch-up");
     expect([401, 503]).toContain(response.status());
   });
+
+  test("generated social preview images are available", async ({ page, request }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "metadata route check only needs one browser project");
+
+    for (const route of ["/opengraph-image", "/twitter-image"]) {
+      const response = await request.get(route);
+      expect(response.status()).toBe(200);
+      expect(response.headers()["content-type"]).toContain("image/png");
+      expect((await response.body()).length).toBeGreaterThan(10_000);
+    }
+
+    await page.goto("/");
+    await expect(page.locator('meta[property="og:image"]')).toHaveAttribute("content", /opengraph-image/);
+    await expect(page.locator('meta[name="twitter:image"]')).toHaveAttribute("content", /twitter-image/);
+    await expect(page.locator('meta[property="og:image:alt"]')).toHaveAttribute("content", /premium sticky tasks/i);
+  });
 });

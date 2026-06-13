@@ -18,6 +18,11 @@ export const metadata: Metadata = {
     siteName: "Sticky",
     type: "website",
   },
+  twitter: {
+    card: "summary_large_image",
+    title: "Sticky",
+    description: "Premium sticky tasks for fast capture, lists, subtasks, due dates, and recurrence.",
+  },
   icons: {
     icon: "/icon.svg",
     shortcut: "/icon.svg",
