@@ -50,7 +50,7 @@ npm run test:e2e
 
 The current workspace is linked to the Vercel project
 `yuvraj-kashyaps-projects/sticky` and has a production deployment at
-`https://sticky-3texlnm7k-yuvraj-kashyaps-projects.vercel.app`, with the stable
+`https://sticky-f0fo4sjnz-yuvraj-kashyaps-projects.vercel.app`, with the stable
 alias `https://sticky-green.vercel.app`. The latest deployment metadata lists
 `https://sticky.yuvrajkashyap.com` as an alias, and Vercel domain inspection now
 finds it attached to `yuvraj-kashyaps-projects/sticky`; Porkbun still needs the
