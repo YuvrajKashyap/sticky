@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "crons": [
+    {
+      "path": "/api/recurrence/catch-up",
+      "schedule": "15 11 * * *"
+    }
+  ]
+}

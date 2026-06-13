@@ -1,0 +1,60 @@
+# Sticky
+
+Sticky is a production-grade personal task and sticky-note app for `sticky.yuvrajkashyap.com`.
+
+The app is a Next.js App Router build backed by Supabase Auth and the dedicated
+`sticky` Postgres schema. The local demo adapter is only for smoke testing when
+Supabase keys are unavailable; production data belongs in Supabase.
+
+## Local Setup
+
+1. Install dependencies with `npm install`.
+2. Copy `.env.example` to `.env.local`.
+3. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+   Set `NEXT_PUBLIC_SITE_URL` only for a deployed origin that is already present
+   in Supabase Auth's redirect allow list.
+4. For scheduled recurrence catch-up, set server-only `SUPABASE_SECRET_KEY` and
+   `CRON_SECRET` in Vercel. Do not prefix either value with `NEXT_PUBLIC_`.
+5. Apply the SQL files in `supabase/migrations/` to the shared Supabase project in timestamp order. The Data API migration appends the `sticky` schema to Supabase's exposed schemas, and the latest recurrence cron migration adds the service-only worker RPC.
+6. Add approved owner emails to `sticky.allowed_emails`.
+7. Configure Supabase Auth redirect URLs for the production domain and local development.
+8. Set the same public Supabase environment variables in Vercel.
+9. Run `npm run dev`.
+
+## Verification
+
+Run the full local gate with:
+
+```powershell
+npm run verify
+```
+
+That command runs typecheck, lint, production build, a moderate npm audit, and
+Playwright. Playwright starts or reuses `http://localhost:3100` and enables demo
+mode only for that test server when Supabase public keys are not present.
+
+Useful narrower checks:
+
+```powershell
+npm run typecheck
+npm run lint
+npm run build
+npm run test:e2e
+```
+
+## Production Handoff
+
+- Deployment runbook: [docs/deployment.md](docs/deployment.md)
+- Release checklist: [docs/release-checklist.md](docs/release-checklist.md)
+- Recurrence runbook: [docs/recurrence.md](docs/recurrence.md)
+
+The current workspace is linked to the Vercel project
+`yuvraj-kashyaps-projects/sticky` and has a production deployment at
+`https://sticky-qj9ngtx7k-yuvraj-kashyaps-projects.vercel.app`, with the stable
+alias `https://sticky-green.vercel.app`. The target
+domain is attached in Vercel; Porkbun still needs the DNS record listed in the
+deployment runbook. The protected recurrence cron route and live worker RPC are
+prepared, but Vercel still needs `SUPABASE_SECRET_KEY` before scheduled catch-up
+can mutate production data. Supabase Auth URL configuration also still needs the
+dashboard or Management API step from the runbook before real email/OAuth
+sign-in can be fully verified.
