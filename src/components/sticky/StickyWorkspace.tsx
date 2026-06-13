@@ -49,7 +49,7 @@ import {
   Undo2,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { listToDb, recurrenceToDb, subtaskToDb, taskToDb } from "@/lib/sticky/mappers";
@@ -661,6 +661,12 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
     [mode],
   );
 
+  const closeCommandCenter = useCallback(() => {
+    setCommandOpen(false);
+    setCommandQuery("");
+    setCommandIndex(0);
+  }, []);
+
   useEffect(() => {
     workspaceRef.current = workspace;
   }, [workspace]);
@@ -726,7 +732,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
 
       if (event.key === "Escape") {
         if (commandOpen) {
-          setCommandOpen(false);
+          closeCommandCenter();
           return;
         }
         if (confirmRequest) {
@@ -751,7 +757,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
 
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [commandOpen, confirmRequest, listEditor, selectedTaskId]);
+  }, [closeCommandCenter, commandOpen, confirmRequest, listEditor, selectedTaskId]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -1226,8 +1232,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
   }
 
   function runCommand(item: CommandItem) {
-    setCommandOpen(false);
-    setCommandQuery("");
+    closeCommandCenter();
     item.run();
   }
 
@@ -2830,6 +2835,9 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
                 type="button"
                 onClick={() => setCommandOpen(true)}
                 aria-label="Open command center"
+                aria-haspopup="dialog"
+                aria-expanded={commandOpen}
+                aria-controls="sticky-command-dialog"
               >
                 <CommandIcon size={16} />
                 Command
@@ -3091,7 +3099,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
             onQueryChange={setCommandQuery}
             onSelectIndex={setCommandIndex}
             onRun={runCommand}
-            onClose={() => setCommandOpen(false)}
+            onClose={closeCommandCenter}
           />
         ) : null}
 
@@ -4085,6 +4093,8 @@ function CommandCenter({
   onClose: () => void;
 }) {
   const selectedItem = selectedIndex >= 0 ? items[selectedIndex] : null;
+  const listboxId = "sticky-command-results";
+  const selectedOptionId = selectedItem ? `sticky-command-option-${selectedIndex}` : undefined;
 
   function iconFor(item: CommandItem) {
     if (item.kind === "list") {
@@ -4105,6 +4115,7 @@ function CommandCenter({
   return (
     <div className="dialog-backdrop" role="presentation">
       <motion.div
+        id="sticky-command-dialog"
         className="sticky-dialog command-dialog"
         role="dialog"
         aria-modal="true"
@@ -4153,14 +4164,20 @@ function CommandCenter({
             type="search"
             placeholder="Search tasks, lists, or actions"
             aria-label="Search commands"
+            role="combobox"
+            aria-expanded="true"
+            aria-controls={listboxId}
+            aria-activedescendant={selectedOptionId}
+            aria-autocomplete="list"
           />
         </label>
 
-        <div className="command-list" role="listbox" aria-label="Command results">
+        <div id={listboxId} className="command-list" role="listbox" aria-label="Command results">
           {items.length ? (
             items.map((item, index) => (
               <button
                 key={item.id}
+                id={`sticky-command-option-${index}`}
                 className={`command-item ${index === selectedIndex ? "active" : ""}`}
                 type="button"
                 role="option"
