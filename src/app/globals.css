@@ -2856,13 +2856,26 @@ select {
   }
 
   .list-tab-wrap {
-    flex-basis: clamp(150px, 44vw, 176px);
+    flex-basis: clamp(220px, 64vw, 270px);
+    grid-template-columns: 1fr;
+    gap: 6px;
   }
 
   .list-tab {
     gap: 6px;
-    min-height: 54px;
-    padding-inline: 6px;
+    min-height: 58px;
+    padding-inline: 8px;
+  }
+
+  .list-tab-name {
+    min-width: 0;
+  }
+
+  .list-tab-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    padding-inline: 4px;
   }
 
   .list-tab-counts {
@@ -2870,14 +2883,10 @@ select {
     padding-inline: 6px;
   }
 
-  .list-tab-actions {
-    gap: 5px;
-  }
-
   .list-tab-actions button,
   .icon-chip {
-    width: 32px;
-    height: 32px;
+    width: 34px;
+    height: 30px;
   }
 
   .rail-footer {
