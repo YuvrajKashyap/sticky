@@ -17,6 +17,8 @@ Use this before calling a Sticky release ready.
 - Create, rename, reorder, switch, and delete lists.
 - Quick-add a sticky.
 - Quick-add a sticky with smart schedule text such as `tomorrow 2pm`.
+- Quick-add a sticky with weekday and word-time text such as `Friday noon` and
+  confirm the schedule is parsed without polluting the saved title.
 - Quick-add a sticky with a matching `#list-slug` token and confirm it lands in
   that list with the token removed.
 - Edit title, details, color, list, due date, and due time.
