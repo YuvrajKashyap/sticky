@@ -607,25 +607,27 @@ function saveStatus(saveState: SaveState, mode: AppMode, demoReady: boolean) {
     return {
       tone: demoReady ? "clean" : "saving",
       label: demoReady ? "Local demo saved" : "Opening local demo",
+      shortLabel: demoReady ? "Saved" : "Opening",
     };
   }
 
   if (saveState.pending > 0) {
-    return { tone: "saving", label: "Saving changes" };
+    return { tone: "saving", label: "Saving changes", shortLabel: "Saving" };
   }
 
   if (saveState.error) {
-    return { tone: "error", label: "Save needs attention" };
+    return { tone: "error", label: "Save needs attention", shortLabel: "Check" };
   }
 
   if (saveState.lastSavedAt) {
     return {
       tone: "clean",
       label: `Saved ${format(new Date(saveState.lastSavedAt), "h:mm a")}`,
+      shortLabel: "Saved",
     };
   }
 
-  return { tone: "clean", label: "Supabase-backed" };
+  return { tone: "clean", label: "Supabase-backed", shortLabel: "Live" };
 }
 
 export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWorkspaceProps) {
@@ -2707,9 +2709,12 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
                 className={`save-status ${currentSaveStatus.tone}`}
                 role="status"
                 aria-live="polite"
-                title={saveState.error ?? undefined}
+                title={saveState.error ?? currentSaveStatus.label}
               >
-                {currentSaveStatus.label}
+                <span className="save-status-label">{currentSaveStatus.label}</span>
+                <span className="save-status-short" aria-hidden="true">
+                  {currentSaveStatus.shortLabel}
+                </span>
               </span>
             </div>
             <button className="icon-chip" type="button" onClick={signOut} aria-label="Sign out">

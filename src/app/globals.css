@@ -748,9 +748,22 @@ select {
   max-width: 210px;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.rail-footer .save-status > .save-status-label,
+.rail-footer .save-status > .save-status-short {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-footer .save-status > .save-status-short {
+  display: none;
 }
 
 .save-status::before {
@@ -2876,7 +2889,18 @@ select {
   }
 
   .rail-footer .save-status {
-    max-width: 104px;
+    max-width: 76px;
+  }
+
+  .rail-footer .save-status > .save-status-label {
+    display: none;
+  }
+
+  .rail-footer .save-status > .save-status-short {
+    display: inline-block;
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 850;
   }
 
   .task-stage {
