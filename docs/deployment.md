@@ -8,12 +8,14 @@ This runbook is for deploying Sticky to `sticky.yuvrajkashyap.com`.
 - Database schema: `sticky`.
 - Live Supabase project ref used by this build: `sqskfdcwfwywjoobbpos`.
 - Live Supabase project name observed during verification: `yk-platform`.
+- Live Supabase health observed during verification: `ACTIVE_HEALTHY` in
+  `us-east-2` on PostgreSQL `17.6.1.104`.
 - Vercel CLI account observed in this environment: `yuvrajkashyap`.
 - Vercel project: `yuvraj-kashyaps-projects/sticky`.
 - Vercel project ID: `prj_nfiyWrEfak04ah1pIqvFqcytQcmh`.
 - Local Vercel link status: `.vercel/project.json` exists and is ignored.
-- Local git status: repository initialized on branch `main` with baseline
-  commit `fba305d build sticky`; no remote is configured yet.
+- Local git status: repository initialized on branch `main`; no remote is
+  configured yet.
 - Latest production deployment: `dpl_8n8QF7cSKvaMx1Vg5SXB3j8FSJk9`.
 - Public production URL:
   `https://sticky-h0o547tao-yuvraj-kashyaps-projects.vercel.app`.
@@ -78,6 +80,9 @@ Current Vercel env state observed with `vercel env ls` on 2026-06-13:
   should be added after DNS and Supabase Auth URL configuration are complete.
   `CRON_SECRET` is set. `SUPABASE_SECRET_KEY` still needs to be added before the
   automated recurrence worker can mutate production data.
+- Supabase API settings expose an enabled modern publishable key for the
+  `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` value; `.env.example` intentionally
+  keeps a placeholder.
 - Development: the three core runtime variables are set.
 - Preview: not set because the project has no connected Git repository yet; the
   local repo has not been connected to a remote/Vercel Git integration yet, and
@@ -89,6 +94,8 @@ Current Vercel env state observed with `vercel env ls` on 2026-06-13:
 Latest live verification on 2026-06-13 against project
 `sqskfdcwfwywjoobbpos`:
 
+- Supabase project metadata returned project name `yk-platform`, project health
+  `ACTIVE_HEALTHY`, region `us-east-2`, and PostgreSQL `17.6.1.104`.
 - Supabase security advisors were re-run after
   `20260613045652_sticky_add_today_task_view.sql`. The only Sticky-owned
   table advisor notice was `rls_enabled_no_policy` for
@@ -107,25 +114,40 @@ Latest live verification on 2026-06-13 against project
   `allowed_emails`, `lists`, `subtasks`, `task_activity`,
   `task_recurrence_rules`, `tasks`, `user_preferences`, `user_state`, and
   `users`.
-- Sticky-only grant checks confirmed `sticky.allowed_emails` is granted only to
-  `service_role`; runtime tables have authenticated owner-scoped access; audit
-  rows are authenticated-read and service-role-written; `sticky.users` is
-  authenticated-read and service-role-written.
+- Compact schema checks confirmed 9 Sticky tables, 24 Sticky policies, no
+  Sticky views, no Sticky table grants to `anon`, no Sticky routines executable
+  by `anon`, one active allowlist row, and zero runtime user-data rows at the
+  time of verification.
+- Sticky-only grant checks confirmed `sticky.allowed_emails` has no `anon` or
+  `authenticated` grants or policies; runtime tables have authenticated
+  owner-scoped access; audit rows are authenticated-read and
+  service-role-written; `sticky.users` is authenticated-read and
+  service-role-written.
 - Sticky routine checks confirmed no Sticky routine is executable by `anon`,
   all Sticky functions have pinned search paths, and
   `sticky.advance_recurring_task_for_worker(...)` is executable by
   `service_role` only.
+- Live migration history matched the local `supabase/migrations/` filenames
+  observed on 2026-06-13, including the aligned initial schema, advisor, Data
+  API, atomic workspace, recurrence, preference, and Today-view migrations.
 - Sticky foreign-key checks confirmed all Sticky-owned foreign keys have
   covering indexes, including task/list/subtask/activity/recurrence/user-state
   relationships.
 
 1. Confirm the `sticky` schema exists and the migrations in `supabase/migrations/`
-   have been applied in timestamp order, including
-   `20260613004023_sticky_recurring_completion.sql` and
-   `20260613010533_sticky_recurring_catchup.sql` and
-   `20260613013059_sticky_recurring_cron_catchup.sql` and
-   `20260613041115_sticky_persist_view_preferences.sql` and
-   `20260613045652_sticky_add_today_task_view.sql`.
+   have been applied in timestamp order. The live project currently records
+   these Sticky migration versions:
+   `20260612181552_sticky_initial_schema`,
+   `20260612181915_sticky_advisor_fixes`,
+   `20260612190607_sticky_recurrence_and_function_grants`,
+   `20260612191604_sticky_expose_data_api_schema`,
+   `20260612193259_sticky_atomic_workspace_functions`,
+   `20260612231438_sticky_allowed_emails_updated_at`,
+   `20260613004023_sticky_recurring_completion`,
+   `20260613010533_sticky_recurring_catchup`,
+   `20260613013059_sticky_recurring_cron_catchup`,
+   `20260613041115_sticky_persist_view_preferences`, and
+   `20260613045652_sticky_add_today_task_view`.
 2. Confirm the Supabase Data API exposes the `sticky` schema.
 3. Confirm RLS is enabled on Sticky-owned tables.
 4. Confirm `sticky.allowed_emails` intentionally has no public policies.
@@ -351,9 +373,10 @@ Current DNS check result: `sticky.yuvrajkashyap.com` does not resolve yet.
 
 Latest smoke evidence:
 
-- Local `npm run verify` passed after the selected-sticky command workflow,
-  Today task-view, and local-date fixes: typecheck, lint, production build,
-  moderate audit, and Playwright `15 passed, 7 skipped`.
+- Local `npm.cmd run verify` passed after migration filename alignment,
+  deployment evidence refresh, and social preview polish: typecheck, lint,
+  production build, moderate audit with zero vulnerabilities, and Playwright
+  `16 passed, 8 skipped`.
 - Live Supabase migration `sticky_add_today_task_view` is recorded at version
   `20260613045652`, and the `sticky.user_preferences.task_view_filter` check
   constraint allows `today`.
