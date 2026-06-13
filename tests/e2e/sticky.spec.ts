@@ -162,9 +162,11 @@ test.describe("Sticky workspace", () => {
       await page.keyboard.press("Escape");
       await expect(commandDialog).toHaveCount(0);
       await expect(commandTrigger).toHaveAttribute("aria-expanded", "false");
+      await expect(commandTrigger).toBeFocused();
       await page.keyboard.press("Control+K");
       await expect(commandSearch).toHaveValue("");
       await page.keyboard.press("Escape");
+      await expect(commandTrigger).toBeFocused();
 
       await page.getByRole("button", { name: "New list" }).click();
       await page.getByRole("textbox", { name: "Name" }).fill("Verification");

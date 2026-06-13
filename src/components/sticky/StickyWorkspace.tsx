@@ -656,15 +656,20 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
   const quickInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const commandInputRef = useRef<HTMLInputElement>(null);
+  const commandTriggerRef = useRef<HTMLButtonElement>(null);
   const supabase = useMemo(
     () => (mode === "supabase" ? createSupabaseBrowserClient() : null),
     [mode],
   );
 
-  const closeCommandCenter = useCallback(() => {
+  const closeCommandCenter = useCallback((restoreFocus = false) => {
     setCommandOpen(false);
     setCommandQuery("");
     setCommandIndex(0);
+
+    if (restoreFocus) {
+      window.setTimeout(() => commandTriggerRef.current?.focus(), 0);
+    }
   }, []);
 
   useEffect(() => {
@@ -732,7 +737,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
 
       if (event.key === "Escape") {
         if (commandOpen) {
-          closeCommandCenter();
+          closeCommandCenter(true);
           return;
         }
         if (confirmRequest) {
@@ -2831,6 +2836,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
                 </div>
               </div>
               <button
+                ref={commandTriggerRef}
                 className="command-trigger"
                 type="button"
                 onClick={() => setCommandOpen(true)}
@@ -3099,7 +3105,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
             onQueryChange={setCommandQuery}
             onSelectIndex={setCommandIndex}
             onRun={runCommand}
-            onClose={closeCommandCenter}
+            onClose={() => closeCommandCenter(true)}
           />
         ) : null}
 
@@ -4158,6 +4164,7 @@ function CommandCenter({
 
               if (event.key === "Escape") {
                 event.preventDefault();
+                event.stopPropagation();
                 onClose();
               }
             }}
