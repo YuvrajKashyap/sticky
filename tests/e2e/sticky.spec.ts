@@ -169,12 +169,21 @@ test.describe("Sticky workspace", () => {
       await expect(commandTrigger).toBeFocused();
 
       await page.getByRole("button", { name: "New list" }).click();
-      await page.getByRole("textbox", { name: "Name" }).fill("Verification");
+      const newListDialog = page.getByRole("dialog", { name: "New list" });
+      await expect(newListDialog).toBeVisible();
+      const newListName = newListDialog.getByRole("textbox", { name: "Name" });
+      await expect(newListName).toBeFocused();
+      await page.keyboard.press("Shift+Tab");
+      await expect(newListDialog.getByRole("button", { name: "Close list editor" })).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(newListName).toBeFocused();
+      await newListName.fill("Verification");
       await page.getByText("Sky", { exact: true }).click();
       await page.getByRole("button", { name: "Save list" }).click();
       await expect(page.getByRole("heading", { name: "Verification" })).toBeVisible();
 
       await page.getByRole("button", { name: "Rename", exact: true }).click();
+      await expect(page.getByRole("dialog", { name: "Rename list" })).toBeVisible();
       await page.getByRole("textbox", { name: "Name" }).fill("Verification Prime");
       await page.getByRole("button", { name: "Save list" }).click();
       await expect(page.getByRole("heading", { name: "Verification Prime" })).toBeVisible();
@@ -361,7 +370,14 @@ test.describe("Sticky workspace", () => {
       await repeatTaskButton.click();
       await details.getByRole("button", { name: "Complete" }).click();
       await page.getByRole("button", { name: "Clear completed" }).click();
-      await page.getByRole("dialog").getByRole("button", { name: "Clear completed" }).click();
+      const clearDialog = page.getByRole("dialog", { name: "Clear completed pile?" });
+      await expect(clearDialog).toBeVisible();
+      await expect(clearDialog.getByRole("button", { name: "Cancel" })).toBeFocused();
+      await page.keyboard.press("Shift+Tab");
+      await expect(clearDialog.getByRole("button", { name: "Clear completed" })).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(clearDialog.getByRole("button", { name: "Cancel" })).toBeFocused();
+      await clearDialog.getByRole("button", { name: "Clear completed" }).click();
       await expect(page.getByText("Completed pile cleared")).toBeVisible();
 
       await page.getByRole("button", { name: /Delete Move Target/ }).click();

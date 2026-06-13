@@ -184,6 +184,15 @@ const WEEKDAYS = [
   { label: "S", short: "Sat", name: "Saturday", value: 6 },
 ];
 
+const FOCUSABLE_DIALOG_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  '[tabindex]:not([tabindex="-1"])',
+].join(",");
+
 function createId() {
   return crypto.randomUUID();
 }
@@ -205,6 +214,35 @@ function nextCompletedSortOrder(values: Array<{ completedSortOrder: number | nul
 
 function bySortOrder<T extends { sortOrder: number; createdAt: string }>(a: T, b: T) {
   return a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt);
+}
+
+function trapDialogFocus(event: React.KeyboardEvent<HTMLElement>) {
+  if (event.key !== "Tab") {
+    return;
+  }
+
+  const focusable = Array.from(
+    event.currentTarget.querySelectorAll<HTMLElement>(FOCUSABLE_DIALOG_SELECTOR),
+  ).filter((node) => node.getClientRects().length > 0);
+
+  if (!focusable.length) {
+    event.preventDefault();
+    return;
+  }
+
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+    return;
+  }
+
+  if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 
 function humanDue(task: StickyTask) {
@@ -4006,13 +4044,20 @@ function ListEditorDialog({
 
   return (
     <div className="dialog-backdrop" role="presentation">
-      <form className="sticky-dialog" onSubmit={submit}>
+      <form
+        className="sticky-dialog"
+        onSubmit={submit}
+        onKeyDown={trapDialogFocus}
+        role="dialog"
+        aria-modal="true"
+        aria-label={list === "new" ? "New list" : "Rename list"}
+      >
         <div className="details-head">
           <div>
             <p className="eyebrow">List</p>
             <h3>{list === "new" ? "New list" : "Rename list"}</h3>
           </div>
-          <button className="icon-chip" type="button" onClick={onClose} aria-label="Close">
+          <button className="icon-chip" type="button" onClick={onClose} aria-label="Close list editor">
             <X size={18} />
           </button>
         </div>
@@ -4056,14 +4101,20 @@ function ConfirmDialog({
 }) {
   return (
     <div className="dialog-backdrop" role="presentation">
-      <div className="sticky-dialog confirm-dialog" role="dialog" aria-modal="true">
+      <div
+        className="sticky-dialog confirm-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label={request.title}
+        onKeyDown={trapDialogFocus}
+      >
         <div className="dialog-icon danger">
           <Trash2 size={24} />
         </div>
         <h3>{request.title}</h3>
         <p>{request.body}</p>
         <div className="dialog-actions">
-          <button className="secondary-action compact" type="button" onClick={onCancel}>
+          <button className="secondary-action compact" type="button" onClick={onCancel} autoFocus>
             Cancel
           </button>
           <button
@@ -4126,6 +4177,7 @@ function CommandCenter({
         role="dialog"
         aria-modal="true"
         aria-label="Command center"
+        onKeyDown={trapDialogFocus}
         initial={{ opacity: 0, y: 18, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 12, scale: 0.98 }}
