@@ -2935,7 +2935,7 @@ select {
   }
 
   .list-tab-wrap {
-    flex-basis: clamp(220px, 64vw, 270px);
+    flex-basis: 100%;
     grid-template-columns: 1fr;
     gap: 6px;
   }

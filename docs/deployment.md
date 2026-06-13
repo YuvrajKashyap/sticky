@@ -373,11 +373,11 @@ Current DNS check result: `sticky.yuvrajkashyap.com` does not resolve yet.
 
 Latest smoke evidence:
 
-- Local `npm.cmd run verify` passed after natural-language capture coverage,
-  sync-failure banner polish, mobile list-rail polish, migration filename
-  alignment, deployment evidence refresh, social preview polish, and
+- Local `npm.cmd run verify` passed after phone list-rail framing polish,
+  natural-language capture coverage, sync-failure banner polish, migration
+  filename alignment, deployment evidence refresh, social preview polish, and
   cron-route guardrail: typecheck, lint, production build, moderate audit with
-  zero vulnerabilities, and Playwright `17 passed, 11 skipped`.
+  zero vulnerabilities, and Playwright `18 passed, 10 skipped`.
 - Live Supabase migration `sticky_add_today_task_view` is recorded at version
   `20260613045652`, and the `sticky.user_preferences.task_view_filter` check
   constraint allows `today`.

@@ -87,6 +87,33 @@ async function expectNoInlineClip(locator: Locator) {
     .toBe(true);
 }
 
+async function expectNoPartiallyVisibleListTabs(page: Page) {
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const stack = document.querySelector(".list-stack");
+        const tabs = Array.from(document.querySelectorAll(".list-tab-wrap"));
+        if (!stack) {
+          return false;
+        }
+
+        const stackBox = stack.getBoundingClientRect();
+        return tabs.every((tab) => {
+          const tabBox = tab.getBoundingClientRect();
+          const visibleWidth =
+            Math.min(tabBox.right, stackBox.right) - Math.max(tabBox.left, stackBox.left);
+
+          if (visibleWidth <= 1) {
+            return true;
+          }
+
+          return visibleWidth >= tabBox.width - 1;
+        });
+      }),
+    )
+    .toBe(true);
+}
+
 test.describe("Sticky workspace", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
@@ -347,6 +374,7 @@ test.describe("Sticky workspace", () => {
       await expectSingleLine(page.locator(".workspace-title h2"));
       await expectNoHorizontalOverflow(page);
       await expect(page.locator(".save-status")).toContainText("Local demo saved");
+      await expectNoPartiallyVisibleListTabs(page);
       const launchTab = page.locator(".list-tab-wrap", { hasText: "Launch polish" });
       await launchTab.scrollIntoViewIfNeeded();
       await expectNoInlineClip(launchTab.locator(".list-tab-name"));
