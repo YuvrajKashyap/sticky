@@ -2748,10 +2748,15 @@ select {
     overflow-x: auto;
     overflow-y: hidden;
     padding: 4px 2px;
+    overscroll-behavior-x: contain;
+    scroll-padding-inline: 2px;
+    scroll-snap-type: x proximity;
   }
 
   .list-tab-wrap {
-    min-width: 210px;
+    flex: 0 0 210px;
+    min-width: 0;
+    scroll-snap-align: start;
   }
 
   .rail-footer {
@@ -2818,13 +2823,17 @@ select {
   }
 
   .list-rail {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: auto auto minmax(0, 1fr);
     grid-template-rows: auto auto;
     gap: 9px;
   }
 
   .new-list-button {
-    justify-self: stretch;
+    min-width: 126px;
+    min-height: 42px;
+    justify-self: start;
+    padding-inline: 12px;
+    white-space: nowrap;
   }
 
   .list-stack {
@@ -2834,11 +2843,28 @@ select {
   }
 
   .list-tab-wrap {
-    min-width: min(176px, 72vw);
+    flex-basis: clamp(150px, 44vw, 176px);
   }
 
   .list-tab {
+    gap: 6px;
     min-height: 54px;
+    padding-inline: 6px;
+  }
+
+  .list-tab-counts {
+    min-width: 38px;
+    padding-inline: 6px;
+  }
+
+  .list-tab-actions {
+    gap: 5px;
+  }
+
+  .list-tab-actions button,
+  .icon-chip {
+    width: 32px;
+    height: 32px;
   }
 
   .rail-footer {
@@ -2847,6 +2873,10 @@ select {
 
   .rail-footer > div {
     display: block;
+  }
+
+  .rail-footer .save-status {
+    max-width: 104px;
   }
 
   .task-stage {

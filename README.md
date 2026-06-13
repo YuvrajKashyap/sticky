@@ -50,11 +50,12 @@ npm run test:e2e
 
 The current workspace is linked to the Vercel project
 `yuvraj-kashyaps-projects/sticky` and has a production deployment at
-`https://sticky-qj9ngtx7k-yuvraj-kashyaps-projects.vercel.app`, with the stable
-alias `https://sticky-green.vercel.app`. The target
-domain is attached in Vercel; Porkbun still needs the DNS record listed in the
-deployment runbook. The protected recurrence cron route and live worker RPC are
-prepared, but Vercel still needs `SUPABASE_SECRET_KEY` before scheduled catch-up
-can mutate production data. Supabase Auth URL configuration also still needs the
-dashboard or Management API step from the runbook before real email/OAuth
-sign-in can be fully verified.
+`https://sticky-h0o547tao-yuvraj-kashyaps-projects.vercel.app`, with the stable
+alias `https://sticky-green.vercel.app`. The latest deployment metadata lists
+`https://sticky.yuvrajkashyap.com` as an alias, but direct Vercel domain
+inspection currently reports an access/scope mismatch and DNS does not resolve
+yet. The protected recurrence cron route and live worker RPC are prepared, but
+Vercel still needs `SUPABASE_SECRET_KEY` before scheduled catch-up can mutate
+production data. Supabase Auth URL configuration also still needs the dashboard
+or Management API step from the runbook before real email/OAuth sign-in can be
+fully verified.
