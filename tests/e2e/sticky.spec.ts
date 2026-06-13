@@ -168,7 +168,8 @@ test.describe("Sticky workspace", () => {
       await page.keyboard.press("Escape");
       await expect(commandTrigger).toBeFocused();
 
-      await page.getByRole("button", { name: "New list" }).click();
+      const newListButton = page.getByRole("button", { name: "New list" });
+      await newListButton.click();
       const newListDialog = page.getByRole("dialog", { name: "New list" });
       await expect(newListDialog).toBeVisible();
       const newListName = newListDialog.getByRole("textbox", { name: "Name" });
@@ -177,16 +178,25 @@ test.describe("Sticky workspace", () => {
       await expect(newListDialog.getByRole("button", { name: "Close list editor" })).toBeFocused();
       await page.keyboard.press("Tab");
       await expect(newListName).toBeFocused();
+      await page.keyboard.press("Escape");
+      await expect(newListDialog).toHaveCount(0);
+      await expect(newListButton).toBeFocused();
+
+      await newListButton.click();
+      await expect(newListDialog).toBeVisible();
       await newListName.fill("Verification");
       await page.getByText("Sky", { exact: true }).click();
       await page.getByRole("button", { name: "Save list" }).click();
       await expect(page.getByRole("heading", { name: "Verification" })).toBeVisible();
+      await expect(newListButton).toBeFocused();
 
-      await page.getByRole("button", { name: "Rename", exact: true }).click();
+      const renameButton = page.getByRole("button", { name: "Rename", exact: true });
+      await renameButton.click();
       await expect(page.getByRole("dialog", { name: "Rename list" })).toBeVisible();
       await page.getByRole("textbox", { name: "Name" }).fill("Verification Prime");
       await page.getByRole("button", { name: "Save list" }).click();
       await expect(page.getByRole("heading", { name: "Verification Prime" })).toBeVisible();
+      await expect(renameButton).toBeFocused();
 
       await page.getByRole("button", { name: "New list" }).click();
       await page.getByRole("textbox", { name: "Name" }).fill("Move Target");
@@ -369,7 +379,8 @@ test.describe("Sticky workspace", () => {
 
       await repeatTaskButton.click();
       await details.getByRole("button", { name: "Complete" }).click();
-      await page.getByRole("button", { name: "Clear completed" }).click();
+      const clearCompletedButton = page.getByRole("button", { name: "Clear completed" });
+      await clearCompletedButton.click();
       const clearDialog = page.getByRole("dialog", { name: "Clear completed pile?" });
       await expect(clearDialog).toBeVisible();
       await expect(clearDialog.getByRole("button", { name: "Cancel" })).toBeFocused();
@@ -377,6 +388,12 @@ test.describe("Sticky workspace", () => {
       await expect(clearDialog.getByRole("button", { name: "Clear completed" })).toBeFocused();
       await page.keyboard.press("Tab");
       await expect(clearDialog.getByRole("button", { name: "Cancel" })).toBeFocused();
+      await page.keyboard.press("Escape");
+      await expect(clearDialog).toHaveCount(0);
+      await expect(clearCompletedButton).toBeFocused();
+
+      await clearCompletedButton.click();
+      await expect(clearDialog).toBeVisible();
       await clearDialog.getByRole("button", { name: "Clear completed" }).click();
       await expect(page.getByText("Completed pile cleared")).toBeVisible();
 

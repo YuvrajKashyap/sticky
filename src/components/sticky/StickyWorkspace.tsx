@@ -691,6 +691,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
     error: null,
   });
   const workspaceRef = useRef(workspace);
+  const dialogReturnFocusRef = useRef<HTMLElement | null>(null);
   const quickInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const commandInputRef = useRef<HTMLInputElement>(null);
@@ -709,6 +710,54 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
       window.setTimeout(() => commandTriggerRef.current?.focus(), 0);
     }
   }, []);
+
+  const rememberDialogReturnFocus = useCallback(() => {
+    const activeElement = document.activeElement;
+
+    if (!(activeElement instanceof HTMLElement) || activeElement === document.body) {
+      dialogReturnFocusRef.current = null;
+      return;
+    }
+
+    dialogReturnFocusRef.current = activeElement.closest("#sticky-command-dialog")
+      ? commandTriggerRef.current
+      : activeElement;
+  }, []);
+
+  const restoreDialogReturnFocus = useCallback(() => {
+    const target = dialogReturnFocusRef.current;
+    dialogReturnFocusRef.current = null;
+
+    if (target && document.contains(target)) {
+      window.setTimeout(() => target.focus(), 0);
+    }
+  }, []);
+
+  const openListEditor = useCallback(
+    (nextListEditor: StickyList | "new") => {
+      rememberDialogReturnFocus();
+      setListEditor(nextListEditor);
+    },
+    [rememberDialogReturnFocus],
+  );
+
+  const closeListEditor = useCallback(() => {
+    setListEditor(null);
+    restoreDialogReturnFocus();
+  }, [restoreDialogReturnFocus]);
+
+  const openConfirmDialog = useCallback(
+    (request: ConfirmRequest) => {
+      rememberDialogReturnFocus();
+      setConfirmRequest(request);
+    },
+    [rememberDialogReturnFocus],
+  );
+
+  const cancelConfirmDialog = useCallback(() => {
+    setConfirmRequest(null);
+    restoreDialogReturnFocus();
+  }, [restoreDialogReturnFocus]);
 
   useEffect(() => {
     workspaceRef.current = workspace;
@@ -779,11 +828,11 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
           return;
         }
         if (confirmRequest) {
-          setConfirmRequest(null);
+          cancelConfirmDialog();
           return;
         }
         if (listEditor) {
-          setListEditor(null);
+          closeListEditor();
           return;
         }
         if (selectedTaskId) {
@@ -800,7 +849,15 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
 
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [closeCommandCenter, commandOpen, confirmRequest, listEditor, selectedTaskId]);
+  }, [
+    cancelConfirmDialog,
+    closeCommandCenter,
+    closeListEditor,
+    commandOpen,
+    confirmRequest,
+    listEditor,
+    selectedTaskId,
+  ]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -1078,7 +1135,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
       title: "Create a list",
       detail: "Open the list editor",
       keywords: "new list create",
-      run: () => setListEditor("new"),
+      run: () => openListEditor("new"),
     },
     ...(activeList
       ? [
@@ -1088,7 +1145,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
             title: "Rename current list",
             detail: activeList.name,
             keywords: "rename edit list current",
-            run: () => setListEditor(activeList),
+            run: () => openListEditor(activeList),
           },
           {
             id: "action-completed",
@@ -1443,7 +1500,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
         lists: [...workspace.lists, list],
         userState: { ...workspace.userState, selectedListId: list.id, searchQuery: "" },
       });
-      setListEditor(null);
+      closeListEditor();
       void persist(
         "List",
         async () => {
@@ -1477,7 +1534,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
             : item,
         ),
       });
-      setListEditor(null);
+      closeListEditor();
       void persist(
         "List",
         () =>
@@ -1503,7 +1560,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
     }
 
     const taskCount = workspace.tasks.filter((task) => task.listId === list.id).length;
-    setConfirmRequest({
+    openConfirmDialog({
       title: `Delete ${list.name}?`,
       body: `This removes ${taskCount} sticky${taskCount === 1 ? "" : "ies"} and their subtasks.`,
       actionLabel: "Delete list",
@@ -1975,7 +2032,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
   }
 
   function requestDeleteTask(task: StickyTask) {
-    setConfirmRequest({
+    openConfirmDialog({
       title: `Delete ${task.title}?`,
       body: "The sticky, subtasks, and recurrence settings will be removed.",
       actionLabel: "Delete sticky",
@@ -2201,7 +2258,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
       return;
     }
 
-    setConfirmRequest({
+    openConfirmDialog({
       title: "Clear completed pile?",
       body: `This deletes ${completedTasks.length} completed sticky${completedTasks.length === 1 ? "" : "ies"} from ${activeList?.name ?? "this list"}.`,
       actionLabel: "Clear completed",
@@ -2723,7 +2780,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
             </div>
           </div>
 
-          <button className="new-list-button" type="button" onClick={() => setListEditor("new")}>
+          <button className="new-list-button" type="button" onClick={() => openListEditor("new")}>
             <Plus size={18} />
             New list
           </button>
@@ -2743,7 +2800,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
                     active={list.id === activeListId}
                     stats={listStats.get(list.id) ?? { active: 0, completed: 0 }}
                     onSelect={() => switchList(list.id)}
-                    onRename={() => setListEditor(list)}
+                    onRename={() => openListEditor(list)}
                     onDelete={() => requestDeleteList(list)}
                   />
                 ))}
@@ -2889,7 +2946,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
               <button
                 className="tool-button"
                 type="button"
-                onClick={() => activeList && setListEditor(activeList)}
+                onClick={() => activeList && openListEditor(activeList)}
               >
                 <Pencil size={16} />
                 Rename
@@ -3122,7 +3179,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
         {listEditor ? (
           <ListEditorDialog
             list={listEditor}
-            onClose={() => setListEditor(null)}
+            onClose={closeListEditor}
             onSave={saveList}
           />
         ) : null}
@@ -3130,7 +3187,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
         {confirmRequest ? (
           <ConfirmDialog
             request={confirmRequest}
-            onCancel={() => setConfirmRequest(null)}
+            onCancel={cancelConfirmDialog}
           />
         ) : null}
 
