@@ -12,8 +12,8 @@ This runbook is for deploying Sticky to `sticky.yuvrajkashyap.com`.
 - Vercel project: `yuvraj-kashyaps-projects/sticky`.
 - Vercel project ID: `prj_nfiyWrEfak04ah1pIqvFqcytQcmh`.
 - Local Vercel link status: `.vercel/project.json` exists and is ignored.
-- Local git status: repository initialized on branch `main`; no remote is
-  configured yet.
+- Local git status: repository initialized on branch `main` with baseline
+  commit `fba305d build sticky`; no remote is configured yet.
 - Latest production deployment: `dpl_8n8QF7cSKvaMx1Vg5SXB3j8FSJk9`.
 - Public production URL:
   `https://sticky-h0o547tao-yuvraj-kashyaps-projects.vercel.app`.
@@ -24,8 +24,10 @@ This runbook is for deploying Sticky to `sticky.yuvrajkashyap.com`.
   `https://sticky-yuvrajkashyap-yuvraj-kashyaps-projects.vercel.app`.
 - Vercel Authentication / Deployment Protection is disabled for this project
   (`ssoProtection: null`) so generated production URLs can be smoke-tested.
-- Target domain `sticky.yuvrajkashyap.com` is attached in Vercel, but DNS is not
-  configured yet.
+- Target domain `sticky.yuvrajkashyap.com` appears in the latest deployment's
+  alias list, but `vercel domains inspect sticky.yuvrajkashyap.com` currently
+  reports that the active `yuvraj-kashyaps-projects` scope does not have access
+  to the domain. DNS is still not resolving.
 - Owner access: `sticky.allowed_emails` contains one active owner row, verified
   after adding update tracking to the allowlist table.
 - Recurrence: model, RLS, UI controls, schedule summaries, completion-driven
@@ -70,7 +72,7 @@ Do not add service-role or secret keys with a `NEXT_PUBLIC_` prefix. Use
 `SUPABASE_SECRET_KEY` for the scheduled worker; the code also supports the
 legacy `SUPABASE_SERVICE_ROLE_KEY` name as a fallback.
 
-Current Vercel env state:
+Current Vercel env state observed with `vercel env ls` on 2026-06-13:
 
 - Production: the three core runtime variables are set; `NEXT_PUBLIC_SITE_URL`
   should be added after DNS and Supabase Auth URL configuration are complete.
@@ -317,13 +319,16 @@ vercel domains add sticky.yuvrajkashyap.com --scope yuvraj-kashyaps-projects
 vercel domains inspect sticky.yuvrajkashyap.com --scope yuvraj-kashyaps-projects
 ```
 
-Current Vercel instruction for Porkbun:
+Prior Vercel instruction captured for Porkbun:
 
 ```text
 A sticky.yuvrajkashyap.com 76.76.21.21
 ```
 
-Apply that returned DNS record in Porkbun, wait for propagation, then re-run:
+Current direct domain inspection returns an access error for the active
+`yuvraj-kashyaps-projects` scope even though the latest deployment still lists
+the custom-domain alias. Resolve that Vercel domain ownership/scope mismatch,
+apply the returned DNS record in Porkbun, wait for propagation, then re-run:
 
 ```powershell
 vercel domains inspect sticky.yuvrajkashyap.com --scope yuvraj-kashyaps-projects
