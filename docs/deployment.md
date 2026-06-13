@@ -16,9 +16,9 @@ This runbook is for deploying Sticky to `sticky.yuvrajkashyap.com`.
 - Local Vercel link status: `.vercel/project.json` exists and is ignored.
 - Local git status: repository initialized on branch `main`; no remote is
   configured yet.
-- Latest production deployment: `dpl_8n8QF7cSKvaMx1Vg5SXB3j8FSJk9`.
+- Latest production deployment: `dpl_7dSCSaDDyeDpyBfKQL98e184TVqM`.
 - Public production URL:
-  `https://sticky-h0o547tao-yuvraj-kashyaps-projects.vercel.app`.
+  `https://sticky-3texlnm7k-yuvraj-kashyaps-projects.vercel.app`.
 - Production aliases observed:
   `https://sticky-green.vercel.app`,
   `https://sticky.yuvrajkashyap.com`,
@@ -175,7 +175,7 @@ https://sticky.yuvrajkashyap.com
 http://localhost:3000/auth/callback
 http://localhost:3100/auth/callback
 https://sticky.yuvrajkashyap.com/auth/callback
-https://sticky-h0o547tao-yuvraj-kashyaps-projects.vercel.app/auth/callback
+https://sticky-3texlnm7k-yuvraj-kashyaps-projects.vercel.app/auth/callback
 https://sticky-green.vercel.app/auth/callback
 https://sticky-yuvraj-kashyaps-projects.vercel.app/auth/callback
 ```
@@ -194,7 +194,7 @@ $redirects = @(
   "http://localhost:3000/auth/callback",
   "http://localhost:3100/auth/callback",
   "https://sticky.yuvrajkashyap.com/auth/callback",
-  "https://sticky-h0o547tao-yuvraj-kashyaps-projects.vercel.app/auth/callback",
+  "https://sticky-3texlnm7k-yuvraj-kashyaps-projects.vercel.app/auth/callback",
   "https://sticky-green.vercel.app/auth/callback",
   "https://sticky-yuvraj-kashyaps-projects.vercel.app/auth/callback"
 ) -join ","
@@ -373,10 +373,10 @@ Current DNS check result: `sticky.yuvrajkashyap.com` does not resolve yet.
 
 Latest smoke evidence:
 
-- Local `npm.cmd run verify` passed after migration filename alignment,
-  deployment evidence refresh, social preview polish, and cron-route guardrail:
-  typecheck, lint, production build, moderate audit with zero vulnerabilities,
-  and Playwright `17 passed, 9 skipped`.
+- Local `npm.cmd run verify` passed after mobile list-rail polish, migration
+  filename alignment, deployment evidence refresh, social preview polish, and
+  cron-route guardrail: typecheck, lint, production build, moderate audit with
+  zero vulnerabilities, and Playwright `17 passed, 9 skipped`.
 - Live Supabase migration `sticky_add_today_task_view` is recorded at version
   `20260613045652`, and the `sticky.user_preferences.task_view_filter` check
   constraint allows `today`.
@@ -384,19 +384,18 @@ Latest smoke evidence:
   transaction: owner subject saw and updated own rows, a second authenticated
   subject saw/updated zero owner rows, and `anon` has no Sticky schema/table
   read privileges.
-- `https://sticky-h0o547tao-yuvraj-kashyaps-projects.vercel.app` returns HTTP
+- `https://sticky-3texlnm7k-yuvraj-kashyaps-projects.vercel.app` returns HTTP
   `200` with the `Sticky` page title.
 - `https://sticky-green.vercel.app` returns HTTP `200` with the `Sticky` page
   title.
 - `vercel inspect https://sticky-green.vercel.app` reports production deployment
-  `dpl_8n8QF7cSKvaMx1Vg5SXB3j8FSJk9` as `Ready` with
+  `dpl_7dSCSaDDyeDpyBfKQL98e184TVqM` as `Ready` with
   `sticky.yuvrajkashyap.com` in the alias list.
+- Production-safe Playwright smoke passed against `https://sticky-green.vercel.app`:
+  route chrome, auth callback errors/origin preservation, unauthenticated cron,
+  and generated social previews reported `9 passed, 1 skipped`.
 - `https://sticky-green.vercel.app/?auth_error=Magic%20link%20expired` returns
   HTTP `200`, renders the signed-out auth shell, and shows the callback error.
-- `https://sticky-h0o547tao-yuvraj-kashyaps-projects.vercel.app/auth/callback?error_description=smoke`
-  redirects to
-  `https://sticky-h0o547tao-yuvraj-kashyaps-projects.vercel.app/?auth_error=smoke`,
-  preserving the generated deployment origin.
 - `https://sticky-green.vercel.app/auth/callback?error_description=Provider%20denied`
   redirects to `https://sticky-green.vercel.app/?auth_error=Provider+denied`,
   preserving the stable alias origin.
@@ -407,5 +406,5 @@ Latest smoke evidence:
 - `/api/recurrence/catch-up` returns HTTP `401` without the cron bearer token.
 - `/api/recurrence/catch-up` returns HTTP `200` with a valid cron bearer token
   and reports `disabled: true` until `SUPABASE_SECRET_KEY` is configured.
-- Deployment error logs for `dpl_8n8QF7cSKvaMx1Vg5SXB3j8FSJk9` returned no
-  errors.
+- Deployment error logs for `dpl_7dSCSaDDyeDpyBfKQL98e184TVqM` returned no
+  records in the last 30 minutes.
