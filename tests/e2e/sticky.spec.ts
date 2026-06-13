@@ -50,6 +50,15 @@ function localDateKey(offsetDays = 0) {
   return local.toISOString().slice(0, 10);
 }
 
+function nextWeekdayKey(day: number) {
+  const today = new Date();
+  let delta = (day - today.getDay() + 7) % 7;
+  if (delta === 0) {
+    delta = 7;
+  }
+  return localDateKey(delta);
+}
+
 function shortDateLabel(dateKey: string) {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -405,6 +414,37 @@ test.describe("Sticky workspace", () => {
       await expect(routedCard).not.toContainText("#capture-target");
       await expect(routedCard).toContainText(`${shortDateLabel(localDateKey(1))} at 09:00`);
       await expect(page.getByLabel("Sticky details").getByRole("textbox", { name: "Title" })).toHaveValue("Route me");
+    });
+  });
+
+  test("quick capture parses weekday and word time without polluting the title", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "natural language capture runs in the desktop project");
+
+    await expectNoConsoleErrors(page, async () => {
+      await page.goto("/");
+      const nextFriday = nextWeekdayKey(5);
+
+      await page.getByLabel("Quick add sticky").fill("Plan review Friday noon");
+      await expect(page.locator(".quick-schedule-preview")).toContainText("Friday");
+      await expect(page.locator(".quick-schedule-preview")).toContainText("12:00 PM");
+      await page.getByRole("button", { name: "Add" }).click();
+
+      const capturedCard = page.locator(".task-card", { hasText: "Plan review" });
+      await expect(capturedCard).toBeVisible();
+      await expect(capturedCard).toContainText(`${shortDateLabel(nextFriday)} at 12:00`);
+      await expect(capturedCard).not.toContainText("Friday noon");
+
+      const details = page.getByLabel("Sticky details");
+      await expect(details.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Plan review");
+      await expect(details.locator('input[aria-label="Due date"]')).toHaveValue(nextFriday);
+      await expect(details.locator('input[aria-label="Due time"]')).toHaveValue("12:00");
+
+      await page.reload();
+      const persistedCard = page.locator(".task-card", { hasText: "Plan review" });
+      await expect(persistedCard).toBeVisible();
+      await expect(persistedCard).toContainText(`${shortDateLabel(nextFriday)} at 12:00`);
+      await persistedCard.click();
+      await expect(details.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Plan review");
     });
   });
 
