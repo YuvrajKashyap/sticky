@@ -2730,6 +2730,26 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
               {systemMessage}
             </div>
           ) : null}
+          {saveState.error ? (
+            <div className="sync-banner" role="alert">
+              <TriangleAlert size={17} />
+              <div>
+                <strong>Last save did not stick</strong>
+                <span>{saveState.error}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setSaveState((current) => ({
+                    ...current,
+                    error: null,
+                  }))
+                }
+              >
+                Dismiss
+              </button>
+            </div>
+          ) : null}
 
           <header className="workspace-topbar">
             <div className="workspace-title">
