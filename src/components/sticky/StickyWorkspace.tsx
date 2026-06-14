@@ -3512,8 +3512,12 @@ function TaskDetailsPanel({
   const [titleDraft, setTitleDraft] = useState(task?.title ?? "");
   const [detailsDraft, setDetailsDraft] = useState(task?.details ?? "");
   const subtaskTitleId = useId();
+  const recurrenceRestrictionId = useId();
+  const subtaskRestrictionId = useId();
   const canHaveSubtasks = !recurrenceRule;
   const canRepeat = subtasks.length === 0;
+  const recurrenceBlockedBySubtasks = !recurrenceRule && !canRepeat;
+  const subtasksBlockedByRepeat = !canHaveSubtasks;
 
   useEffect(() => {
     setNewSubtaskTitle("");
@@ -3615,6 +3619,10 @@ function TaskDetailsPanel({
 
   function submitSubtask(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!canHaveSubtasks || !newSubtaskTitle.trim()) {
+      return;
+    }
+
     onAddSubtask(newSubtaskTitle);
     setNewSubtaskTitle("");
   }
@@ -3855,14 +3863,17 @@ function TaskDetailsPanel({
           <input
             type="checkbox"
             checked={Boolean(recurrenceRule)}
-            disabled={!recurrenceRule && !canRepeat}
+            disabled={recurrenceBlockedBySubtasks}
+            aria-describedby={recurrenceBlockedBySubtasks ? recurrenceRestrictionId : undefined}
             onChange={(event) => onToggleRecurrence(event.target.checked)}
           />
           <span>{recurrenceRule ? "Repeating" : "Not repeating"}</span>
         </label>
 
-        {!canRepeat && !recurrenceRule ? (
-          <p className="helper-copy">Repeating stickies cannot have subtasks. Remove subtasks first.</p>
+        {recurrenceBlockedBySubtasks ? (
+          <p className="helper-copy" id={recurrenceRestrictionId}>
+            Repeating stickies cannot have subtasks. Remove subtasks first.
+          </p>
         ) : null}
 
         {recurrenceRule ? (
@@ -4029,16 +4040,24 @@ function TaskDetailsPanel({
             value={newSubtaskTitle}
             onChange={(event) => setNewSubtaskTitle(event.target.value)}
             placeholder={canHaveSubtasks ? "Add subtask" : "Subtasks are disabled for repeats"}
-            disabled={!canHaveSubtasks}
+            disabled={subtasksBlockedByRepeat}
+            aria-describedby={subtasksBlockedByRepeat ? subtaskRestrictionId : undefined}
           />
           <button
             type="submit"
-            disabled={!newSubtaskTitle.trim() || !canHaveSubtasks}
+            disabled={!newSubtaskTitle.trim() || subtasksBlockedByRepeat}
             aria-label="Add subtask"
+            aria-describedby={subtasksBlockedByRepeat ? subtaskRestrictionId : undefined}
           >
             <Plus size={16} />
           </button>
         </form>
+
+        {subtasksBlockedByRepeat ? (
+          <p className="helper-copy" id={subtaskRestrictionId}>
+            Repeating stickies do not support subtasks. Remove repeat to add subtasks.
+          </p>
+        ) : null}
 
         <SortableContext
           items={subtasks.map((subtask) => subtask.id)}

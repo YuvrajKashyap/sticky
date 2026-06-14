@@ -352,6 +352,10 @@ test.describe("Sticky workspace", () => {
       await expect(subtaskDeleteToast.getByRole("button", { name: "Dismiss Subtask deleted" })).toBeVisible();
       await subtaskDeleteToast.getByRole("button", { name: "Undo Subtask deleted" }).click();
       await expect(details.locator(".subtask-row")).toHaveCount(2);
+      await expect(details.getByLabel("Not repeating")).toBeDisabled();
+      await expect(details.getByLabel("Not repeating")).toHaveAccessibleDescription(
+        "Repeating stickies cannot have subtasks. Remove subtasks first.",
+      );
 
       await details.getByLabel("List").selectOption({ label: "Move Target" });
       await page.locator("button.list-tab", { hasText: "Move Target" }).click();
@@ -379,6 +383,16 @@ test.describe("Sticky workspace", () => {
       await page.getByRole("button", { name: "Add", exact: true }).click();
       await activeRegion.getByText("Repeat without subtasks").click();
       await details.getByLabel("Not repeating").check();
+      const repeatSubtaskTitle = details.getByLabel("New subtask title");
+      const repeatAddSubtaskButton = details.getByRole("button", { name: "Add subtask" });
+      await expect(repeatSubtaskTitle).toBeDisabled();
+      await expect(repeatSubtaskTitle).toHaveAccessibleDescription(
+        "Repeating stickies do not support subtasks. Remove repeat to add subtasks.",
+      );
+      await expect(repeatAddSubtaskButton).toBeDisabled();
+      await expect(repeatAddSubtaskButton).toHaveAccessibleDescription(
+        "Repeating stickies do not support subtasks. Remove repeat to add subtasks.",
+      );
       await details.getByLabel("Starts").fill("2026-06-15");
       await expect(details.getByLabel("Starts")).toHaveValue("2026-06-15");
       await details.getByLabel("Frequency").selectOption("weekly");
