@@ -174,6 +174,10 @@ const TASK_SORT_LABELS: Record<StickyTaskSortMode, string> = {
   custom: "Custom",
   due: "Due date",
 };
+const TASK_SORT_ACCESSIBLE_LABELS: Record<StickyTaskSortMode, string> = {
+  custom: "Custom order",
+  due: "Due date",
+};
 const WEEKDAYS = [
   { label: "S", short: "Sun", name: "Sunday", value: 0 },
   { label: "M", short: "Mon", name: "Monday", value: 1 },
@@ -461,6 +465,12 @@ function plural(value: number, singular: string, pluralForm = `${singular}s`) {
 
 function taskViewButtonLabel(label: string, count: number, active: boolean) {
   return `${active ? "Current" : "Show"} task view: ${label}, ${count} ${plural(count, "sticky", "stickies")}`;
+}
+
+function taskSortButtonLabel(sortMode: StickyTaskSortMode, active: boolean) {
+  const label = TASK_SORT_ACCESSIBLE_LABELS[sortMode];
+
+  return active ? `Current task sort: ${label}` : `Sort stickies by ${label.toLowerCase()}`;
 }
 
 function recurrenceCadence(rule: StickyRecurrenceRule) {
@@ -3036,6 +3046,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
                 className={taskSortMode === "custom" ? "active" : ""}
                 onClick={() => setTaskSortMode("custom")}
                 aria-pressed={taskSortMode === "custom"}
+                aria-label={taskSortButtonLabel("custom", taskSortMode === "custom")}
               >
                 <Rows3 size={15} />
                 {TASK_SORT_LABELS.custom}
@@ -3045,6 +3056,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
                 className={taskSortMode === "due" ? "active" : ""}
                 onClick={() => setTaskSortMode("due")}
                 aria-pressed={taskSortMode === "due"}
+                aria-label={taskSortButtonLabel("due", taskSortMode === "due")}
               >
                 <CalendarDays size={15} />
                 {TASK_SORT_LABELS.due}

@@ -135,6 +135,7 @@ test.describe("Sticky workspace", () => {
         }),
       ).toBeVisible();
       await expect(page.getByRole("button", { name: "Current task view: All, 3 stickies" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Current task sort: Custom order" })).toBeVisible();
       await expectSingleLine(page.locator(".workspace-title h2"));
       await expectNoHorizontalOverflow(page);
       await expect(page.locator(".save-status")).toContainText("Local demo saved");
@@ -344,7 +345,11 @@ test.describe("Sticky workspace", () => {
         "true",
       );
       await expect(filteredActiveRegion.getByText("Second order sticky")).toBeVisible();
-      await page.getByRole("button", { name: "Due date", exact: true }).click();
+      await page.getByRole("button", { name: "Sort stickies by due date" }).click();
+      await expect(page.getByRole("button", { name: "Current task sort: Due date" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
       await expectTextBefore(page, ".task-title", "Smart parsed sticky", "Verification sticky polished");
       await expect(
         filteredActiveRegion.locator(".task-card", { hasText: "Smart parsed sticky" }).getByRole("button", {
@@ -354,7 +359,10 @@ test.describe("Sticky workspace", () => {
       await page.keyboard.press("Control+K");
       await page.getByLabel("Search commands").fill("custom order");
       await page.keyboard.press("Enter");
-      await expect(page.getByRole("button", { name: "Custom" })).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByRole("button", { name: "Current task sort: Custom order" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
 
       const newSubtaskTitle = details.getByLabel("New subtask title");
       const addSubtaskButton = details.getByRole("button", { name: "Add subtask" });
@@ -572,12 +580,15 @@ test.describe("Sticky workspace", () => {
       const taskViews = page.locator(".task-filter-bar");
 
       await taskViews.getByRole("button", { name: /Today/ }).click();
-      await page.getByRole("button", { name: "Due date", exact: true }).click();
+      await page.getByRole("button", { name: "Sort stickies by due date" }).click();
       await expect(taskViews.getByRole("button", { name: "Current task view: Today, 2 stickies" })).toHaveAttribute(
         "aria-pressed",
         "true",
       );
-      await expect(page.getByRole("button", { name: "Due date", exact: true })).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByRole("button", { name: "Current task sort: Due date" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
       await expect(page.getByText(/Reordering is locked while search, filters, or due-date sorting are active/)).toBeVisible();
 
       await page.reload();
@@ -586,7 +597,10 @@ test.describe("Sticky workspace", () => {
         "aria-pressed",
         "true",
       );
-      await expect(page.getByRole("button", { name: "Due date", exact: true })).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByRole("button", { name: "Current task sort: Due date" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
       await expect(page.getByText(/Reordering is locked while search, filters, or due-date sorting are active/)).toBeVisible();
     });
   });
