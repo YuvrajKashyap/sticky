@@ -118,11 +118,81 @@ function quickAddButton(page: Page, listName: string) {
   return page.getByRole("button", { name: `Add sticky to ${listName}` });
 }
 
+async function expectSpecificVisibleControlNames(page: Page) {
+  const weakNames = await page.evaluate(() => {
+    const genericNames = new Set([
+      "Add",
+      "Delete",
+      "Duplicate",
+      "Complete",
+      "Restore",
+      "Rename",
+      "Move",
+      "Open",
+      "Close",
+    ]);
+
+    function labelText(element: Element) {
+      const ariaLabel = element.getAttribute("aria-label");
+      if (ariaLabel) {
+        return ariaLabel.trim();
+      }
+
+      const labelledBy = element.getAttribute("aria-labelledby");
+      if (labelledBy) {
+        return labelledBy
+          .split(/\s+/)
+          .map((id) => document.getElementById(id)?.textContent?.trim())
+          .filter(Boolean)
+          .join(" ");
+      }
+
+      if (element.id) {
+        const explicitLabel = document.querySelector(`label[for="${CSS.escape(element.id)}"]`);
+        if (explicitLabel?.textContent) {
+          return explicitLabel.textContent.trim();
+        }
+      }
+
+      const wrappingLabel = element.closest("label");
+      if (wrappingLabel?.textContent) {
+        return wrappingLabel.textContent.replace(/\s+/g, " ").trim();
+      }
+
+      return (element.textContent ?? "").replace(/\s+/g, " ").trim();
+    }
+
+    return Array.from(document.querySelectorAll("button, [role='button'], input, textarea, select"))
+      .filter((element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      })
+      .map((element) => {
+        const name = labelText(element);
+        return {
+          name,
+          tag: element.tagName.toLowerCase(),
+          className: typeof element.className === "string" ? element.className : "",
+        };
+      })
+      .filter((control) => !control.name || genericNames.has(control.name));
+  });
+
+  expect(weakNames).toEqual([]);
+}
+
 test.describe("Sticky workspace", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
     await page.evaluate(() => window.localStorage.clear());
     await page.reload();
+  });
+
+  test("visible workspace controls avoid empty or generic action names", async ({ page }) => {
+    await expectNoConsoleErrors(page, async () => {
+      await expect(page.locator(".sticky-app")).toBeVisible();
+      await expectSpecificVisibleControlNames(page);
+    });
   });
 
   test("desktop workflow covers lists, tasks, subtasks, due dates, recurrence, completed pile, and persistence", async ({ page }, testInfo) => {
@@ -206,7 +276,7 @@ test.describe("Sticky workspace", () => {
       ).toBeVisible();
       await expect(newListButton).toBeFocused();
 
-      const renameButton = page.getByRole("button", { name: "Rename", exact: true });
+      const renameButton = page.getByRole("button", { name: "Rename current list Verification" });
       await renameButton.click();
       await expect(page.getByRole("dialog", { name: "Rename list" })).toBeVisible();
       await page.getByRole("textbox", { name: "Name" }).fill("Verification Prime");
@@ -217,7 +287,7 @@ test.describe("Sticky workspace", () => {
           name: "Open list Verification Prime, 0 active stickies, 0 completed stickies, current list",
         }),
       ).toBeVisible();
-      await expect(renameButton).toBeFocused();
+      await expect(page.getByRole("button", { name: "Rename current list Verification Prime" })).toBeFocused();
 
       await page.getByRole("button", { name: "New list" }).click();
       await page.getByRole("textbox", { name: "Name" }).fill("Move Target");
@@ -233,6 +303,12 @@ test.describe("Sticky workspace", () => {
       moveTargetTab = page.locator(".list-tab-wrap", { hasText: "Move Target" });
       await moveTargetTab.getByRole("button", { name: /Move list named Move Target down/ }).click();
       await expectTextBefore(page, ".list-tab-name", "Verification Prime", "Move Target");
+      await expect(
+        page.getByRole("button", { name: "Drag list named Move Target" }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Drag list named Verification Prime" }),
+      ).toBeVisible();
       await page.keyboard.press("Control+K");
       await page.getByLabel("Search commands").fill("Verification Prime");
       await page.keyboard.press("Enter");

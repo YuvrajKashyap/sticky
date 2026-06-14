@@ -3005,6 +3005,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
                 className="tool-button"
                 type="button"
                 onClick={() => activeList && openListEditor(activeList)}
+                aria-label={`Rename current list ${activeList?.name ?? ""}`.trim()}
               >
                 <Pencil size={16} />
                 Rename
@@ -3330,7 +3331,12 @@ function SortableListItem({
         onClick={onSelect}
         aria-label={listTabLabel}
       >
-        <span className="drag-handle" {...sortable.attributes} {...sortable.listeners}>
+        <span
+          className="drag-handle"
+          {...sortable.attributes}
+          {...sortable.listeners}
+          aria-label={`Drag list named ${list.name}`}
+        >
           <GripVertical size={16} />
         </span>
         <span className="list-tab-name">{list.name}</span>

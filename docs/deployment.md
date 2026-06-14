@@ -377,6 +377,14 @@ Current DNS check result: `sticky.yuvrajkashyap.com` does not resolve yet.
 
 Latest smoke evidence:
 
+- Local `npm.cmd run verify` passed on 2026-06-14 after list drag-handle and
+  current-list rename action-name accessibility polish: typecheck, lint,
+  production build, moderate audit with zero vulnerabilities, and Playwright
+  `20 passed, 10 skipped`.
+- Chrome-channel Playwright workspace audit passed on 2026-06-14 in desktop
+  and mobile viewports with no console errors, no horizontal overflow, and no
+  visible controls with empty or generic action names. The same rule is now
+  covered by e2e regression coverage.
 - Production source deploy from local commit `de99d7e` passed on 2026-06-14
   after the local prebuilt Vercel build hit a Windows symlink `EPERM` while
   assembling `.vercel/output`. Remote Vercel build completed successfully and
