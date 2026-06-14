@@ -1,10 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { userFacingStickyMessage } from "@/lib/sticky/messages";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getAppBaseUrl } from "@/lib/supabase/redirect";
 
 function redirectWithAuthError(baseUrl: string, message: string) {
   const url = new URL(baseUrl);
-  url.searchParams.set("auth_error", message);
+  url.searchParams.set("auth_error", userFacingStickyMessage(message));
   return NextResponse.redirect(url);
 }
 

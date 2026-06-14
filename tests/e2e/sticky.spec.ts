@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
+  GENERIC_STICKY_ACCESS_MESSAGE,
   GENERIC_STICKY_SAVE_MESSAGE,
   userFacingStickyMessage,
   userFacingStickySaveMessage,
@@ -928,6 +929,20 @@ test.describe("Sticky workspace", () => {
       await expect(page.getByText("Supabase")).toHaveCount(0);
       await expect(page.getByText("sticky.allowed_emails")).toHaveCount(0);
       await expect(page.getByText("NEXT_PUBLIC_SUPABASE")).toHaveCount(0);
+    });
+  });
+
+  test("auth callback sanitizes technical errors before redirecting", async ({ page }) => {
+    await expectNoConsoleErrors(page, async () => {
+      await page.goto("/auth/callback?error_description=permission%20denied%20for%20schema%20sticky");
+      const redirectedUrl = new URL(page.url());
+
+      expect(redirectedUrl.pathname).toBe("/");
+      expect(redirectedUrl.searchParams.get("auth_error")).toBe(GENERIC_STICKY_ACCESS_MESSAGE);
+      expect(page.url()).not.toContain("permission");
+      expect(page.url()).not.toContain("schema");
+      await expect(page.getByRole("heading", { name: "Sign in to Sticky" })).toBeVisible();
+      await expect(page.getByText(GENERIC_STICKY_ACCESS_MESSAGE)).toBeVisible();
     });
   });
 
