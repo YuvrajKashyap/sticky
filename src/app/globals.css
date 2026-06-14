@@ -3042,6 +3042,23 @@ select {
     grid-template-columns: 1fr;
   }
 
+  .task-filter-bar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible;
+  }
+
+  .task-filter-bar button {
+    width: 100%;
+    min-width: 0;
+    flex: none;
+  }
+
+  .task-filter-bar span {
+    overflow: visible;
+    text-overflow: clip;
+  }
+
   .task-sort-row {
     align-items: stretch;
     flex-direction: column;

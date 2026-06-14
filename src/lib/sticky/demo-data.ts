@@ -1,14 +1,13 @@
 import { localDateKey } from "@/lib/sticky/recurrence";
 import type { StickyWorkspaceData } from "@/types/sticky";
 
-const now = new Date();
-const todayKey = localDateKey(now);
-
-function iso(minutesAgo = 0) {
+function iso(now: Date, minutesAgo = 0) {
   return new Date(now.getTime() - minutesAgo * 60_000).toISOString();
 }
 
 export function createDemoWorkspaceData(): StickyWorkspaceData {
+  const now = new Date();
+  const todayKey = localDateKey(now);
   const userId = "demo-user";
   const todayId = "demo-list-today";
   const launchId = "demo-list-launch";
@@ -32,8 +31,8 @@ export function createDemoWorkspaceData(): StickyWorkspaceData {
         name: "Today",
         color: "sun",
         sortOrder: 1000,
-        createdAt: iso(360),
-        updatedAt: iso(8),
+        createdAt: iso(now, 360),
+        updatedAt: iso(now, 8),
       },
       {
         id: launchId,
@@ -41,8 +40,8 @@ export function createDemoWorkspaceData(): StickyWorkspaceData {
         name: "Launch polish",
         color: "coral",
         sortOrder: 2000,
-        createdAt: iso(340),
-        updatedAt: iso(12),
+        createdAt: iso(now, 340),
+        updatedAt: iso(now, 12),
       },
       {
         id: homeId,
@@ -50,8 +49,8 @@ export function createDemoWorkspaceData(): StickyWorkspaceData {
         name: "Home",
         color: "mint",
         sortOrder: 3000,
-        createdAt: iso(330),
-        updatedAt: iso(30),
+        createdAt: iso(now, 330),
+        updatedAt: iso(now, 30),
       },
     ],
     tasks: [
@@ -69,8 +68,8 @@ export function createDemoWorkspaceData(): StickyWorkspaceData {
         completedAt: null,
         sortOrder: 1000,
         completedSortOrder: null,
-        createdAt: iso(120),
-        updatedAt: iso(12),
+        createdAt: iso(now, 120),
+        updatedAt: iso(now, 12),
       },
       {
         id: polishTaskId,
@@ -86,8 +85,8 @@ export function createDemoWorkspaceData(): StickyWorkspaceData {
         completedAt: null,
         sortOrder: 2000,
         completedSortOrder: null,
-        createdAt: iso(100),
-        updatedAt: iso(20),
+        createdAt: iso(now, 100),
+        updatedAt: iso(now, 20),
       },
       {
         id: recurringTaskId,
@@ -103,8 +102,8 @@ export function createDemoWorkspaceData(): StickyWorkspaceData {
         completedAt: null,
         sortOrder: 3000,
         completedSortOrder: null,
-        createdAt: iso(80),
-        updatedAt: iso(5),
+        createdAt: iso(now, 80),
+        updatedAt: iso(now, 5),
       },
       {
         id: completedTaskId,
@@ -117,11 +116,11 @@ export function createDemoWorkspaceData(): StickyWorkspaceData {
         dueTime: null,
         timezone: "America/Chicago",
         isCompleted: true,
-        completedAt: iso(22),
+        completedAt: iso(now, 22),
         sortOrder: 4000,
         completedSortOrder: 1000,
-        createdAt: iso(180),
-        updatedAt: iso(22),
+        createdAt: iso(now, 180),
+        updatedAt: iso(now, 22),
       },
       {
         id: "demo-task-marketing",
@@ -137,8 +136,8 @@ export function createDemoWorkspaceData(): StickyWorkspaceData {
         completedAt: null,
         sortOrder: 1000,
         completedSortOrder: null,
-        createdAt: iso(80),
-        updatedAt: iso(15),
+        createdAt: iso(now, 80),
+        updatedAt: iso(now, 15),
       },
     ],
     subtasks: [
@@ -148,10 +147,10 @@ export function createDemoWorkspaceData(): StickyWorkspaceData {
         taskId: inboxTaskId,
         title: "Sort inbox into Today and Launch",
         isCompleted: true,
-        completedAt: iso(16),
+        completedAt: iso(now, 16),
         sortOrder: 1000,
-        createdAt: iso(70),
-        updatedAt: iso(16),
+        createdAt: iso(now, 70),
+        updatedAt: iso(now, 16),
       },
       {
         id: "demo-subtask-priority",
@@ -161,8 +160,8 @@ export function createDemoWorkspaceData(): StickyWorkspaceData {
         isCompleted: false,
         completedAt: null,
         sortOrder: 2000,
-        createdAt: iso(65),
-        updatedAt: iso(18),
+        createdAt: iso(now, 65),
+        updatedAt: iso(now, 18),
       },
       {
         id: "demo-subtask-sheet",
@@ -172,8 +171,8 @@ export function createDemoWorkspaceData(): StickyWorkspaceData {
         isCompleted: false,
         completedAt: null,
         sortOrder: 1000,
-        createdAt: iso(60),
-        updatedAt: iso(18),
+        createdAt: iso(now, 60),
+        updatedAt: iso(now, 18),
       },
     ],
     recurrenceRules: [
@@ -191,8 +190,8 @@ export function createDemoWorkspaceData(): StickyWorkspaceData {
         occurrenceCount: null,
         timezone: "America/Chicago",
         paused: false,
-        createdAt: iso(80),
-        updatedAt: iso(5),
+        createdAt: iso(now, 80),
+        updatedAt: iso(now, 5),
       },
     ],
     preferences: {

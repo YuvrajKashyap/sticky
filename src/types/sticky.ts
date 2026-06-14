@@ -10,6 +10,8 @@ export type StickyTaskViewFilter = "all" | "today" | "due" | "overdue" | "recurr
 
 export type StickyTaskSortMode = "custom" | "due";
 
+export type StickyLaunchIntent = "capture" | "search" | "today" | "scheduled";
+
 export type StickyUser = {
   id: string;
   email: string;

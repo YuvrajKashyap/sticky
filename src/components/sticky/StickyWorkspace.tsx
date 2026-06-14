@@ -65,6 +65,7 @@ import type {
   StickyList,
   StickyRecurrenceRule,
   StickySubtask,
+  StickyLaunchIntent,
   StickyTaskSortMode,
   StickyTaskViewFilter,
   StickyTask,
@@ -75,6 +76,7 @@ type StickyWorkspaceProps = {
   initialData: StickyWorkspaceData;
   mode: AppMode;
   systemMessage?: string;
+  initialLaunchIntent?: StickyLaunchIntent;
 };
 
 type Toast = {
@@ -682,7 +684,7 @@ function saveStatus(saveState: SaveState, mode: AppMode, demoReady: boolean) {
   return { tone: "clean", label: "Supabase-backed", shortLabel: "Live" };
 }
 
-export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWorkspaceProps) {
+export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunchIntent }: StickyWorkspaceProps) {
   const [workspace, setWorkspace] = useState(initialData);
   const [demoReady, setDemoReady] = useState(mode !== "demo");
   const [quickTitle, setQuickTitle] = useState("");
@@ -705,6 +707,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
     error: null,
   });
   const workspaceRef = useRef(workspace);
+  const launchIntentAppliedRef = useRef(false);
   const dialogReturnFocusRef = useRef<HTMLElement | null>(null);
   const quickInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -872,6 +875,30 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
     listEditor,
     selectedTaskId,
   ]);
+
+  useEffect(() => {
+    if (!initialLaunchIntent || launchIntentAppliedRef.current) {
+      return;
+    }
+
+    if (mode === "demo" && !demoReady) {
+      return;
+    }
+
+    launchIntentAppliedRef.current = true;
+
+    if (initialLaunchIntent === "capture") {
+      window.setTimeout(() => quickInputRef.current?.focus(), 0);
+      return;
+    }
+
+    if (initialLaunchIntent === "search") {
+      window.setTimeout(() => searchInputRef.current?.focus(), 0);
+      return;
+    }
+
+    setTaskViewFilterState(initialLaunchIntent === "today" ? "today" : "due");
+  }, [demoReady, initialLaunchIntent, mode]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -1133,7 +1160,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
       title: "Capture a new sticky",
       detail: activeList ? `Add to ${activeList.name}` : "Focus the quick capture tray",
       keywords: "new add quick capture task sticky n",
-      run: () => quickInputRef.current?.focus(),
+      run: () => window.setTimeout(() => quickInputRef.current?.focus(), 0),
     },
     {
       id: "action-search",
@@ -1141,7 +1168,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
       title: "Search this list",
       detail: activeList ? `Filter ${activeList.name}` : "Focus search",
       keywords: "find filter search current list",
-      run: () => searchInputRef.current?.focus(),
+      run: () => window.setTimeout(() => searchInputRef.current?.focus(), 0),
     },
     {
       id: "action-new-list",

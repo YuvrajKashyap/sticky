@@ -635,6 +635,9 @@ test.describe("Sticky workspace", () => {
       await page.getByLabel("Quick add sticky").fill("Mobile capture");
       await quickAddButton(page, "Today").click();
       await expect(page.getByText("Mobile capture")).toBeVisible();
+      for (const label of ["Scheduled", "Repeating", "Subtasks"]) {
+        await expectNoInlineClip(page.locator(".task-filter-bar button", { hasText: label }).locator("span"));
+      }
       const mobileDetails = page.getByLabel("Sticky details");
       await expect(mobileDetails).toBeVisible();
       await expect(mobileDetails.locator('input[type="date"]')).toBeVisible();
@@ -933,6 +936,83 @@ test.describe("Sticky workspace", () => {
       ok: true,
       disabled: true,
       reason: "Supabase server secret is not configured.",
+    });
+  });
+
+  test("install manifest advertises real shortcuts and screenshots", async ({ request }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "install manifest check only needs one browser project");
+
+    const manifestResponse = await request.get("/manifest.webmanifest");
+    expect(manifestResponse.status()).toBe(200);
+    expect(manifestResponse.headers()["content-type"]).toContain("application/manifest+json");
+
+    const manifest = (await manifestResponse.json()) as {
+      display_override?: string[];
+      launch_handler?: { client_mode?: string[] };
+      screenshots?: Array<{ src: string; form_factor?: string; sizes?: string }>;
+      shortcuts?: Array<{ name: string; url: string }>;
+    };
+
+    expect(manifest.display_override).toEqual(["window-controls-overlay", "standalone", "minimal-ui"]);
+    expect(manifest.launch_handler?.client_mode).toEqual(["focus-existing", "navigate-existing"]);
+    expect(manifest.shortcuts?.map((shortcut) => shortcut.url)).toEqual([
+      "/?intent=capture",
+      "/?view=today",
+      "/?view=scheduled",
+      "/?intent=search",
+    ]);
+    expect(manifest.shortcuts?.map((shortcut) => shortcut.name)).toEqual([
+      "Quick Capture",
+      "Today View",
+      "Scheduled View",
+      "Search Sticky",
+    ]);
+    expect(manifest.screenshots).toEqual([
+      expect.objectContaining({
+        src: "/install-screenshot-wide",
+        sizes: "1280x720",
+        form_factor: "wide",
+      }),
+      expect.objectContaining({
+        src: "/install-screenshot-narrow",
+        sizes: "390x844",
+        form_factor: "narrow",
+      }),
+    ]);
+
+    for (const route of ["/install-screenshot-wide", "/install-screenshot-narrow"]) {
+      const response = await request.get(route);
+      expect(response.status()).toBe(200);
+      expect(response.headers()["content-type"]).toContain("image/png");
+      expect((await response.body()).length).toBeGreaterThan(10_000);
+    }
+  });
+
+  test("install shortcuts open useful workspace intents", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "launch intent check only needs one browser project");
+
+    await expectNoConsoleErrors(page, async () => {
+      await page.goto("/?intent=capture");
+      await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+      await expect(page.getByLabel("Quick add sticky")).toBeFocused();
+
+      await page.goto("/?intent=search");
+      await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+      await expect(page.getByLabel("Search current list")).toBeFocused();
+
+      await page.goto("/?view=today");
+      await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Current task view: Today, 2 stickies" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+
+      await page.goto("/?view=scheduled");
+      await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Current task view: Scheduled, 2 stickies" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
     });
   });
 
