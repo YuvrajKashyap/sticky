@@ -179,14 +179,17 @@ https://sticky.yuvrajkashyap.com
 http://localhost:3000/auth/callback
 http://localhost:3100/auth/callback
 https://sticky.yuvrajkashyap.com/auth/callback
-https://sticky-59p4495uq-yuvraj-kashyaps-projects.vercel.app/auth/callback
+https://sticky-3zihnt2x3-yuvraj-kashyaps-projects.vercel.app/auth/callback
 https://sticky-green.vercel.app/auth/callback
 https://sticky-yuvraj-kashyaps-projects.vercel.app/auth/callback
 ```
 
-After the first Vercel preview deploy, add that exact preview callback URL too,
-for example `https://<preview-host>/auth/callback`. If you intentionally choose
-a wildcard for Vercel previews, Supabase documents the pattern
+Generated Vercel deployment hosts change after new deploys. Re-run
+`npm run launch:check` with a local `SUPABASE_ACCESS_TOKEN` before release; it
+derives the current generated production callback from `vercel inspect` and
+checks it against Supabase Auth. After the first Vercel preview deploy, add that
+exact preview callback URL too, for example `https://<preview-host>/auth/callback`.
+If you intentionally choose a wildcard for Vercel previews, Supabase documents the pattern
 `https://*-<team-or-account-slug>.vercel.app/**`; verify the pattern against the
 actual preview host before relying on it.
 
@@ -198,7 +201,7 @@ $redirects = @(
   "http://localhost:3000/auth/callback",
   "http://localhost:3100/auth/callback",
   "https://sticky.yuvrajkashyap.com/auth/callback",
-  "https://sticky-59p4495uq-yuvraj-kashyaps-projects.vercel.app/auth/callback",
+  "https://sticky-3zihnt2x3-yuvraj-kashyaps-projects.vercel.app/auth/callback",
   "https://sticky-green.vercel.app/auth/callback",
   "https://sticky-yuvraj-kashyaps-projects.vercel.app/auth/callback"
 ) -join ","

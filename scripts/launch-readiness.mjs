@@ -14,19 +14,7 @@ const vercelProjectId = process.env.VERCEL_PROJECT_ID ?? "prj_nfiyWrEfak04ah1pIq
 const supabaseProjectRef = process.env.SUPABASE_PROJECT_REF ?? "sqskfdcwfwywjoobbpos";
 const supabaseAuthSiteUrl =
   process.env.SUPABASE_AUTH_SITE_URL ?? `https://${customDomain}`;
-const supabaseAuthRedirectUrls = (
-  process.env.SUPABASE_AUTH_REDIRECT_URLS ??
-  [
-    "http://localhost:3000/auth/callback",
-    "http://localhost:3100/auth/callback",
-    `https://${customDomain}/auth/callback`,
-    "https://sticky-green.vercel.app/auth/callback",
-    "https://sticky-yuvraj-kashyaps-projects.vercel.app/auth/callback",
-  ].join(",")
-)
-  .split(",")
-  .map((url) => url.trim())
-  .filter(Boolean);
+let productionDeploymentOrigin = null;
 
 const results = [];
 
@@ -83,6 +71,23 @@ function asArray(value) {
   }
 
   return [];
+}
+
+function getSupabaseAuthRedirectUrls() {
+  const configured = asArray(process.env.SUPABASE_AUTH_REDIRECT_URLS);
+
+  if (configured.length) {
+    return configured;
+  }
+
+  return [
+    "http://localhost:3000/auth/callback",
+    "http://localhost:3100/auth/callback",
+    `https://${customDomain}/auth/callback`,
+    "https://sticky-green.vercel.app/auth/callback",
+    "https://sticky-yuvraj-kashyaps-projects.vercel.app/auth/callback",
+    productionDeploymentOrigin ? `${productionDeploymentOrigin}/auth/callback` : null,
+  ].filter(Boolean);
 }
 
 function findConfigValue(value, acceptedKeys) {
@@ -183,6 +188,14 @@ async function checkDeploymentInspect(origin) {
   try {
     const { stdout, stderr } = await runVercel(["inspect", origin, "--scope", vercelScope]);
     const output = `${stdout}\n${stderr}`;
+    const deploymentUrl = output.match(/^\s*url\s+(https:\/\/\S+)/im)?.[1];
+
+    if (deploymentUrl) {
+      productionDeploymentOrigin = new URL(deploymentUrl).origin;
+      pass("Vercel deployment URL", `${productionDeploymentOrigin} is the current generated production URL`);
+    } else {
+      warn("Vercel deployment URL", "could not parse the generated production URL from vercel inspect");
+    }
 
     if (hasLineValue(output, "name", vercelProject)) {
       pass("Vercel deployment project", `deployment belongs to ${vercelProject}`);
@@ -465,7 +478,7 @@ async function checkSupabaseAuthConfig() {
       return;
     }
 
-    for (const redirectUrl of supabaseAuthRedirectUrls) {
+    for (const redirectUrl of getSupabaseAuthRedirectUrls()) {
       if (redirectUrls.has(redirectUrl)) {
         pass("Supabase Auth redirect URL", `${redirectUrl} is allowed`);
       } else {
