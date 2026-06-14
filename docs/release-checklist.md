@@ -6,6 +6,8 @@ Use this before calling a Sticky release ready.
 
 - `npm install` succeeds.
 - `npm run verify` succeeds.
+- `npm run security:check` confirms client-reachable code does not import
+  server-only Supabase helpers or reference server-only Supabase/cron secrets.
 - `git status --short --branch` has no unexpected changes, or the repo is
   intentionally not a git checkout.
 - Local app opens at `http://localhost:3100` during Playwright verification.

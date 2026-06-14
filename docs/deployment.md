@@ -283,6 +283,7 @@ npm run verify
 
 - TypeScript
 - ESLint
+- Client/server secret-boundary checks
 - Next.js production build
 - npm moderate audit
 - Playwright desktop/mobile e2e smoke tests

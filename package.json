@@ -9,9 +9,10 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
+    "security:check": "node scripts/security-check.mjs",
     "audit:moderate": "npm audit --audit-level=moderate",
     "launch:check": "node scripts/launch-readiness.mjs",
-    "verify": "npm run typecheck && npm run lint && npm run build && npm run audit:moderate && npm run test:e2e"
+    "verify": "npm run typecheck && npm run lint && npm run security:check && npm run build && npm run audit:moderate && npm run test:e2e"
   },
   "overrides": {
     "postcss": "8.5.15"
