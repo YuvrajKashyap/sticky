@@ -3150,7 +3150,13 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
           </section>
 
           <section className="completed-pile" aria-label="Completed stickies">
-            <button className="completed-toggle" type="button" onClick={toggleCompletedPile}>
+            <button
+              className="completed-toggle"
+              type="button"
+              onClick={toggleCompletedPile}
+              aria-expanded={completedOpen}
+              aria-controls="completed-stickies-list"
+            >
               {completedOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
               <span>Completed</span>
               <strong>{completedTasks.length}</strong>
@@ -3159,6 +3165,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
             <AnimatePresence initial={false}>
               {completedOpen ? (
                 <motion.div
+                  id="completed-stickies-list"
                   className="completed-list"
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: "auto", opacity: 1 }}

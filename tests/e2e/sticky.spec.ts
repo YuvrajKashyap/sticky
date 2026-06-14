@@ -259,12 +259,18 @@ test.describe("Sticky workspace", () => {
         .locator(".task-card", { hasText: "Second order sticky" })
         .getByRole("button", { name: /Complete Second order sticky/ })
         .click();
-      await page.getByRole("button", { name: /Completed/ }).click();
+      const completedToggle = page.getByRole("button", { name: /Completed/ });
+      await expect(completedToggle).toHaveAttribute("aria-controls", "completed-stickies-list");
+      await expect(completedToggle).toHaveAttribute("aria-expanded", "false");
+      await completedToggle.click();
+      await expect(completedToggle).toHaveAttribute("aria-expanded", "true");
+      await expect(page.locator("#completed-stickies-list")).toBeVisible();
       const initialCompletedRegion = page.getByRole("region", { name: "Completed stickies" });
       await expect(initialCompletedRegion.getByRole("button", { name: "Second order sticky", exact: true })).toBeVisible();
       await initialCompletedRegion.getByRole("button", { name: /Restore Second order sticky/ }).click();
       await expect(page.getByRole("region", { name: "Active stickies" }).getByText("Second order sticky")).toBeVisible();
-      await page.getByRole("button", { name: /Completed/ }).click();
+      await completedToggle.click();
+      await expect(completedToggle).toHaveAttribute("aria-expanded", "false");
 
       const smartTomorrow = localDateKey(1);
       await page.getByLabel("Quick add sticky").fill("Smart parsed sticky tomorrow 2pm");
