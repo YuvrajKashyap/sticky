@@ -1696,6 +1696,37 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
     });
   }
 
+  function saveListOrder(ordered: StickyList[], before: StickyWorkspaceData) {
+    const timestamp = nowIso();
+    const moved = ordered.map((list, index) => ({
+      ...list,
+      sortOrder: (index + 1) * 1000,
+      updatedAt: timestamp,
+    }));
+
+    setWorkspace({ ...workspace, lists: moved });
+    void persist(
+      "List order",
+      () =>
+        supabase!.rpc("reorder_lists", {
+          p_list_ids: moved.map((list) => list.id),
+        }),
+      before,
+    );
+  }
+
+  function moveListInOrder(listId: string, direction: -1 | 1) {
+    const ordered = workspace.lists.slice().sort(bySortOrder);
+    const oldIndex = ordered.findIndex((list) => list.id === listId);
+    const newIndex = oldIndex + direction;
+
+    if (oldIndex < 0 || newIndex < 0 || newIndex >= ordered.length) {
+      return;
+    }
+
+    saveListOrder(arrayMove(ordered, oldIndex, newIndex), workspace);
+  }
+
   function createTask(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const intent = parseQuickCaptureIntent(quickTitle, workspace.lists);
@@ -2724,20 +2755,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
       if (oldIndex < 0 || newIndex < 0) {
         return;
       }
-      const moved = arrayMove(ordered, oldIndex, newIndex).map((list, index) => ({
-        ...list,
-        sortOrder: (index + 1) * 1000,
-      }));
-      const before = workspace;
-      setWorkspace({ ...workspace, lists: moved });
-      void persist(
-        "List order",
-        () =>
-          supabase!.rpc("reorder_lists", {
-            p_list_ids: moved.map((list) => list.id),
-          }),
-        before,
-      );
+      saveListOrder(arrayMove(ordered, oldIndex, newIndex), workspace);
     }
 
     if (type === "task") {
@@ -2808,21 +2826,25 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
           </button>
 
           <SortableContext
-            items={workspace.lists.map((list) => list.id)}
+            items={workspace.lists.slice().sort(bySortOrder).map((list) => list.id)}
             strategy={horizontalListSortingStrategy}
           >
             <nav className="list-stack">
               {workspace.lists
                 .slice()
                 .sort(bySortOrder)
-                .map((list) => (
+                .map((list, index, sortedLists) => (
                   <SortableListItem
                     key={list.id}
                     list={list}
                     active={list.id === activeListId}
                     stats={listStats.get(list.id) ?? { active: 0, completed: 0 }}
+                    canMoveUp={index > 0}
+                    canMoveDown={index < sortedLists.length - 1}
                     onSelect={() => switchList(list.id)}
                     onRename={() => openListEditor(list)}
+                    onMoveUp={() => moveListInOrder(list.id, -1)}
+                    onMoveDown={() => moveListInOrder(list.id, 1)}
                     onDelete={() => requestDeleteList(list)}
                   />
                 ))}
@@ -3239,15 +3261,23 @@ function SortableListItem({
   list,
   active,
   stats,
+  canMoveUp,
+  canMoveDown,
   onSelect,
   onRename,
+  onMoveUp,
+  onMoveDown,
   onDelete,
 }: {
   list: StickyList;
   active: boolean;
   stats: { active: number; completed: number };
+  canMoveUp: boolean;
+  canMoveDown: boolean;
   onSelect: () => void;
   onRename: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
   onDelete: () => void;
 }) {
   const sortable = useSortable({ id: list.id, data: { type: "list" } });
@@ -3272,6 +3302,22 @@ function SortableListItem({
         </span>
       </button>
       <div className="list-tab-actions">
+        <button
+          type="button"
+          onClick={onMoveUp}
+          disabled={!canMoveUp}
+          aria-label={`Move list named ${list.name} up`}
+        >
+          <ChevronUp size={14} />
+        </button>
+        <button
+          type="button"
+          onClick={onMoveDown}
+          disabled={!canMoveDown}
+          aria-label={`Move list named ${list.name} down`}
+        >
+          <ChevronDown size={14} />
+        </button>
         <button type="button" onClick={onRename} aria-label={`Rename ${list.name}`}>
           <Pencil size={14} />
         </button>

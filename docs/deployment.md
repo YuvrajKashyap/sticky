@@ -373,7 +373,7 @@ Current DNS check result: `sticky.yuvrajkashyap.com` does not resolve yet.
 
 Latest smoke evidence:
 
-- Local `npm.cmd run verify` passed after keyboard and mobile-safe subtask
+- Local `npm.cmd run verify` passed after keyboard and mobile-safe list/subtask
   reorder coverage, dialog focus-return coverage, modal focus-trap and
   dialog-label polish, command-center focus restoration and accessibility
   polish, phone list-rail framing polish, natural-language capture coverage,

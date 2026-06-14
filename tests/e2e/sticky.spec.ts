@@ -203,6 +203,15 @@ test.describe("Sticky workspace", () => {
       await page.getByText("Mint", { exact: true }).click();
       await page.getByRole("button", { name: "Save list" }).click();
       await expect(page.getByRole("heading", { name: "Move Target" })).toBeVisible();
+      let moveTargetTab = page.locator(".list-tab-wrap", { hasText: "Move Target" });
+      await expect(
+        moveTargetTab.getByRole("button", { name: /Move list named Move Target down/ }),
+      ).toBeDisabled();
+      await moveTargetTab.getByRole("button", { name: /Move list named Move Target up/ }).click();
+      await expectTextBefore(page, ".list-tab-name", "Move Target", "Verification Prime");
+      moveTargetTab = page.locator(".list-tab-wrap", { hasText: "Move Target" });
+      await moveTargetTab.getByRole("button", { name: /Move list named Move Target down/ }).click();
+      await expectTextBefore(page, ".list-tab-name", "Verification Prime", "Move Target");
       await page.keyboard.press("Control+K");
       await page.getByLabel("Search commands").fill("Verification Prime");
       await page.keyboard.press("Enter");
@@ -444,6 +453,13 @@ test.describe("Sticky workspace", () => {
       const launchTab = page.locator(".list-tab-wrap", { hasText: "Launch polish" });
       await launchTab.scrollIntoViewIfNeeded();
       await expectNoInlineClip(launchTab.locator(".list-tab-name"));
+      await expect(
+        launchTab.getByRole("button", { name: /Move list named Launch polish up/ }),
+      ).toBeVisible();
+      await expect(
+        launchTab.getByRole("button", { name: /Move list named Launch polish down/ }),
+      ).toBeVisible();
+      await expectNoHorizontalOverflow(page);
       await page.getByRole("button", { name: "Open command center" }).click();
       await expect(page.getByRole("dialog", { name: "Command center" })).toBeVisible();
       await page.getByLabel("Search commands").fill("capture");
