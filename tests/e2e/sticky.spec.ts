@@ -316,6 +316,20 @@ test.describe("Sticky workspace", () => {
 
       await details.getByPlaceholder("Add subtask").fill("Second subtask");
       await details.locator(".subtask-form button").click();
+      const subtaskRows = details.locator(".subtask-row");
+      await expect(
+        subtaskRows.nth(0).getByRole("button", { name: /Move Edited subtask up/ }),
+      ).toBeDisabled();
+      await expect(
+        subtaskRows.nth(1).getByRole("button", { name: /Move Second subtask down/ }),
+      ).toBeDisabled();
+      await subtaskRows.nth(1).getByRole("button", { name: /Move Second subtask up/ }).click();
+      await expect(details.locator(".subtask-row input").first()).toHaveValue("Second subtask");
+      await expect(
+        details.locator(".subtask-row").first().getByRole("button", { name: /Move Second subtask up/ }),
+      ).toBeDisabled();
+      await details.locator(".subtask-row").first().getByRole("button", { name: /Move Second subtask down/ }).click();
+      await expect(details.locator(".subtask-row input").nth(1)).toHaveValue("Second subtask");
       await dragBetween(page, details.locator(".subtask-drag").nth(1), details.locator(".subtask-drag").nth(0));
       await details.locator(".subtask-check").first().click();
       await details.locator(".subtask-delete").first().click();
@@ -438,8 +452,17 @@ test.describe("Sticky workspace", () => {
       await page.getByLabel("Quick add sticky").fill("Mobile capture");
       await page.getByRole("button", { name: "Add" }).click();
       await expect(page.getByText("Mobile capture")).toBeVisible();
-      await expect(page.getByLabel("Sticky details")).toBeVisible();
-      await expect(page.getByLabel("Sticky details").locator('input[type="date"]')).toBeVisible();
+      const mobileDetails = page.getByLabel("Sticky details");
+      await expect(mobileDetails).toBeVisible();
+      await expect(mobileDetails.locator('input[type="date"]')).toBeVisible();
+      await mobileDetails.getByPlaceholder("Add subtask").fill("Phone first");
+      await mobileDetails.locator(".subtask-form button").click();
+      await mobileDetails.getByPlaceholder("Add subtask").fill("Phone second");
+      await mobileDetails.locator(".subtask-form button").click();
+      await expect(
+        mobileDetails.locator(".subtask-row").nth(1).getByRole("button", { name: /Move Phone second up/ }),
+      ).toBeVisible();
+      await expectNoHorizontalOverflow(page);
       await expect(page.getByRole("button", { name: "Compact" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Use dark color mode" })).toBeVisible();
     });

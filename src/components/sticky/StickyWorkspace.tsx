@@ -2425,6 +2425,46 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
     );
   }
 
+  function saveSubtaskOrder(
+    taskId: string,
+    ordered: StickySubtask[],
+    before: StickyWorkspaceData,
+  ) {
+    const timestamp = nowIso();
+    const moved = ordered.map((subtask, index) => ({
+      ...subtask,
+      sortOrder: (index + 1) * 1000,
+      updatedAt: timestamp,
+    }));
+    const movedMap = new Map(moved.map((subtask) => [subtask.id, subtask]));
+
+    setWorkspace({
+      ...workspace,
+      subtasks: workspace.subtasks.map((subtask) => movedMap.get(subtask.id) ?? subtask),
+    });
+    void persist(
+      "Subtask order",
+      () =>
+        supabase!.rpc("reorder_subtasks", {
+          p_task_id: taskId,
+          p_subtask_ids: moved.map((subtask) => subtask.id),
+        }),
+      before,
+    );
+  }
+
+  function moveSubtaskInOrder(taskId: string, subtaskId: string, direction: -1 | 1) {
+    const ordered = (subtasksByTask.get(taskId) ?? []).slice().sort(bySortOrder);
+    const oldIndex = ordered.findIndex((subtask) => subtask.id === subtaskId);
+    const newIndex = oldIndex + direction;
+
+    if (oldIndex < 0 || newIndex < 0 || newIndex >= ordered.length) {
+      return;
+    }
+
+    saveSubtaskOrder(taskId, arrayMove(ordered, oldIndex, newIndex), workspace);
+  }
+
   function deleteSubtask(subtaskId: string) {
     const subtask = workspace.subtasks.find((item) => item.id === subtaskId);
 
@@ -2727,25 +2767,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
       if (oldIndex < 0 || newIndex < 0) {
         return;
       }
-      const moved = arrayMove(ordered, oldIndex, newIndex).map((subtask, index) => ({
-        ...subtask,
-        sortOrder: (index + 1) * 1000,
-      }));
-      const movedMap = new Map(moved.map((subtask) => [subtask.id, subtask]));
-      const before = workspace;
-      setWorkspace({
-        ...workspace,
-        subtasks: workspace.subtasks.map((subtask) => movedMap.get(subtask.id) ?? subtask),
-      });
-      void persist(
-        "Subtask order",
-        () =>
-          supabase!.rpc("reorder_subtasks", {
-            p_task_id: selectedTask.id,
-            p_subtask_ids: moved.map((subtask) => subtask.id),
-          }),
-        before,
-      );
+      saveSubtaskOrder(selectedTask.id, arrayMove(ordered, oldIndex, newIndex), workspace);
     }
   }
 
@@ -3160,6 +3182,9 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
           onRestore={() => selectedTask && restoreTask(selectedTask.id)}
           onAddSubtask={(title) => selectedTask && addSubtask(selectedTask, title)}
           onUpdateSubtask={updateSubtask}
+          onMoveSubtask={(subtaskId, direction) =>
+            selectedTask && moveSubtaskInOrder(selectedTask.id, subtaskId, direction)
+          }
           onDeleteSubtask={deleteSubtask}
           onToggleRecurrence={(enabled) => selectedTask && toggleRecurrence(selectedTask, enabled)}
           onUpdateRecurrence={updateRecurrence}
@@ -3409,6 +3434,7 @@ function TaskDetailsPanel({
   onRestore,
   onAddSubtask,
   onUpdateSubtask,
+  onMoveSubtask,
   onDeleteSubtask,
   onToggleRecurrence,
   onUpdateRecurrence,
@@ -3430,6 +3456,7 @@ function TaskDetailsPanel({
   onRestore: () => void;
   onAddSubtask: (title: string) => void;
   onUpdateSubtask: (subtaskId: string, patch: Partial<StickySubtask>) => void;
+  onMoveSubtask: (subtaskId: string, direction: -1 | 1) => void;
   onDeleteSubtask: (subtaskId: string) => void;
   onToggleRecurrence: (enabled: boolean) => void;
   onUpdateRecurrence: (ruleId: string, patch: Partial<StickyRecurrenceRule>) => void;
@@ -3963,11 +3990,15 @@ function TaskDetailsPanel({
           strategy={verticalListSortingStrategy}
         >
           <div className="subtask-list">
-            {subtasks.map((subtask) => (
+            {subtasks.map((subtask, index) => (
               <SortableSubtaskRow
                 key={subtask.id}
                 subtask={subtask}
+                canMoveUp={index > 0}
+                canMoveDown={index < subtasks.length - 1}
                 onUpdate={(patch) => onUpdateSubtask(subtask.id, patch)}
+                onMoveUp={() => onMoveSubtask(subtask.id, -1)}
+                onMoveDown={() => onMoveSubtask(subtask.id, 1)}
                 onDelete={() => onDeleteSubtask(subtask.id)}
               />
             ))}
@@ -4002,11 +4033,19 @@ function TaskDetailsPanel({
 
 function SortableSubtaskRow({
   subtask,
+  canMoveUp,
+  canMoveDown,
   onUpdate,
+  onMoveUp,
+  onMoveDown,
   onDelete,
 }: {
   subtask: StickySubtask;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
   onUpdate: (patch: Partial<StickySubtask>) => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
   onDelete: () => void;
 }) {
   const [titleDraft, setTitleDraft] = useState(subtask.title);
@@ -4066,6 +4105,24 @@ function SortableSubtaskRow({
         aria-label={`Subtask title: ${subtask.title}`}
         className={subtask.isCompleted ? "done" : ""}
       />
+      <button
+        className="subtask-move"
+        type="button"
+        onClick={onMoveUp}
+        disabled={!canMoveUp}
+        aria-label={`Move ${subtask.title} up`}
+      >
+        <ChevronUp size={14} />
+      </button>
+      <button
+        className="subtask-move"
+        type="button"
+        onClick={onMoveDown}
+        disabled={!canMoveDown}
+        aria-label={`Move ${subtask.title} down`}
+      >
+        <ChevronDown size={14} />
+      </button>
       <button
         className="subtask-drag"
         type="button"
