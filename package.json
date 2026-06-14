@@ -11,9 +11,10 @@
     "test:e2e": "playwright test",
     "test:production-smoke": "node scripts/production-smoke.mjs",
     "security:check": "node scripts/security-check.mjs",
+    "schema:check": "node scripts/schema-check.mjs",
     "audit:moderate": "npm audit --audit-level=moderate",
     "launch:check": "node scripts/launch-readiness.mjs",
-    "verify": "npm run typecheck && npm run lint && npm run security:check && npm run build && npm run audit:moderate && npm run test:e2e"
+    "verify": "npm run typecheck && npm run lint && npm run security:check && npm run schema:check && npm run build && npm run audit:moderate && npm run test:e2e"
   },
   "overrides": {
     "postcss": "8.5.15"

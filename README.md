@@ -32,9 +32,11 @@ npm run verify
 That command runs typecheck, lint, production build, a moderate npm audit, and
 Playwright. It also runs a local security check that confirms client-reachable
 modules do not import server-only Supabase helpers or reference server-only
-Supabase/cron secrets. Playwright starts or reuses `http://localhost:3100` and
-enables demo mode only for that test server when Supabase public keys are not
-present.
+Supabase/cron secrets, plus a schema check that guards Sticky migrations against
+public-schema drift, `anon` grants, missing RLS, and unsafe final function
+execute/search-path settings. Playwright starts or reuses
+`http://localhost:3100` and enables demo mode only for that test server when
+Supabase public keys are not present.
 
 Useful narrower checks:
 
@@ -42,6 +44,7 @@ Useful narrower checks:
 npm run typecheck
 npm run lint
 npm run security:check
+npm run schema:check
 npm run build
 npm run test:e2e
 npm run test:production-smoke

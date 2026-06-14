@@ -8,6 +8,9 @@ Use this before calling a Sticky release ready.
 - `npm run verify` succeeds.
 - `npm run security:check` confirms client-reachable code does not import
   server-only Supabase helpers or reference server-only Supabase/cron secrets.
+- `npm run schema:check` confirms Sticky migrations stay in `sticky.*`, keep
+  expected RLS/table coverage, avoid `anon` grants, and leave final function
+  execute/search-path settings hardened.
 - `git status --short --branch` has no unexpected changes, or the repo is
   intentionally not a git checkout.
 - GitHub Actions `Verify Sticky` passes after the repo is connected to GitHub,
