@@ -4132,22 +4132,42 @@ function TaskDetailsPanel({
       </section>
 
       <div className="details-actions">
-        <button className="secondary-action compact" type="button" onClick={onDuplicate}>
+        <button
+          className="secondary-action compact"
+          type="button"
+          onClick={onDuplicate}
+          aria-label={`Duplicate ${task.title}`}
+        >
           <Copy size={16} />
           Duplicate
         </button>
         {task.isCompleted ? (
-          <button className="secondary-action compact" type="button" onClick={onRestore}>
+          <button
+            className="secondary-action compact"
+            type="button"
+            onClick={onRestore}
+            aria-label={`Restore ${task.title}`}
+          >
             <Undo2 size={16} />
             Restore
           </button>
         ) : (
-          <button className="primary-action compact" type="button" onClick={onComplete}>
+          <button
+            className="primary-action compact"
+            type="button"
+            onClick={onComplete}
+            aria-label={`Complete ${task.title}`}
+          >
             <Check size={16} />
             Complete
           </button>
         )}
-        <button className="danger-action" type="button" onClick={onDelete}>
+        <button
+          className="danger-action"
+          type="button"
+          onClick={onDelete}
+          aria-label={`Delete ${task.title}`}
+        >
           <Trash2 size={16} />
           Delete
         </button>

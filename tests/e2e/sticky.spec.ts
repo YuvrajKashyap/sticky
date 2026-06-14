@@ -476,7 +476,7 @@ test.describe("Sticky workspace", () => {
       await details.getByLabel("Pause repeat").uncheck();
       await expect(details.getByText("Every week on Mon")).toBeVisible();
 
-      await details.getByRole("button", { name: "Complete" }).click();
+      await details.getByRole("button", { name: "Complete Repeat without subtasks" }).click();
       const repeatToast = page.locator(".toast", { hasText: "Next repeat: Jun 22, 2026" });
       await expect(repeatToast).toBeVisible();
       await page.getByRole("button", { name: /Completed/ }).click();
@@ -488,7 +488,7 @@ test.describe("Sticky workspace", () => {
       const repeatTaskButton = generatedRepeatCard.locator("button.task-body-button");
 
       await repeatTaskButton.click();
-      await details.getByRole("button", { name: "Complete" }).click();
+      await details.getByRole("button", { name: "Complete Repeat without subtasks" }).click();
       const clearCompletedButton = page.getByRole("button", { name: "Clear completed" });
       await clearCompletedButton.click();
       const clearDialog = page.getByRole("dialog", { name: "Clear completed pile?" });
@@ -691,7 +691,7 @@ test.describe("Sticky workspace", () => {
       await details.locator(".subtask-check").first().click();
       await expect(details.locator(".subtask-check.done")).toHaveCount(1);
 
-      await details.getByRole("button", { name: "Duplicate" }).click();
+      await details.getByRole("button", { name: "Duplicate Reusable setup" }).click();
       await expect(page.locator(".toast", { hasText: "Sticky duplicated" })).toBeVisible();
       await expect(details.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Reusable setup copy");
       await expect(details.getByRole("textbox", { name: "Details" })).toHaveValue("Keep the checklist and schedule.");
@@ -707,7 +707,7 @@ test.describe("Sticky workspace", () => {
       await expect(copiedCard).toContainText(`${shortDateLabel(tomorrow)} at 09:00`);
 
       await copiedCard.click();
-      await details.getByRole("button", { name: "Duplicate" }).click();
+      await details.getByRole("button", { name: "Duplicate Reusable setup copy" }).click();
       await expect(details.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Reusable setup copy copy");
     });
   });
@@ -760,12 +760,16 @@ test.describe("Sticky workspace", () => {
       });
       await expect(persistedCard).toHaveClass(/color-violet/);
       await persistedCard.click();
+      await expect(details.getByRole("button", { name: "Duplicate Command action sticky" })).toBeVisible();
+      await expect(details.getByRole("button", { name: "Complete Command action sticky" })).toBeVisible();
+      await expect(details.getByRole("button", { name: "Delete Command action sticky" })).toBeVisible();
 
       await page.keyboard.press("Control+K");
       await page.getByLabel("Search commands").fill("complete selected");
       await page.keyboard.press("Enter");
       await expect(page.locator(".toast", { hasText: "Sticky completed" })).toBeVisible();
       await expect(details.getByRole("heading", { name: "Completed sticky" })).toBeVisible();
+      await expect(details.getByRole("button", { name: "Restore Command action sticky" })).toBeVisible();
       await expect(page.getByRole("region", { name: "Active stickies" }).getByText("Command action sticky")).toHaveCount(0);
 
       await page.keyboard.press("Control+K");
