@@ -300,6 +300,7 @@ Run the hosted launch-readiness gate separately:
 
 ```powershell
 npm run launch:check
+npm run test:production-smoke
 ```
 
 The launch checker uses only Node built-ins plus the local Vercel CLI. It checks
@@ -322,6 +323,12 @@ preview releases.
 fine-grained Management API token with auth config read permission, keep it out
 of Vercel runtime env vars, and remove it from the shell after verification if
 desired.
+
+`npm run test:production-smoke` defaults to `https://sticky-green.vercel.app` and
+runs read-only desktop/mobile browser checks against the signed-out production
+shell, auth callback hygiene, route headers, install assets, console errors, and
+horizontal overflow. Set `STICKY_PRODUCTION_URL` or `PLAYWRIGHT_BASE_URL` to
+smoke-test a generated production URL or preview URL.
 
 ## Preview Deploy
 
@@ -405,6 +412,8 @@ Current DNS check result: `sticky.yuvrajkashyap.com` does not resolve yet.
    `sticky.yuvrajkashyap.com` DNS, missing Vercel `SUPABASE_SECRET_KEY`, missing
    Vercel `NEXT_PUBLIC_SITE_URL`, and pending Supabase Auth URL/callback
    configuration.
+0. Run `npm run test:production-smoke` against the hosted URL that is being
+   released.
 1. Visit `https://sticky.yuvrajkashyap.com`.
 2. Sign in with an allowlisted owner email.
 3. Confirm the workspace loads with Supabase-backed data, not demo mode.

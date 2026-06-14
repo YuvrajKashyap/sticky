@@ -94,6 +94,8 @@ Use this before calling a Sticky release ready.
 - Supabase Auth redirect URLs include local, production, and the verified preview
   callback URL.
 - Preview deployment passes Playwright with `PLAYWRIGHT_BASE_URL`.
+- Hosted signed-out production smoke passes with `npm run test:production-smoke`
+  against the release URL.
 - Production deployment passes a manual smoke test.
 - Production routes include the hardened browser headers: Content Security
   Policy, HSTS, frame denial, nosniff, referrer policy, and permissions policy.

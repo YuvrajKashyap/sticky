@@ -9,6 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
+    "test:production-smoke": "node scripts/production-smoke.mjs",
     "security:check": "node scripts/security-check.mjs",
     "audit:moderate": "npm audit --audit-level=moderate",
     "launch:check": "node scripts/launch-readiness.mjs",

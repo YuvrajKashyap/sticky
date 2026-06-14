@@ -44,12 +44,19 @@ npm run lint
 npm run security:check
 npm run build
 npm run test:e2e
+npm run test:production-smoke
 ```
 
 The repository also includes a GitHub Actions workflow at
 `.github/workflows/verify.yml`. Once this local repo is pushed to GitHub, it
 runs the same `npm run verify` gate on pushes to `main`, pull requests, and
 manual dispatches.
+
+`npm run test:production-smoke` defaults to the stable production alias and runs
+read-only desktop/mobile Playwright checks against the signed-out shell,
+callback hygiene, hardened headers, install assets, console errors, and
+horizontal overflow. Override it with `STICKY_PRODUCTION_URL` or
+`PLAYWRIGHT_BASE_URL` when checking a different hosted deployment.
 
 Before calling the hosted app launch-ready, run:
 
