@@ -44,10 +44,11 @@ This runbook is for deploying Sticky to `sticky.yuvrajkashyap.com`.
   `SUPABASE_ACCESS_TOKEN`, and Chrome dashboard automation is unavailable
   because Chrome is not running and the Codex Chrome Extension is not installed
   in the selected Chrome profile.
-- Supabase MCP project metadata was rechecked on 2026-06-14 and still reported
-  `yk-platform` as `ACTIVE_HEALTHY`; follow-up table/advisor checks require
-  reauthenticating the Supabase app connector in this session, and the local
-  `supabase` CLI is not installed.
+- Supabase MCP checks were re-run on 2026-06-14 and reported `yk-platform` as
+  `ACTIVE_HEALTHY`; Sticky-owned advisors, table/RLS/grant checks, routine
+  exposure, migration history, and a rolled-back RLS isolation simulation all
+  passed with the expected `sticky.allowed_emails` no-policy INFO notice.
+  The local `supabase` CLI is not installed.
 
 `AGENTS.md` names the shared Supabase project as `yk-portfolio`; the verified
 project ref above is the value currently used by `.env.example` and the applied
@@ -95,25 +96,24 @@ Current Vercel env state observed with `vercel env ls` on 2026-06-14:
 
 ## Supabase Production Checks
 
-Latest live verification on 2026-06-13 against project
+Latest live verification on 2026-06-14 against project
 `sqskfdcwfwywjoobbpos`:
 
 - Supabase project metadata returned project name `yk-platform`, project health
   `ACTIVE_HEALTHY`, region `us-east-2`, and PostgreSQL `17.6.1.104`.
-- Supabase security advisors were re-run after
-  `20260613045652_sticky_add_today_task_view.sql`. The only Sticky-owned
-  table advisor notice was `rls_enabled_no_policy` for
-  `sticky.allowed_emails`, which is intentional because the allowlist is
-  service-role-only and has no public policies.
+- Supabase security and performance advisors were re-run. The only Sticky-owned
+  advisor notice was `rls_enabled_no_policy` for `sticky.allowed_emails`, which
+  is intentional because the allowlist is service-role-only and has no public
+  policies. Other advisor warnings/errors belonged to other app schemas and
+  were not changed from this repo.
 - A rolled-back live RLS simulation created disposable Auth users, Sticky users,
-  list/task/subtask rows, user state, and preferences, then switched to the
-  `authenticated` role with different JWT subjects. User A could read one of
-  each own row and update one own task; User B saw zero User A rows and updated
-  zero User A tasks. A follow-up cleanup query confirmed zero disposable rows
-  remained after rollback.
+  list/task/subtask rows, then switched to the `authenticated` role with a User
+  A JWT subject. User A could read one own list/task/subtask and update one own
+  task, saw zero User B list/task/subtask rows, and updated zero User B task
+  rows. A follow-up cleanup query confirmed zero disposable Auth, Sticky user,
+  and Sticky task rows remained after rollback.
 - Anonymous access checks confirmed `anon` has no `sticky` schema usage and no
-  `select` privilege on `sticky.lists`, `sticky.tasks`, `sticky.subtasks`,
-  `sticky.user_state`, or `sticky.user_preferences`.
+  `select` privilege on `sticky.lists`, `sticky.tasks`, or `sticky.subtasks`.
 - Sticky-only table checks confirmed RLS is enabled on
   `allowed_emails`, `lists`, `subtasks`, `task_activity`,
   `task_recurrence_rules`, `tasks`, `user_preferences`, `user_state`, and
@@ -132,7 +132,7 @@ Latest live verification on 2026-06-13 against project
   `sticky.advance_recurring_task_for_worker(...)` is executable by
   `service_role` only.
 - Live migration history matched the local `supabase/migrations/` filenames
-  observed on 2026-06-13, including the aligned initial schema, advisor, Data
+  observed on 2026-06-14, including the aligned initial schema, advisor, Data
   API, atomic workspace, recurrence, preference, and Today-view migrations.
 - Sticky foreign-key checks confirmed all Sticky-owned foreign keys have
   covering indexes, including task/list/subtask/activity/recurrence/user-state
