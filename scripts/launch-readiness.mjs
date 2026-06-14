@@ -11,10 +11,13 @@ const expectedARecord = process.env.STICKY_EXPECTED_A_RECORD ?? "76.76.21.21";
 const vercelScope = process.env.VERCEL_SCOPE ?? "yuvraj-kashyaps-projects";
 const vercelProject = process.env.VERCEL_PROJECT ?? "sticky";
 const vercelProjectId = process.env.VERCEL_PROJECT_ID ?? "prj_nfiyWrEfak04ah1pIqvFqcytQcmh";
+const recurrenceCronPath = process.env.STICKY_CRON_PATH ?? "/api/recurrence/catch-up";
+const recurrenceCronSchedule = process.env.STICKY_CRON_SCHEDULE ?? "15 11 * * *";
 const supabaseProjectRef = process.env.SUPABASE_PROJECT_REF ?? "sqskfdcwfwywjoobbpos";
 const supabaseAuthSiteUrl =
   process.env.SUPABASE_AUTH_SITE_URL ?? `https://${customDomain}`;
 let productionDeploymentOrigin = null;
+let vercelProjectMetadataPromise = null;
 
 const results = [];
 
@@ -146,6 +149,18 @@ async function runGit(args) {
   });
 }
 
+async function getVercelProjectMetadata() {
+  vercelProjectMetadataPromise ??= runVercel([
+    "api",
+    `/v9/projects/${vercelProjectId}`,
+    "--scope",
+    vercelScope,
+    "--raw",
+  ]).then(({ stdout }) => JSON.parse(stdout));
+
+  return vercelProjectMetadataPromise;
+}
+
 function formatVercelGitLink(link) {
   const provider = typeof link.type === "string" ? link.type : "git provider";
   const org = typeof link.org === "string" ? link.org : null;
@@ -203,8 +218,7 @@ async function checkSourceControlReadiness() {
   }
 
   try {
-    const { stdout } = await runVercel(["api", `/v9/projects/${vercelProjectId}`, "--scope", vercelScope, "--raw"]);
-    const project = JSON.parse(stdout);
+    const project = await getVercelProjectMetadata();
 
     if (project.link && typeof project.link === "object") {
       pass("Vercel Git integration", formatVercelGitLink(project.link));
@@ -461,15 +475,52 @@ async function checkManifest(origin) {
 
 async function checkCronGuard(origin) {
   try {
-    const { response } = await fetchText("/api/recurrence/catch-up", origin);
+    const { response } = await fetchText(recurrenceCronPath, origin);
 
     if (response.status === 401 || response.status === 503) {
-      pass("cron guard", `/api/recurrence/catch-up refused unauthenticated request with ${response.status}`);
+      pass("cron guard", `${recurrenceCronPath} refused unauthenticated request with ${response.status}`);
     } else {
-      fail("cron guard", `/api/recurrence/catch-up returned ${response.status}; expected 401 or 503`);
+      fail("cron guard", `${recurrenceCronPath} returned ${response.status}; expected 401 or 503`);
     }
   } catch (error) {
     fail("cron guard", error instanceof Error ? error.message : String(error));
+  }
+}
+
+async function checkVercelCronConfig() {
+  try {
+    const config = JSON.parse(await readFile("vercel.json", "utf8"));
+    const crons = Array.isArray(config.crons) ? config.crons : [];
+    const cron = crons.find((entry) => entry?.path === recurrenceCronPath);
+
+    if (cron?.schedule === recurrenceCronSchedule) {
+      pass("Vercel cron config", `vercel.json schedules ${recurrenceCronPath} at ${recurrenceCronSchedule}`);
+    } else if (cron) {
+      fail("Vercel cron config", `${recurrenceCronPath} schedule is ${cron.schedule || "missing"}, expected ${recurrenceCronSchedule}`);
+    } else {
+      fail("Vercel cron config", `vercel.json does not schedule ${recurrenceCronPath}`);
+    }
+  } catch (error) {
+    fail("Vercel cron config", error instanceof Error ? error.message : String(error));
+  }
+
+  try {
+    const project = await getVercelProjectMetadata();
+    const definitions = Array.isArray(project.crons?.definitions) ? project.crons.definitions : [];
+    const cron = definitions.find((entry) => entry?.path === recurrenceCronPath);
+
+    if (cron?.schedule === recurrenceCronSchedule) {
+      pass("Vercel cron deployment", `project schedules ${recurrenceCronPath} at ${recurrenceCronSchedule}`);
+    } else if (cron) {
+      fail("Vercel cron deployment", `${recurrenceCronPath} schedule is ${cron.schedule || "missing"}, expected ${recurrenceCronSchedule}`);
+    } else {
+      fail("Vercel cron deployment", `project has no deployed cron for ${recurrenceCronPath}`);
+    }
+  } catch (error) {
+    warn(
+      "Vercel cron deployment",
+      `could not inspect deployed cron definitions (${error instanceof Error ? error.message : String(error)})`,
+    );
   }
 }
 
@@ -593,6 +644,7 @@ async function main() {
     await checkRobots(normalizedProductionUrl);
     await checkManifest(normalizedProductionUrl);
     await checkCronGuard(normalizedProductionUrl);
+    await checkVercelCronConfig();
   }
 
   const dnsReady = await checkDns();

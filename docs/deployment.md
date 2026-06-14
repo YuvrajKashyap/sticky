@@ -307,12 +307,13 @@ the CI workflow, local release branch, Git remote handoff status, Vercel project
 Git integration, local Vercel link, deployment status,
 domain attachment/configuration, the stable production alias, security headers,
 `/robots.txt`, `/manifest.webmanifest`, the unauthenticated recurrence cron
-guard, the `sticky.yuvrajkashyap.com` DNS A record, and required Vercel
-production env var names without printing values. If `SUPABASE_ACCESS_TOKEN` is
-present in the local shell, it also checks the Supabase Management API auth
-config endpoint for the final site URL and redirect allow-list. A failing result
-is expected until Porkbun DNS, `SUPABASE_SECRET_KEY`, `NEXT_PUBLIC_SITE_URL`, and
-Supabase Auth URL/callback configuration are complete. A warning is expected
+guard, the local and deployed Vercel Cron schedule, the
+`sticky.yuvrajkashyap.com` DNS A record, and required Vercel production env var
+names without printing values. If `SUPABASE_ACCESS_TOKEN` is present in the
+local shell, it also checks the Supabase Management API auth config endpoint for
+the final site URL and redirect allow-list. A failing result is expected until
+Porkbun DNS, `SUPABASE_SECRET_KEY`, `NEXT_PUBLIC_SITE_URL`, and Supabase Auth
+URL/callback configuration are complete. A warning is expected
 until the repo has a GitHub `origin` remote and Vercel Git integration for
 preview releases.
 
