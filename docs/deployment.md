@@ -48,7 +48,8 @@ This runbook is for deploying Sticky to `sticky.yuvrajkashyap.com`.
   `ACTIVE_HEALTHY`; Sticky-owned advisors, table/RLS/grant checks, routine
   exposure, migration history, and a rolled-back RLS isolation simulation all
   passed with the expected `sticky.allowed_emails` no-policy INFO notice.
-  The local `supabase` CLI is not installed.
+  The security-definer bootstrap helpers now use an empty pinned search path
+  with explicit schema references. The local `supabase` CLI is not installed.
 
 `AGENTS.md` names the shared Supabase project as `yk-portfolio`; the verified
 project ref above is the value currently used by `.env.example` and the applied
@@ -130,10 +131,17 @@ Latest live verification on 2026-06-14 against project
 - Sticky routine checks confirmed no Sticky routine is executable by `anon`,
   all Sticky functions have pinned search paths, and
   `sticky.advance_recurring_task_for_worker(...)` is executable by
-  `service_role` only.
+  `service_role` only. The security-definer helpers
+  `sticky.bootstrap_current_user(...)`, `sticky.email_is_allowed(...)`, and
+  `sticky.is_active_user(...)` use `search_path = ''`; `email_is_allowed` is
+  service-role-only, while the bootstrap and active-user helpers remain
+  authenticated/service-role as intended.
 - Live migration history matched the local `supabase/migrations/` filenames
-  observed on 2026-06-14, including the aligned initial schema, advisor, Data
-  API, atomic workspace, recurrence, preference, and Today-view migrations.
+  observed on 2026-06-14 through the Today-view migration. The
+  `20260614031937_sticky_harden_security_definer_search_paths` SQL was applied
+  live with read/write Supabase SQL access because the local Supabase CLI is not
+  installed; the migration pipeline should still record/apply that idempotent
+  file during the next formal migration handoff.
 - Sticky foreign-key checks confirmed all Sticky-owned foreign keys have
   covering indexes, including task/list/subtask/activity/recurrence/user-state
   relationships.
@@ -151,7 +159,9 @@ Latest live verification on 2026-06-14 against project
    `20260613010533_sticky_recurring_catchup`,
    `20260613013059_sticky_recurring_cron_catchup`,
    `20260613041115_sticky_persist_view_preferences`, and
-   `20260613045652_sticky_add_today_task_view`.
+   `20260613045652_sticky_add_today_task_view`. Also apply or migration-record
+   `20260614031937_sticky_harden_security_definer_search_paths`; its SQL has
+   already been applied live and is idempotent.
 2. Confirm the Supabase Data API exposes the `sticky` schema.
 3. Confirm RLS is enabled on Sticky-owned tables.
 4. Confirm `sticky.allowed_emails` intentionally has no public policies.
