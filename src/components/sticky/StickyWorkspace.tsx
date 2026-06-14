@@ -3076,7 +3076,11 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
               placeholder={`Add a sticky to ${activeList?.name ?? "this list"}`}
               aria-label="Quick add sticky"
             />
-            <button type="submit" disabled={!quickCaptureIntent.title.trim() || !activeListId}>
+            <button
+              type="submit"
+              disabled={!quickCaptureIntent.title.trim() || !activeListId}
+              aria-label={`Add sticky to ${quickCaptureIntent.listName ?? activeList?.name ?? "current list"}`}
+            >
               Add
             </button>
             {quickCaptureIntent.dueDate || quickCaptureIntent.dueTime || quickCaptureIntent.listName ? (

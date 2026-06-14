@@ -114,6 +114,10 @@ async function expectNoPartiallyVisibleListTabs(page: Page) {
     .toBe(true);
 }
 
+function quickAddButton(page: Page, listName: string) {
+  return page.getByRole("button", { name: `Add sticky to ${listName}` });
+}
+
 test.describe("Sticky workspace", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
@@ -247,11 +251,11 @@ test.describe("Sticky workspace", () => {
 
       await page.locator("button.list-tab", { hasText: "Verification Prime" }).click();
       await page.getByLabel("Quick add sticky").fill("Write the verification sticky");
-      await page.getByRole("button", { name: "Add", exact: true }).click();
+      await quickAddButton(page, "Verification Prime").click();
       await expect(page.getByText("Write the verification sticky")).toBeVisible();
 
       await page.getByLabel("Quick add sticky").fill("Second order sticky");
-      await page.getByRole("button", { name: "Add", exact: true }).click();
+      await quickAddButton(page, "Verification Prime").click();
       await page
         .locator(".task-card", { hasText: "Second order sticky" })
         .getByRole("button", { name: /Move Second order sticky up/ })
@@ -278,7 +282,7 @@ test.describe("Sticky workspace", () => {
       await page.getByLabel("Quick add sticky").fill("Smart parsed sticky tomorrow 2pm");
       await expect(page.locator(".quick-schedule-preview")).toContainText("Tomorrow");
       await expect(page.locator(".quick-schedule-preview")).toContainText("2:00 PM");
-      await page.getByRole("button", { name: "Add", exact: true }).click();
+      await quickAddButton(page, "Verification Prime").click();
       const smartCard = page.locator(".task-card", { hasText: "Smart parsed sticky" });
       await expect(smartCard).toBeVisible();
       await expect(smartCard).toContainText(`${shortDateLabel(smartTomorrow)} at 14:00`);
@@ -429,7 +433,7 @@ test.describe("Sticky workspace", () => {
       const twoDaysAgo = localDateKey(-2);
       const today = localDateKey();
       await page.getByLabel("Quick add sticky").fill("Overdue repeat catch-up");
-      await page.getByRole("button", { name: "Add", exact: true }).click();
+      await quickAddButton(page, "Move Target").click();
       await activeRegion.getByText("Overdue repeat catch-up").click();
       await details.locator('input[aria-label="Due date"]').fill(twoDaysAgo);
       await details.locator('input[aria-label="Due time"]').fill("08:00");
@@ -444,7 +448,7 @@ test.describe("Sticky workspace", () => {
       await expect(page.getByText(/behind schedule/)).toHaveCount(0);
 
       await page.getByLabel("Quick add sticky").fill("Repeat without subtasks");
-      await page.getByRole("button", { name: "Add", exact: true }).click();
+      await quickAddButton(page, "Move Target").click();
       await activeRegion.getByText("Repeat without subtasks").click();
       await details.getByLabel("Not repeating").check();
       const repeatSubtaskTitle = details.getByLabel("New subtask title");
@@ -549,7 +553,7 @@ test.describe("Sticky workspace", () => {
       await page.keyboard.press("Enter");
       await expect(page.getByLabel("Quick add sticky")).toBeFocused();
       await page.getByLabel("Quick add sticky").fill("Mobile capture");
-      await page.getByRole("button", { name: "Add", exact: true }).click();
+      await quickAddButton(page, "Today").click();
       await expect(page.getByText("Mobile capture")).toBeVisible();
       const mobileDetails = page.getByLabel("Sticky details");
       await expect(mobileDetails).toBeVisible();
@@ -623,7 +627,7 @@ test.describe("Sticky workspace", () => {
       await expect(page.locator(".quick-schedule-preview")).toContainText("Capture Target");
       await expect(page.locator(".quick-schedule-preview")).toContainText("Tomorrow");
       await expect(page.locator(".quick-schedule-preview")).toContainText("9:00 AM");
-      await page.getByRole("button", { name: "Add", exact: true }).click();
+      await quickAddButton(page, "Capture Target").click();
 
       await expect(page.getByRole("heading", { name: "Capture Target" })).toBeVisible();
       await expect(page.getByLabel("Search current list")).toHaveValue("");
@@ -645,7 +649,7 @@ test.describe("Sticky workspace", () => {
       await page.getByLabel("Quick add sticky").fill("Plan review Friday noon");
       await expect(page.locator(".quick-schedule-preview")).toContainText("Friday");
       await expect(page.locator(".quick-schedule-preview")).toContainText("12:00 PM");
-      await page.getByRole("button", { name: "Add", exact: true }).click();
+      await quickAddButton(page, "Today").click();
 
       const capturedCard = page.locator(".task-card", { hasText: "Plan review" });
       await expect(capturedCard).toBeVisible();
@@ -673,7 +677,7 @@ test.describe("Sticky workspace", () => {
       await page.goto("/");
       const tomorrow = localDateKey(1);
       await page.getByLabel("Quick add sticky").fill("Reusable setup tomorrow 9am");
-      await page.getByRole("button", { name: "Add", exact: true }).click();
+      await quickAddButton(page, "Today").click();
 
       const details = page.getByLabel("Sticky details");
       await details.getByRole("textbox", { name: "Details" }).fill("Keep the checklist and schedule.");
@@ -714,7 +718,7 @@ test.describe("Sticky workspace", () => {
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
       await page.getByLabel("Quick add sticky").fill("Weekly template");
-      await page.getByRole("button", { name: "Add", exact: true }).click();
+      await quickAddButton(page, "Today").click();
 
       const details = page.getByLabel("Sticky details");
       await details.getByLabel("Not repeating").check();
@@ -740,7 +744,7 @@ test.describe("Sticky workspace", () => {
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
       await page.getByLabel("Quick add sticky").fill("Command action sticky");
-      await page.getByRole("button", { name: "Add", exact: true }).click();
+      await quickAddButton(page, "Today").click();
 
       const details = page.getByLabel("Sticky details");
       const activeRegion = page.getByRole("region", { name: "Active stickies" });
