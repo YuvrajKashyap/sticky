@@ -978,7 +978,10 @@ test.describe("Sticky workspace", () => {
       await details.getByLabel("Starts").fill("2026-06-15");
       await details.getByLabel("Frequency").selectOption("weekly");
       await details.getByLabel("Monday").click();
+      await details.getByLabel("Ends").selectOption("on_date");
+      await details.getByLabel("End date").fill("2026-07-01");
       await expect(details.getByText("Every week on Mon")).toBeVisible();
+      await expect(details.getByText("Starts Jun 15, 2026 - Ends Jul 1, 2026")).toBeVisible();
 
       await page.keyboard.press("Control+K");
       await page.getByLabel("Search commands").fill("duplicate selected");
@@ -987,7 +990,17 @@ test.describe("Sticky workspace", () => {
       await expect(details.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Weekly template copy");
       await expect(details.getByLabel("Repeating")).toBeChecked();
       await expect(details.getByText("Every week on Mon")).toBeVisible();
+      await expect(details.getByLabel("End date")).toHaveValue("2026-07-01");
+      await expect(details.getByText("Starts Jun 15, 2026 - Ends Jul 1, 2026")).toBeVisible();
       await expect(page.locator(".task-card", { hasText: "Weekly template copy" })).toContainText("Every week on Mon");
+
+      await page.reload();
+      const copiedCard = page.locator(".task-card", { hasText: "Weekly template copy" });
+      await expect(copiedCard).toBeVisible();
+      await copiedCard.click();
+      await expect(details.getByLabel("Repeating")).toBeChecked();
+      await expect(details.getByLabel("End date")).toHaveValue("2026-07-01");
+      await expect(details.getByText("Starts Jun 15, 2026 - Ends Jul 1, 2026")).toBeVisible();
     });
   });
 
