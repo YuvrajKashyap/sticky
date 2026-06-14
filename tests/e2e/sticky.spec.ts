@@ -635,6 +635,7 @@ test.describe("Sticky workspace", () => {
 
   test("mobile layout keeps the workspace usable", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "mobile", "mobile layout check runs in the mobile project");
+    test.setTimeout(45_000);
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
@@ -679,6 +680,25 @@ test.describe("Sticky workspace", () => {
       await expect(
         mobileDetails.locator(".subtask-row").nth(1).getByRole("button", { name: /Move Phone second up/ }),
       ).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      await mobileDetails.getByRole("button", { name: "Complete Mobile capture" }).click();
+      const activeRegion = page.getByRole("region", { name: "Active stickies" });
+      await expect(activeRegion.locator(".task-card", { hasText: "Mobile capture" })).toHaveCount(0);
+      const completionToast = page.getByRole("group", { name: "Sticky completed: Mobile capture" });
+      await expect(completionToast).toBeVisible();
+      await mobileDetails.getByRole("button", { name: "Close details" }).click();
+      await expect(completionToast).toBeHidden({ timeout: 8_000 });
+      const completedToggle = page.locator(".completed-pile").getByRole("button", { name: /Completed/ });
+      await expect(completedToggle).toHaveAttribute("aria-expanded", "false");
+      await completedToggle.click();
+      await expect(completedToggle).toHaveAttribute("aria-expanded", "true");
+      const completedRegion = page.getByRole("region", { name: "Completed stickies" });
+      await expect(completedRegion.getByRole("button", { name: "Mobile capture", exact: true })).toBeVisible();
+      await completedRegion.getByRole("button", { name: "Restore Mobile capture" }).click();
+      await expect(activeRegion.locator(".task-card", { hasText: "Mobile capture" })).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      await page.reload();
+      await expect(activeRegion.locator(".task-card", { hasText: "Mobile capture" })).toBeVisible();
       await expectNoHorizontalOverflow(page);
       await expect(page.getByRole("button", { name: "Compact" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Use dark color mode" })).toBeVisible();
