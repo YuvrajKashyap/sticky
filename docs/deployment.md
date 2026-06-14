@@ -44,12 +44,14 @@ This runbook is for deploying Sticky to `sticky.yuvrajkashyap.com`.
   `SUPABASE_ACCESS_TOKEN`, and Chrome dashboard automation is unavailable
   because Chrome is not running and the Codex Chrome Extension is not installed
   in the selected Chrome profile.
-- Supabase MCP checks were re-run on 2026-06-14 and reported `yk-platform` as
-  `ACTIVE_HEALTHY`; Sticky-owned advisors, table/RLS/grant checks, routine
-  exposure, migration history, and a rolled-back RLS isolation simulation all
-  passed with the expected `sticky.allowed_emails` no-policy INFO notice.
-  The security-definer bootstrap helpers now use an empty pinned search path
-  with explicit schema references. The local `supabase` CLI is not installed.
+- Supabase connector checks were refreshed on 2026-06-14 after deployment
+  `dpl_F7p1prHEDmfTWHZyTd3h76ArGHtp` and reported `yk-platform` as
+  `ACTIVE_HEALTHY`. Current Sticky-owned security advisors still show only the
+  expected `sticky.allowed_emails` no-policy INFO notice. Earlier same-day
+  table/RLS/grant checks, routine exposure, migration history, and a rolled-back
+  RLS isolation simulation also passed. The security-definer bootstrap helpers
+  now use an empty pinned search path with explicit schema references. The local
+  `supabase` CLI is not installed.
 
 `AGENTS.md` names the shared Supabase project as `yk-portfolio`; the verified
 project ref above is the value currently used by `.env.example` and the applied
@@ -100,6 +102,16 @@ Current Vercel env state observed with `vercel env ls` on 2026-06-14:
 Latest live verification on 2026-06-14 against project
 `sqskfdcwfwywjoobbpos`:
 
+- A current Supabase connector refresh after deployment
+  `dpl_F7p1prHEDmfTWHZyTd3h76ArGHtp` confirmed the configured project is still
+  `yk-platform` / `sqskfdcwfwywjoobbpos`, `ACTIVE_HEALTHY`, in `us-east-2`, on
+  PostgreSQL `17.6.1.104`. Current security advisors still have no
+  Sticky-owned warnings or errors beyond the intentional
+  `rls_enabled_no_policy` INFO notice for `sticky.allowed_emails`. Recent API
+  log samples were dominated by other shared-project schemas and did not show
+  Sticky REST errors; recent Auth log samples showed normal shared-project auth
+  traffic and expected refresh-token misses unrelated to a live
+  `sticky.yuvrajkashyap.com` sign-in, which is still waiting on DNS/Auth config.
 - Supabase project metadata returned project name `yk-platform`, project health
   `ACTIVE_HEALTHY`, region `us-east-2`, and PostgreSQL `17.6.1.104`.
 - Supabase security and performance advisors were re-run. The only Sticky-owned
@@ -471,6 +483,12 @@ Latest smoke evidence:
   remote, absent Vercel Git integration, missing local `SUPABASE_ACCESS_TOKEN`
   for Supabase Auth config verification, and DNS `ENOTFOUND` for the custom
   domain.
+- Supabase connector verification after deployment
+  `dpl_F7p1prHEDmfTWHZyTd3h76ArGHtp` confirmed `yk-platform` /
+  `sqskfdcwfwywjoobbpos` remains `ACTIVE_HEALTHY`; current security advisors
+  still show only the expected Sticky-owned `sticky.allowed_emails` no-policy
+  INFO notice, with other warnings/errors belonging to other shared-project
+  schemas.
 - Local `npm.cmd run verify` passed on 2026-06-14 after mobile viewport zoom
   accessibility polish: typecheck, lint, security check, schema check,
   production build, moderate audit with zero vulnerabilities, and Playwright
