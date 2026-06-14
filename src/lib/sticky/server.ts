@@ -74,7 +74,7 @@ export async function loadWorkspace(): Promise<WorkspaceLoadResult> {
       return {
         status: "demo",
         data: createDemoWorkspaceData(),
-        reason: "Supabase env vars are missing, so Sticky is running the local demo adapter.",
+        reason: "Sticky is running in local demo mode while sign-in is not connected.",
       };
     }
 

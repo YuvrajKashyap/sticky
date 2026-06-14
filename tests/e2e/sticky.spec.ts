@@ -191,6 +191,10 @@ test.describe("Sticky workspace", () => {
   test("visible workspace controls avoid empty or generic action names", async ({ page }) => {
     await expectNoConsoleErrors(page, async () => {
       await expect(page.locator(".sticky-app")).toBeVisible();
+      await expect(
+        page.getByText("Sticky is running in local demo mode while sign-in is not connected."),
+      ).toBeVisible();
+      await expect(page.getByText("Supabase env vars")).toHaveCount(0);
       await expectSpecificVisibleControlNames(page);
     });
   });

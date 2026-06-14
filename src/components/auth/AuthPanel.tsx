@@ -38,7 +38,9 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
 
     if (!supabase) {
       setStatus("error");
-      setMessage("Add Supabase env vars or enable demo mode to run Sticky locally.");
+      setMessage(
+        "Sticky sign-in is not connected in this environment. Add the required app settings or enable demo mode locally.",
+      );
       return;
     }
 
@@ -67,7 +69,7 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
 
     if (!supabase) {
       setStatus("error");
-      setMessage("Supabase is not configured in this environment.");
+      setMessage("Sticky sign-in is not connected in this environment.");
       return;
     }
 
@@ -122,8 +124,8 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
 
         {configurationMissing ? (
           <div className="notice warning">
-            Supabase env vars are not configured. Set `NEXT_PUBLIC_SUPABASE_URL` and
-            `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, or enable local demo mode for UI smoke tests.
+            Sticky sign-in is not connected in this environment. Add the required app
+            settings, or enable demo mode for local UI checks.
           </div>
         ) : null}
 

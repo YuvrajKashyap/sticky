@@ -1369,7 +1369,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
 
     try {
       if (!supabase) {
-        saveError = "Supabase is not configured.";
+        saveError = "Sticky is not connected in this environment.";
       } else {
         const result = await operation();
         const results = Array.isArray(result) ? result : [result];

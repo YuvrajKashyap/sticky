@@ -377,6 +377,9 @@ Current DNS check result: `sticky.yuvrajkashyap.com` does not resolve yet.
 
 Latest smoke evidence:
 
+- Local `npm.cmd run verify` passed on 2026-06-14 after auth and demo fallback
+  product-language polish: typecheck, lint, production build, moderate audit
+  with zero vulnerabilities, and Playwright `20 passed, 10 skipped`.
 - Production source deploy from local commit `17a7a5c` passed on 2026-06-14.
   Remote Vercel build completed successfully and produced production deployment
   `dpl_ETwsgutAAcCEZQ2qZCEEpc53h9Y3`.
