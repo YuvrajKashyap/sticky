@@ -16,9 +16,9 @@ This runbook is for deploying Sticky to `sticky.yuvrajkashyap.com`.
 - Local Vercel link status: `.vercel/project.json` exists and is ignored.
 - Local git status: repository initialized on branch `main`; no remote is
   configured yet.
-- Latest production deployment: `dpl_A3crsEY5mcrYNyuZ8Ryq7uqQpVTb`.
+- Latest production deployment: `dpl_71Re3vav1ebzYekd7oZfKTatJwGo`.
 - Public production URL:
-  `https://sticky-gcj133id7-yuvraj-kashyaps-projects.vercel.app`.
+  `https://sticky-3zihnt2x3-yuvraj-kashyaps-projects.vercel.app`.
 - Production aliases observed:
   `https://sticky-green.vercel.app`,
   `https://sticky.yuvrajkashyap.com`,
@@ -377,6 +377,30 @@ Current DNS check result: `sticky.yuvrajkashyap.com` does not resolve yet.
 
 Latest smoke evidence:
 
+- Local `npm.cmd run verify` passed on 2026-06-14 after auth callback redirect
+  message hardening: typecheck, lint, production build, moderate audit with
+  zero vulnerabilities, and Playwright `29 passed, 13 skipped`.
+- Production source deploy from local commit `d4ff522` passed on 2026-06-14.
+  Remote Vercel build completed successfully and produced production deployment
+  `dpl_71Re3vav1ebzYekd7oZfKTatJwGo`.
+- `vercel inspect sticky-3zihnt2x3-yuvraj-kashyaps-projects.vercel.app`
+  reports production deployment `dpl_71Re3vav1ebzYekd7oZfKTatJwGo` as `Ready`
+  with `sticky-green.vercel.app`, `sticky.yuvrajkashyap.com`,
+  `sticky-yuvraj-kashyaps-projects.vercel.app`, and
+  `sticky-yuvrajkashyap-yuvraj-kashyaps-projects.vercel.app` in the alias list.
+- Production-safe Playwright smoke passed against `https://sticky-green.vercel.app`
+  after deployment `dpl_71Re3vav1ebzYekd7oZfKTatJwGo`: message hygiene, route
+  chrome, auth callback errors/origin preservation, sanitized technical access
+  errors before redirecting and rendering, unauthenticated cron, production
+  security headers, install manifest screenshots/shortcuts, and generated social
+  previews reported `10 passed`.
+- Mobile production auth smoke passed against `https://sticky-green.vercel.app`
+  after deployment `dpl_71Re3vav1ebzYekd7oZfKTatJwGo`: message hygiene,
+  callback errors, sanitized technical access errors before redirecting and
+  rendering, and provider-origin preservation reported `5 passed`.
+- Deployment error-log query for `dpl_71Re3vav1ebzYekd7oZfKTatJwGo` returned no
+  records in the last 15 minutes, and `sticky.yuvrajkashyap.com` still did not
+  resolve in DNS.
 - Local `npm.cmd run verify` passed on 2026-06-14 after save-error message
   hardening: typecheck, lint, production build, moderate audit with zero
   vulnerabilities, and Playwright `27 passed, 13 skipped`.
