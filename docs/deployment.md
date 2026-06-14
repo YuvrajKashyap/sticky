@@ -44,6 +44,10 @@ This runbook is for deploying Sticky to `sticky.yuvrajkashyap.com`.
   `SUPABASE_ACCESS_TOKEN`, and Chrome dashboard automation is unavailable
   because Chrome is not running and the Codex Chrome Extension is not installed
   in the selected Chrome profile.
+- Supabase MCP project metadata was rechecked on 2026-06-14 and still reported
+  `yk-platform` as `ACTIVE_HEALTHY`; follow-up table/advisor checks require
+  reauthenticating the Supabase app connector in this session, and the local
+  `supabase` CLI is not installed.
 
 `AGENTS.md` names the shared Supabase project as `yk-portfolio`; the verified
 project ref above is the value currently used by `.env.example` and the applied
