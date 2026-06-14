@@ -4433,6 +4433,10 @@ function ToastStack({
   toasts: Toast[];
   onDismiss: (id: string) => void;
 }) {
+  function toastAccessibleName(toast: Toast) {
+    return toast.body ? `${toast.title}: ${toast.body}` : toast.title;
+  }
+
   return (
     <div className="toast-stack" aria-live="polite">
       <AnimatePresence initial={false}>
@@ -4440,6 +4444,8 @@ function ToastStack({
           <motion.div
             className="toast"
             key={toast.id}
+            role="group"
+            aria-label={toastAccessibleName(toast)}
             initial={{ opacity: 0, y: 16, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
@@ -4451,9 +4457,15 @@ function ToastStack({
             {toast.actionLabel && toast.onAction ? (
               <button type="button" onClick={toast.onAction}>
                 {toast.actionLabel}
+                <span className="sr-only"> {toast.title}</span>
               </button>
             ) : null}
-            <button type="button" className="toast-close" onClick={() => onDismiss(toast.id)} aria-label="Dismiss">
+            <button
+              type="button"
+              className="toast-close"
+              onClick={() => onDismiss(toast.id)}
+              aria-label={`Dismiss ${toast.title}`}
+            >
               <X size={14} />
             </button>
           </motion.div>

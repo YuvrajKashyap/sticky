@@ -343,9 +343,10 @@ test.describe("Sticky workspace", () => {
       await details.locator(".subtask-check").first().click();
       await details.locator(".subtask-delete").first().click();
       await expect(details.locator(".subtask-row")).toHaveCount(1);
-      const subtaskDeleteToast = page.locator(".toast", { hasText: "Subtask deleted" });
+      const subtaskDeleteToast = page.getByRole("group", { name: /Subtask deleted: Second subtask/ });
       await expect(subtaskDeleteToast).toBeVisible();
-      await subtaskDeleteToast.getByRole("button", { name: "Undo" }).click();
+      await expect(subtaskDeleteToast.getByRole("button", { name: "Dismiss Subtask deleted" })).toBeVisible();
+      await subtaskDeleteToast.getByRole("button", { name: "Undo Subtask deleted" }).click();
       await expect(details.locator(".subtask-row")).toHaveCount(2);
 
       await details.getByLabel("List").selectOption({ label: "Move Target" });
@@ -418,14 +419,14 @@ test.describe("Sticky workspace", () => {
       await clearCompletedButton.click();
       await expect(clearDialog).toBeVisible();
       await clearDialog.getByRole("button", { name: "Clear completed" }).click();
-      await expect(page.getByText("Completed pile cleared")).toBeVisible();
+      await expect(page.getByRole("group", { name: /Completed pile cleared/ })).toBeVisible();
 
       await page.getByRole("button", { name: /Delete Move Target/ }).click();
       await page.getByRole("button", { name: "Delete list" }).click();
       await expect(page.locator("button.list-tab", { hasText: "Move Target" })).toHaveCount(0);
-      const listDeleteToast = page.locator(".toast", { hasText: "List deleted" });
+      const listDeleteToast = page.getByRole("group", { name: /List deleted: Move Target/ });
       await expect(listDeleteToast).toBeVisible();
-      await listDeleteToast.getByRole("button", { name: "Undo" }).click();
+      await listDeleteToast.getByRole("button", { name: "Undo List deleted" }).click();
       await expect(page.locator("button.list-tab", { hasText: "Move Target" })).toBeVisible();
       await expect(activeRegion.getByText("Verification sticky polished")).toBeVisible();
 
@@ -677,7 +678,7 @@ test.describe("Sticky workspace", () => {
 
       const deleteToast = page.locator(".toast", { hasText: "Sticky deleted" });
       await expect(deleteToast).toBeVisible();
-      await deleteToast.getByRole("button", { name: "Undo" }).click();
+      await deleteToast.getByRole("button", { name: "Undo Sticky deleted" }).click();
       await expect(page.getByRole("region", { name: "Active stickies" }).locator(".task-card", {
         hasText: "Command action sticky",
       })).toHaveClass(/color-violet/);
