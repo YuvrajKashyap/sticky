@@ -101,11 +101,15 @@ export async function loadWorkspace(): Promise<WorkspaceLoadResult> {
     .single<DbUser>();
 
   if (bootstrapError || !userRow) {
+    const activationMessage =
+      bootstrapError?.code === "42501"
+        ? "This email is not approved for Sticky yet. Ask the workspace owner to grant access."
+        : bootstrapError?.message ??
+          "Sticky could not activate this account. Ask the workspace owner to approve this email.";
+
     return {
       status: "access_denied",
-      message:
-        bootstrapError?.message ??
-        "Sticky could not activate this account. Confirm the email is in sticky.allowed_emails.",
+      message: activationMessage,
     };
   }
 

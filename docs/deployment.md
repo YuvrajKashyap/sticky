@@ -377,6 +377,14 @@ Current DNS check result: `sticky.yuvrajkashyap.com` does not resolve yet.
 
 Latest smoke evidence:
 
+- Local `npm.cmd run verify` passed on 2026-06-14 after signed-out auth-shell
+  product-language polish: typecheck, lint, production build, moderate audit
+  with zero vulnerabilities, and Playwright `20 passed, 10 skipped`.
+- Chrome-channel Playwright auth-shell smoke passed on 2026-06-14 in desktop
+  and mobile viewports with title `Sticky`, no console/page errors, no
+  horizontal overflow, product-facing privacy copy, and no visible
+  `sticky.allowed_emails`, row-level security, or Supabase Auth implementation
+  terms.
 - Production source deploy from local commit `9681616` passed on 2026-06-14.
   Remote Vercel build completed successfully and produced production deployment
   `dpl_7WajY8bHE2eXg6ZvvHEK2YbsCLK4`.

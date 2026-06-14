@@ -98,14 +98,14 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
         <p className="eyebrow">Sticky</p>
         <h1>Capture the day before it slips.</h1>
         <p className="auth-copy">
-          Lists, stickies, subtasks, due dates, completed piles, and recurrence groundwork
-          in a tactile workspace built for daily use.
+          Fast capture, ordered lists, subtasks, schedules, and repeating routines in a
+          tactile workspace built to feel calm under pressure.
         </p>
 
         <div className="auth-feature-row" aria-label="Sticky capabilities">
-          <span><Sparkles size={16} /> Premium drag feedback</span>
-          <span><CheckCircle2 size={16} /> Completed piles</span>
-          <span><LockKeyhole size={16} /> Supabase Auth</span>
+          <span><Sparkles size={16} /> Tactile planning</span>
+          <span><CheckCircle2 size={16} /> Calm completed piles</span>
+          <span><LockKeyhole size={16} /> Private by default</span>
         </div>
       </section>
 
@@ -156,8 +156,8 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
         ) : null}
 
         <p className="auth-footnote">
-          Access is controlled by `sticky.allowed_emails` and row-level security in the
-          `sticky` schema.
+          Only approved accounts can open this workspace. Your stickies stay private to
+          your signed-in account.
         </p>
       </section>
     </main>

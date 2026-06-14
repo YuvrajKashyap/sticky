@@ -880,6 +880,11 @@ test.describe("Sticky workspace", () => {
       await page.goto("/?auth_error=Magic%20link%20expired");
       await expect(page.getByRole("heading", { name: "Sign in to Sticky" })).toBeVisible();
       await expect(page.getByText("Magic link expired")).toBeVisible();
+      await expect(page.getByText("Tactile planning")).toBeVisible();
+      await expect(page.getByText("Private by default")).toBeVisible();
+      await expect(page.getByText("sticky.allowed_emails")).toHaveCount(0);
+      await expect(page.getByText("row-level security")).toHaveCount(0);
+      await expect(page.getByText("Supabase Auth")).toHaveCount(0);
     });
   });
 
