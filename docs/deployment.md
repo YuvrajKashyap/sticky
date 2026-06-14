@@ -307,7 +307,8 @@ the CI workflow, local release branch, Git remote handoff status, Vercel project
 Git integration, local Vercel link, deployment status,
 domain attachment/configuration, the stable production alias, security headers,
 Deployment Protection state, `/robots.txt`, `/manifest.webmanifest`, the
-unauthenticated recurrence cron guard, the local and deployed Vercel Cron schedule, the
+recent production runtime error-log window, the unauthenticated recurrence cron
+guard, the local and deployed Vercel Cron schedule, the
 `sticky.yuvrajkashyap.com` DNS A record, and required Vercel production env var
 names without printing values. If `SUPABASE_ACCESS_TOKEN` is present in the
 local shell, it also checks the Supabase Management API auth config endpoint for
@@ -413,7 +414,8 @@ Current DNS check result: `sticky.yuvrajkashyap.com` does not resolve yet.
 7. Confirm `/api/recurrence/catch-up` returns `401` or `503` without cron
    credentials, and returns a JSON worker result when called with
    `Authorization: Bearer $CRON_SECRET`.
-8. Check Vercel build/runtime logs for errors.
+8. Confirm `npm run launch:check` reports no recent production runtime error
+   logs. Use the Vercel dashboard for deeper build-log review if needed.
 
 Latest smoke evidence:
 

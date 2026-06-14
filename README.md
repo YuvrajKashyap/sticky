@@ -60,13 +60,13 @@ npm run launch:check
 This checks the local Vercel link, Vercel deployment readiness, Vercel domain
 attachment/configuration, the stable production alias, hardened route headers,
 Deployment Protection state, `robots.txt`, the install manifest, the
-unauthenticated recurrence cron guard, the local and deployed Vercel Cron
-schedule, the intended custom-domain DNS record, the local verification workflow
-and release branch, the local Git remote and Vercel Git integration state, the
-required Vercel production env names, and, when `SUPABASE_ACCESS_TOKEN` is
-present locally, Supabase Auth site URL and redirect allow-list configuration,
-including the current generated production callback derived from Vercel. It does
-not print secret values. It is expected to fail until
+recent production runtime error-log window, the unauthenticated recurrence cron
+guard, the local and deployed Vercel Cron schedule, the intended custom-domain
+DNS record, the local verification workflow and release branch, the local Git
+remote and Vercel Git integration state, the required Vercel production env
+names, and, when `SUPABASE_ACCESS_TOKEN` is present locally, Supabase Auth site
+URL and redirect allow-list configuration, including the current generated
+production callback derived from Vercel. It does not print secret values. It is expected to fail until
 `sticky.yuvrajkashyap.com` resolves, `SUPABASE_SECRET_KEY` is set in Vercel,
 `NEXT_PUBLIC_SITE_URL` is set for the final domain, and Supabase Auth callback
 configuration is finished. It also warns until the repo has a GitHub `origin`

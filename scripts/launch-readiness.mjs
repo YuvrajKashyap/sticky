@@ -13,6 +13,7 @@ const vercelProject = process.env.VERCEL_PROJECT ?? "sticky";
 const vercelProjectId = process.env.VERCEL_PROJECT_ID ?? "prj_nfiyWrEfak04ah1pIqvFqcytQcmh";
 const recurrenceCronPath = process.env.STICKY_CRON_PATH ?? "/api/recurrence/catch-up";
 const recurrenceCronSchedule = process.env.STICKY_CRON_SCHEDULE ?? "15 11 * * *";
+const deploymentLogWindow = process.env.STICKY_LOG_WINDOW ?? "30m";
 const supabaseProjectRef = process.env.SUPABASE_PROJECT_REF ?? "sqskfdcwfwywjoobbpos";
 const supabaseAuthSiteUrl =
   process.env.SUPABASE_AUTH_SITE_URL ?? `https://${customDomain}`;
@@ -186,6 +187,21 @@ function formatDeploymentProtection(value) {
     .join(", ");
 }
 
+function parseJsonLogLines(output) {
+  return output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("{"))
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
 async function checkSourceControlReadiness() {
   try {
     const workflow = await readFile(".github/workflows/verify.yml", "utf8");
@@ -357,6 +373,44 @@ async function checkDeploymentInspect(origin) {
     fail(
       "Vercel deployment inspect",
       `could not inspect ${origin} (${error instanceof Error ? error.message : String(error)})`,
+    );
+  }
+}
+
+async function checkDeploymentErrorLogs() {
+  try {
+    const project = await getVercelProjectMetadata();
+    const deploymentId = project.targets?.production?.id ?? project.crons?.deploymentId;
+
+    if (!deploymentId) {
+      warn("Vercel runtime error logs", "could not identify the current production deployment id");
+      return;
+    }
+
+    const { stdout, stderr } = await runVercel([
+      "logs",
+      "--deployment",
+      deploymentId,
+      "--since",
+      deploymentLogWindow,
+      "--level",
+      "error",
+      "--json",
+      "--no-follow",
+      "--scope",
+      vercelScope,
+    ]);
+    const logEntries = parseJsonLogLines(`${stdout}\n${stderr}`);
+
+    if (logEntries.length === 0) {
+      pass("Vercel runtime error logs", `no error logs for ${deploymentId} in the last ${deploymentLogWindow}`);
+    } else {
+      fail("Vercel runtime error logs", `${logEntries.length} error log entr${logEntries.length === 1 ? "y" : "ies"} found for ${deploymentId}`);
+    }
+  } catch (error) {
+    warn(
+      "Vercel runtime error logs",
+      `could not query recent production errors (${error instanceof Error ? error.message : String(error)})`,
     );
   }
 }
@@ -671,6 +725,7 @@ async function main() {
     await checkLocalVercelLink();
     await checkDeploymentProtection();
     await checkDeploymentInspect(normalizedProductionUrl);
+    await checkDeploymentErrorLogs();
     await checkRoot(normalizedProductionUrl, "production");
     await checkRobots(normalizedProductionUrl);
     await checkManifest(normalizedProductionUrl);
