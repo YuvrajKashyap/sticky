@@ -16,9 +16,9 @@ This runbook is for deploying Sticky to `sticky.yuvrajkashyap.com`.
 - Local Vercel link status: `.vercel/project.json` exists and is ignored.
 - Local git status: repository initialized on branch `main`; no remote is
   configured yet.
-- Latest production deployment: `dpl_HbDTw3rxF7tL8MdK7QbtfQ4SSof3`.
+- Latest production deployment: `dpl_AZgAkSdUYUcbEb2SQ127GAFvSLFA`.
 - Public production URL:
-  `https://sticky-f0fo4sjnz-yuvraj-kashyaps-projects.vercel.app`.
+  `https://sticky-e7fsmet4q-yuvraj-kashyaps-projects.vercel.app`.
 - Production aliases observed:
   `https://sticky-green.vercel.app`,
   `https://sticky.yuvrajkashyap.com`,
@@ -74,7 +74,7 @@ Do not add service-role or secret keys with a `NEXT_PUBLIC_` prefix. Use
 `SUPABASE_SECRET_KEY` for the scheduled worker; the code also supports the
 legacy `SUPABASE_SERVICE_ROLE_KEY` name as a fallback.
 
-Current Vercel env state observed with `vercel env ls` on 2026-06-13:
+Current Vercel env state observed with `vercel env ls` on 2026-06-14:
 
 - Production: the three core runtime variables are set; `NEXT_PUBLIC_SITE_URL`
   should be added after DNS and Supabase Auth URL configuration are complete.
@@ -175,7 +175,7 @@ https://sticky.yuvrajkashyap.com
 http://localhost:3000/auth/callback
 http://localhost:3100/auth/callback
 https://sticky.yuvrajkashyap.com/auth/callback
-https://sticky-f0fo4sjnz-yuvraj-kashyaps-projects.vercel.app/auth/callback
+https://sticky-e7fsmet4q-yuvraj-kashyaps-projects.vercel.app/auth/callback
 https://sticky-green.vercel.app/auth/callback
 https://sticky-yuvraj-kashyaps-projects.vercel.app/auth/callback
 ```
@@ -194,7 +194,7 @@ $redirects = @(
   "http://localhost:3000/auth/callback",
   "http://localhost:3100/auth/callback",
   "https://sticky.yuvrajkashyap.com/auth/callback",
-  "https://sticky-f0fo4sjnz-yuvraj-kashyaps-projects.vercel.app/auth/callback",
+  "https://sticky-e7fsmet4q-yuvraj-kashyaps-projects.vercel.app/auth/callback",
   "https://sticky-green.vercel.app/auth/callback",
   "https://sticky-yuvraj-kashyaps-projects.vercel.app/auth/callback"
 ) -join ","
@@ -373,6 +373,24 @@ Current DNS check result: `sticky.yuvrajkashyap.com` does not resolve yet.
 
 Latest smoke evidence:
 
+- Production source deploy from local commit `de99d7e` passed on 2026-06-14
+  after the local prebuilt Vercel build hit a Windows symlink `EPERM` while
+  assembling `.vercel/output`. Remote Vercel build completed successfully and
+  produced production deployment `dpl_AZgAkSdUYUcbEb2SQ127GAFvSLFA`.
+- `vercel inspect sticky-e7fsmet4q-yuvraj-kashyaps-projects.vercel.app`
+  reports production deployment `dpl_AZgAkSdUYUcbEb2SQ127GAFvSLFA` as `Ready`
+  with `sticky-green.vercel.app`, `sticky.yuvrajkashyap.com`,
+  `sticky-yuvraj-kashyaps-projects.vercel.app`, and
+  `sticky-yuvrajkashyap-yuvraj-kashyaps-projects.vercel.app` in the alias list.
+- Production-safe Playwright smoke passed against `https://sticky-green.vercel.app`
+  after deployment `dpl_AZgAkSdUYUcbEb2SQ127GAFvSLFA`: route chrome, auth
+  callback errors/origin preservation, unauthenticated cron, and generated
+  social previews reported `9 passed, 3 skipped`.
+- Chrome-channel Playwright smoke passed against `https://sticky-green.vercel.app`
+  in desktop and mobile viewports with title `Sticky`, the signed-out auth
+  shell visible, no console/page errors, and no horizontal overflow.
+- Deployment error logs for `dpl_AZgAkSdUYUcbEb2SQ127GAFvSLFA` returned no
+  records in the last 15 minutes.
 - Local `npm.cmd run verify` passed on 2026-06-14 after selected-sticky detail
   action-name accessibility polish: typecheck, lint, production build,
   moderate audit with zero vulnerabilities, and Playwright
