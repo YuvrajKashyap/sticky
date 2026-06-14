@@ -49,7 +49,7 @@ import {
   Undo2,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { listToDb, recurrenceToDb, subtaskToDb, taskToDb } from "@/lib/sticky/mappers";
@@ -3511,6 +3511,7 @@ function TaskDetailsPanel({
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [titleDraft, setTitleDraft] = useState(task?.title ?? "");
   const [detailsDraft, setDetailsDraft] = useState(task?.details ?? "");
+  const subtaskTitleId = useId();
   const canHaveSubtasks = !recurrenceRule;
   const canRepeat = subtasks.length === 0;
 
@@ -4020,13 +4021,21 @@ function TaskDetailsPanel({
         </div>
 
         <form className="subtask-form" onSubmit={submitSubtask}>
+          <label className="sr-only" htmlFor={subtaskTitleId}>
+            New subtask title
+          </label>
           <input
+            id={subtaskTitleId}
             value={newSubtaskTitle}
             onChange={(event) => setNewSubtaskTitle(event.target.value)}
             placeholder={canHaveSubtasks ? "Add subtask" : "Subtasks are disabled for repeats"}
             disabled={!canHaveSubtasks}
           />
-          <button type="submit" disabled={!newSubtaskTitle.trim() || !canHaveSubtasks}>
+          <button
+            type="submit"
+            disabled={!newSubtaskTitle.trim() || !canHaveSubtasks}
+            aria-label="Add subtask"
+          >
             <Plus size={16} />
           </button>
         </form>
