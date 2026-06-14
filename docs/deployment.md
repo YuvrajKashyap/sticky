@@ -16,9 +16,9 @@ This runbook is for deploying Sticky to `sticky.yuvrajkashyap.com`.
 - Local Vercel link status: `.vercel/project.json` exists and is ignored.
 - Local git status: repository initialized on branch `main`; no remote is
   configured yet.
-- Latest production deployment: `dpl_71Re3vav1ebzYekd7oZfKTatJwGo`.
+- Latest production deployment: `dpl_ASFny6WQXkBCnRwfMFG1XAB5bbuT`.
 - Public production URL:
-  `https://sticky-3zihnt2x3-yuvraj-kashyaps-projects.vercel.app`.
+  `https://sticky-pitxaojii-yuvraj-kashyaps-projects.vercel.app`.
 - Production aliases observed:
   `https://sticky-green.vercel.app`,
   `https://sticky.yuvrajkashyap.com`,
@@ -189,7 +189,7 @@ https://sticky.yuvrajkashyap.com
 http://localhost:3000/auth/callback
 http://localhost:3100/auth/callback
 https://sticky.yuvrajkashyap.com/auth/callback
-https://sticky-3zihnt2x3-yuvraj-kashyaps-projects.vercel.app/auth/callback
+https://sticky-pitxaojii-yuvraj-kashyaps-projects.vercel.app/auth/callback
 https://sticky-green.vercel.app/auth/callback
 https://sticky-yuvraj-kashyaps-projects.vercel.app/auth/callback
 ```
@@ -211,7 +211,7 @@ $redirects = @(
   "http://localhost:3000/auth/callback",
   "http://localhost:3100/auth/callback",
   "https://sticky.yuvrajkashyap.com/auth/callback",
-  "https://sticky-3zihnt2x3-yuvraj-kashyaps-projects.vercel.app/auth/callback",
+  "https://sticky-pitxaojii-yuvraj-kashyaps-projects.vercel.app/auth/callback",
   "https://sticky-green.vercel.app/auth/callback",
   "https://sticky-yuvraj-kashyaps-projects.vercel.app/auth/callback"
 ) -join ","
@@ -443,6 +443,33 @@ Current DNS check result: `sticky.yuvrajkashyap.com` does not resolve yet.
 
 Latest smoke evidence:
 
+- Local `npm.cmd run verify` passed on 2026-06-14 after mobile viewport zoom
+  accessibility polish: typecheck, lint, security check, schema check,
+  production build, moderate audit with zero vulnerabilities, and Playwright
+  `29 passed, 13 skipped`.
+- Production source deploy from local commit `ed6334c` passed on 2026-06-14.
+  Remote Vercel build completed successfully and produced production deployment
+  `dpl_ASFny6WQXkBCnRwfMFG1XAB5bbuT`.
+- `vercel inspect sticky-pitxaojii-yuvraj-kashyaps-projects.vercel.app` reports
+  production deployment `dpl_ASFny6WQXkBCnRwfMFG1XAB5bbuT` as `Ready` with
+  `sticky-green.vercel.app`, `sticky.yuvrajkashyap.com`,
+  `sticky-yuvraj-kashyaps-projects.vercel.app`, and
+  `sticky-yuvrajkashyap-yuvraj-kashyaps-projects.vercel.app` in the alias list.
+- `npm.cmd run test:production-smoke` passed against
+  `https://sticky-green.vercel.app` after deployment
+  `dpl_ASFny6WQXkBCnRwfMFG1XAB5bbuT`: signed-out desktop and mobile shell smoke,
+  viewport zoom guard, callback hygiene, route/header checks, manifest,
+  production icon, generated social preview, unauthenticated cron guard, and
+  horizontal overflow checks reported `7 passed, 1 skipped`.
+- `npm.cmd run launch:check` reported `33 passed, 4 warnings, 4 failed` after
+  deployment `dpl_ASFny6WQXkBCnRwfMFG1XAB5bbuT`; no production error logs were
+  found for the deployment. The remaining failures are unresolved
+  `sticky.yuvrajkashyap.com` DNS, pending Vercel domain configuration until DNS
+  resolves, missing Vercel production `SUPABASE_SECRET_KEY`, and missing Vercel
+  production `NEXT_PUBLIC_SITE_URL`. The remaining warnings are the absent Git
+  remote, absent Vercel Git integration, missing local `SUPABASE_ACCESS_TOKEN`
+  for Supabase Auth config verification, and DNS `ENOTFOUND` for the custom
+  domain.
 - Local `npm.cmd run verify` passed on 2026-06-14 after auth callback redirect
   message hardening: typecheck, lint, production build, moderate audit with
   zero vulnerabilities, and Playwright `29 passed, 13 skipped`.

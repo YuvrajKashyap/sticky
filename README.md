@@ -96,7 +96,7 @@ can run outside this machine.
 
 The current workspace is linked to the Vercel project
 `yuvraj-kashyaps-projects/sticky` and has a production deployment at
-`https://sticky-3zihnt2x3-yuvraj-kashyaps-projects.vercel.app`, with the stable
+`https://sticky-pitxaojii-yuvraj-kashyaps-projects.vercel.app`, with the stable
 alias `https://sticky-green.vercel.app`. The latest deployment metadata lists
 `https://sticky.yuvrajkashyap.com` as an alias, and Vercel domain inspection now
 finds it attached to `yuvraj-kashyaps-projects/sticky`; Porkbun still needs the
