@@ -44,14 +44,16 @@ This runbook is for deploying Sticky to `sticky.yuvrajkashyap.com`.
   `SUPABASE_ACCESS_TOKEN`, and Chrome dashboard automation is unavailable
   because Chrome is not running and the Codex Chrome Extension is not installed
   in the selected Chrome profile.
-- Supabase connector checks were refreshed on 2026-06-14 after deployment
-  `dpl_F7p1prHEDmfTWHZyTd3h76ArGHtp` and reported `yk-platform` as
-  `ACTIVE_HEALTHY`. Current Sticky-owned security advisors still show only the
-  expected `sticky.allowed_emails` no-policy INFO notice. Earlier same-day
-  table/RLS/grant checks, routine exposure, migration history, and a rolled-back
-  RLS isolation simulation also passed. The security-definer bootstrap helpers
-  now use an empty pinned search path with explicit schema references. The local
-  `supabase` CLI is not installed.
+- Supabase connector checks were refreshed again on 2026-06-14 against
+  `sqskfdcwfwywjoobbpos` and reported `yk-platform` as `ACTIVE_HEALTHY`.
+  Current Sticky-owned security advisors still show only the expected
+  `sticky.allowed_emails` no-policy INFO notice. Fresh same-day table/RLS/grant
+  checks confirmed every Sticky table has RLS enabled, `anon` has no Sticky
+  table privileges, runtime tables are authenticated-only through owner-scoped
+  policies, and no Sticky routine is executable by `anon`. Earlier same-day
+  migration history and rolled-back RLS isolation simulations also passed. The
+  security-definer bootstrap helpers use an empty pinned search path with
+  explicit schema references. The local `supabase` CLI is not installed.
 
 `AGENTS.md` names the shared Supabase project as `yk-portfolio`; the verified
 project ref above is the value currently used by `.env.example` and the applied
@@ -102,6 +104,21 @@ Current Vercel env state observed with `vercel env ls` on 2026-06-14:
 Latest live verification on 2026-06-14 against project
 `sqskfdcwfwywjoobbpos`:
 
+- A fresh read-only Supabase connector pass at 2026-06-14 04:57 CDT confirmed
+  Sticky still owns exactly the expected app tables in `sticky`: RLS is enabled
+  on `allowed_emails`, `lists`, `subtasks`, `task_activity`,
+  `task_recurrence_rules`, `tasks`, `user_preferences`, `user_state`, and
+  `users`; `sticky.allowed_emails` has no public policies or authenticated
+  grants; all other runtime tables expose only the expected authenticated
+  privileges, with owner-scoped policies using `auth.uid()` and
+  `sticky.is_active_user(...)`.
+- The same pass confirmed no Sticky table grants exist for `anon`, no Sticky
+  routine is executable by `anon`, and
+  `sticky.advance_recurring_task_for_worker(...)` remains service-role-only.
+  Client-callable recurrence/reorder/completion RPCs are authenticated-only, and
+  trigger/helper routines such as `set_updated_at`,
+  `prevent_recurrence_with_subtasks`, and `prevent_subtask_on_recurring_task`
+  are not executable by `anon` or `authenticated`.
 - A current Supabase connector refresh after deployment
   `dpl_F7p1prHEDmfTWHZyTd3h76ArGHtp` confirmed the configured project is still
   `yk-platform` / `sqskfdcwfwywjoobbpos`, `ACTIVE_HEALTHY`, in `us-east-2`, on
@@ -455,6 +472,23 @@ Current DNS check result: `sticky.yuvrajkashyap.com` does not resolve yet.
 
 Latest smoke evidence:
 
+- Local `npm.cmd run verify` passed on 2026-06-14 after completed-pile
+  preference and selected-list/search user-state reload coverage was added:
+  typecheck, lint, security check, schema check, production build, moderate
+  audit with zero vulnerabilities, and Playwright `33 passed, 17 skipped`.
+- Focused Playwright checks also passed for the new persistence coverage:
+  `completed pile preference survives reload` and
+  `selected list and search state survive reload`.
+- No production redeploy was required for these latest commits because the
+  changes are test and documentation evidence only; the latest production
+  deployment remains `dpl_F7p1prHEDmfTWHZyTd3h76ArGHtp`.
+- `npm.cmd run launch:check` still reports `33 passed, 4 warnings, 4 failed`.
+  The remaining failures are unresolved `sticky.yuvrajkashyap.com` DNS, pending
+  Vercel domain configuration until DNS resolves, missing Vercel production
+  `SUPABASE_SECRET_KEY`, and missing Vercel production `NEXT_PUBLIC_SITE_URL`.
+  The warnings are the absent Git remote, absent Vercel Git integration,
+  missing local `SUPABASE_ACCESS_TOKEN` for Supabase Auth callback verification,
+  and DNS `ENOTFOUND` for the custom domain.
 - Local `npm.cmd run verify` passed on 2026-06-14 after task-view filter
   acceptance coverage was added: typecheck, lint, security check, schema check,
   production build, moderate audit with zero vulnerabilities, and Playwright
