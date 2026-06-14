@@ -845,6 +845,64 @@ test.describe("Sticky workspace", () => {
     });
   });
 
+  test("quick due chips cover today, next week, common times, and persistence", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "quick due chip coverage runs in the desktop project");
+
+    await expectNoConsoleErrors(page, async () => {
+      await page.goto("/");
+      const activeRegion = page.getByRole("region", { name: "Active stickies" });
+      const today = localDateKey();
+      const nextWeek = localDateKey(7);
+
+      await page.getByLabel("Quick add sticky").fill("Chip schedule proof");
+      await quickAddButton(page, "Today").click();
+      const card = activeRegion.locator(".task-card", { hasText: "Chip schedule proof" });
+      await expect(card).toBeVisible();
+      await card.click();
+
+      const details = page.getByLabel("Sticky details");
+      const dueDate = details.locator('input[aria-label="Due date"]');
+      const dueTime = details.locator('input[aria-label="Due time"]');
+
+      await details.getByRole("button", { name: "Today" }).click();
+      await expect(dueDate).toHaveValue(today);
+      await expect(details.getByRole("button", { name: "Today" })).toHaveAttribute("aria-pressed", "true");
+
+      await details.getByRole("button", { name: "Morning" }).click();
+      await expect(dueTime).toHaveValue("09:00");
+      await expect(details.getByRole("button", { name: "Morning" })).toHaveAttribute("aria-pressed", "true");
+      await expect(card).toContainText(`${shortDateLabel(today)} at 09:00`);
+
+      await details.getByRole("button", { name: "Next week" }).click();
+      await expect(dueDate).toHaveValue(nextWeek);
+      await expect(details.getByRole("button", { name: "Next week" })).toHaveAttribute("aria-pressed", "true");
+      await expect(card).toContainText(`${shortDateLabel(nextWeek)} at 09:00`);
+
+      await details.getByRole("button", { name: "Evening" }).click();
+      await expect(dueTime).toHaveValue("17:00");
+      await expect(details.getByRole("button", { name: "Evening" })).toHaveAttribute("aria-pressed", "true");
+      await expect(card).toContainText(`${shortDateLabel(nextWeek)} at 17:00`);
+
+      await details.getByRole("button", { name: "Any time" }).click();
+      await expect(dueDate).toHaveValue(nextWeek);
+      await expect(dueTime).toHaveValue("");
+      await expect(details.getByRole("button", { name: "Any time" })).toHaveAttribute("aria-pressed", "true");
+      await expect(card).toContainText(shortDateLabel(nextWeek));
+      await expect(card).not.toContainText("17:00");
+
+      await details.getByRole("button", { name: "Evening" }).click();
+      await expect(card).toContainText(`${shortDateLabel(nextWeek)} at 17:00`);
+
+      await page.reload();
+      const persistedCard = activeRegion.locator(".task-card", { hasText: "Chip schedule proof" });
+      await expect(persistedCard).toBeVisible();
+      await expect(persistedCard).toContainText(`${shortDateLabel(nextWeek)} at 17:00`);
+      await persistedCard.click();
+      await expect(dueDate).toHaveValue(nextWeek);
+      await expect(dueTime).toHaveValue("17:00");
+    });
+  });
+
   test("duplicate keeps sticky content while making a fresh active copy", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "duplicate workflow runs in the desktop project");
 
