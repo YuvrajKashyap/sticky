@@ -459,6 +459,10 @@ function plural(value: number, singular: string, pluralForm = `${singular}s`) {
   return value === 1 ? singular : pluralForm;
 }
 
+function taskViewButtonLabel(label: string, count: number, active: boolean) {
+  return `${active ? "Current" : "Show"} task view: ${label}, ${count} ${plural(count, "sticky", "stickies")}`;
+}
+
 function recurrenceCadence(rule: StickyRecurrenceRule) {
   const interval = Math.max(1, rule.intervalCount);
   const every = interval === 1 ? "Every" : `Every ${interval}`;
@@ -3009,6 +3013,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage }: StickyWork
                   type="button"
                   className={active ? "active" : ""}
                   aria-pressed={active}
+                  aria-label={taskViewButtonLabel(TASK_VIEW_LABELS[filter], count, active)}
                   onClick={() => setTaskViewFilter(filter)}
                 >
                   {filter === "all" ? <Layers3 size={15} /> : null}

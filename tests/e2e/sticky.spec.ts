@@ -134,6 +134,7 @@ test.describe("Sticky workspace", () => {
           name: "Open list Today, 3 active stickies, 1 completed sticky, current list",
         }),
       ).toBeVisible();
+      await expect(page.getByRole("button", { name: "Current task view: All, 3 stickies" })).toBeVisible();
       await expectSingleLine(page.locator(".workspace-title h2"));
       await expectNoHorizontalOverflow(page);
       await expect(page.locator(".save-status")).toContainText("Local demo saved");
@@ -318,10 +319,17 @@ test.describe("Sticky workspace", () => {
       const filteredActiveRegion = page.getByRole("region", { name: "Active stickies" });
       const taskViews = page.locator(".task-filter-bar");
       await taskViews.getByRole("button", { name: /Today/ }).click();
-      await expect(taskViews.getByRole("button", { name: /Today/ })).toHaveAttribute("aria-pressed", "true");
+      await expect(taskViews.getByRole("button", { name: "Current task view: Today, 0 stickies" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
       await expect(filteredActiveRegion.getByText("Verification sticky polished")).toHaveCount(0);
 
       await page.getByRole("button", { name: /Scheduled/ }).click();
+      await expect(taskViews.getByRole("button", { name: "Current task view: Scheduled, 2 stickies" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
       await expect(filteredActiveRegion.getByText("Verification sticky polished")).toBeVisible();
       await expect(filteredActiveRegion.getByText("Second order sticky")).toHaveCount(0);
       await expect(
@@ -331,6 +339,10 @@ test.describe("Sticky workspace", () => {
       ).toBeDisabled();
       await expect(page.getByText(/Reordering is locked while search, filters, or due-date sorting are active/)).toBeVisible();
       await page.getByRole("button", { name: /All/ }).click();
+      await expect(taskViews.getByRole("button", { name: "Current task view: All, 3 stickies" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
       await expect(filteredActiveRegion.getByText("Second order sticky")).toBeVisible();
       await page.getByRole("button", { name: "Due date", exact: true }).click();
       await expectTextBefore(page, ".task-title", "Smart parsed sticky", "Verification sticky polished");
@@ -561,13 +573,19 @@ test.describe("Sticky workspace", () => {
 
       await taskViews.getByRole("button", { name: /Today/ }).click();
       await page.getByRole("button", { name: "Due date", exact: true }).click();
-      await expect(taskViews.getByRole("button", { name: /Today/ })).toHaveAttribute("aria-pressed", "true");
+      await expect(taskViews.getByRole("button", { name: "Current task view: Today, 2 stickies" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
       await expect(page.getByRole("button", { name: "Due date", exact: true })).toHaveAttribute("aria-pressed", "true");
       await expect(page.getByText(/Reordering is locked while search, filters, or due-date sorting are active/)).toBeVisible();
 
       await page.reload();
       await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
-      await expect(taskViews.getByRole("button", { name: /Today/ })).toHaveAttribute("aria-pressed", "true");
+      await expect(taskViews.getByRole("button", { name: "Current task view: Today, 2 stickies" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
       await expect(page.getByRole("button", { name: "Due date", exact: true })).toHaveAttribute("aria-pressed", "true");
       await expect(page.getByText(/Reordering is locked while search, filters, or due-date sorting are active/)).toBeVisible();
     });
