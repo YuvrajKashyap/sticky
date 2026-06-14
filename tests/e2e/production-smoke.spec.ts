@@ -2,6 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { GENERIC_STICKY_ACCESS_MESSAGE } from "../../src/lib/sticky/messages";
 
+const PRODUCTION_CRON_SECRET = process.env.STICKY_PRODUCTION_CRON_SECRET;
+
 function recordConsoleErrors(page: Page) {
   const errors: string[] = [];
 
@@ -141,5 +143,42 @@ test.describe("Sticky production smoke", () => {
       expect(response.headers()["content-type"]).toContain("image/png");
       expect((await response.body()).length).toBeGreaterThan(10_000);
     }
+  });
+
+  test("protected cron route accepts the configured bearer", async ({ request }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "cron credential smoke only needs one browser project");
+    test.skip(!PRODUCTION_CRON_SECRET, "STICKY_PRODUCTION_CRON_SECRET is not available in this shell");
+
+    const response = await request.get("/api/recurrence/catch-up?limit=1", {
+      headers: {
+        Authorization: `Bearer ${PRODUCTION_CRON_SECRET}`,
+      },
+    });
+
+    expect(response.status()).toBe(200);
+    const body = (await response.json()) as {
+      ok?: boolean;
+      disabled?: boolean;
+      checked?: number;
+      eligible?: number;
+      advanced?: number;
+      skipped?: number;
+      errors?: unknown[];
+      reason?: string;
+    };
+
+    expect(body.ok).toBe(true);
+
+    if (body.disabled) {
+      expect(body.reason).toBe("Supabase server secret is not configured.");
+      return;
+    }
+
+    expect(typeof body.checked).toBe("number");
+    expect(typeof body.eligible).toBe("number");
+    expect(typeof body.advanced).toBe("number");
+    expect(typeof body.skipped).toBe("number");
+    expect(Array.isArray(body.errors)).toBe(true);
+    expect(body.errors).toHaveLength(0);
   });
 });

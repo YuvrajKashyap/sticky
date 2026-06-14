@@ -373,6 +373,9 @@ shell, auth callback hygiene, route headers, install assets, console errors, and
 horizontal overflow. It is isolated from the local `npm run verify` gate so
 localhost/demo product workflows stay deterministic. Set `STICKY_PRODUCTION_URL`
 or `PLAYWRIGHT_BASE_URL` to smoke-test a generated production URL or preview URL.
+If `STICKY_PRODUCTION_CRON_SECRET` is present, the smoke suite also verifies the
+protected recurrence cron route accepts the configured bearer and returns either
+the disabled-worker response or a successful worker result.
 
 ## Preview Deploy
 
@@ -500,6 +503,14 @@ Latest smoke evidence:
   The remaining warnings are the absent Git remote, absent Vercel Git
   integration, missing local `SUPABASE_ACCESS_TOKEN` for Supabase Auth config
   verification, and DNS `ENOTFOUND` for the custom domain.
+- `vercel env pull .env.vercel.local --environment=production --yes` was used
+  on 2026-06-14 to run the optional protected cron smoke with
+  `STICKY_PRODUCTION_CRON_SECRET` set from the ignored local env pull. The
+  focused production-smoke test
+  `protected cron route accepts the configured bearer` passed against
+  `https://sticky-green.vercel.app`, confirming the route accepts the configured
+  cron bearer and currently returns the expected disabled-worker response until
+  `SUPABASE_SECRET_KEY` is configured.
 - Local `npm.cmd run verify` passed on 2026-06-14 after completed-pile
   preference and selected-list/search user-state reload coverage was added:
   typecheck, lint, security check, schema check, production build, moderate

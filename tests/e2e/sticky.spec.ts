@@ -513,13 +513,12 @@ test.describe("Sticky workspace", () => {
       await details.locator(".subtask-row").first().getByRole("button", { name: /Move Second subtask down/ }).click();
       await expect(details.locator(".subtask-row input").nth(1)).toHaveValue("Second subtask");
       await dragBetween(page, details.locator(".subtask-drag").nth(1), details.locator(".subtask-drag").nth(0));
+      await expect(details.locator(".subtask-row.dragging")).toHaveCount(0);
+      await page.waitForTimeout(100);
       await expect(details.locator(".subtask-row input").first()).toHaveValue("Second subtask");
-      const reorderedSubtaskRow = details.locator(".subtask-row").first();
-      await reorderedSubtaskRow.getByRole("button", { name: "Complete subtask: Second subtask" }).click();
-      await expect(
-        reorderedSubtaskRow.getByRole("button", { name: "Restore subtask: Second subtask" }),
-      ).toBeVisible();
-      await reorderedSubtaskRow.getByRole("button", { name: "Delete subtask: Second subtask" }).click();
+      await details.getByRole("button", { name: "Complete subtask: Second subtask" }).click();
+      await expect(details.getByRole("button", { name: "Restore subtask: Second subtask" })).toBeVisible();
+      await details.getByRole("button", { name: "Delete subtask: Second subtask" }).click();
       await expect(details.locator(".subtask-row")).toHaveCount(1);
       const subtaskDeleteToast = page.getByRole("group", { name: /Subtask deleted: Second subtask/ });
       await expect(subtaskDeleteToast).toBeVisible();

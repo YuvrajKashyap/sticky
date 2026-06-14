@@ -18,6 +18,9 @@ const args =
 
 console.log(`Sticky production smoke`);
 console.log(`PLAYWRIGHT_BASE_URL=${baseURL}`);
+console.log(
+  `Protected cron bearer smoke=${process.env.STICKY_PRODUCTION_CRON_SECRET ? "enabled" : "skipped"}`,
+);
 console.log("");
 
 const child = spawn(command, args, {
