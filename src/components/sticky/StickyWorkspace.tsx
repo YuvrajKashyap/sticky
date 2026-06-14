@@ -710,6 +710,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     error: null,
   });
   const workspaceRef = useRef(workspace);
+  const latestSaveAttemptRef = useRef(0);
   const launchIntentAppliedRef = useRef(false);
   const dialogReturnFocusRef = useRef<HTMLElement | null>(null);
   const commandFocusTargetRef = useRef<CommandFocusTarget | null>(null);
@@ -1426,6 +1427,9 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       return true;
     }
 
+    const saveAttempt = latestSaveAttemptRef.current + 1;
+    latestSaveAttemptRef.current = saveAttempt;
+
     setSaveState((current) => ({
       ...current,
       pending: current.pending + 1,
@@ -1450,7 +1454,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     const saveError = rawSaveError ? userFacingStickySaveMessage(rawSaveError) : null;
 
     if (saveError) {
-      if (rollbackData) {
+      if (rollbackData && saveAttempt === latestSaveAttemptRef.current) {
         setWorkspace(rollbackData);
       }
       pushToast({
