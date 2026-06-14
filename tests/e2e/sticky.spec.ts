@@ -719,6 +719,71 @@ test.describe("Sticky workspace", () => {
     });
   });
 
+  test("task view filters cover overdue, repeating, and subtasks without corrupting custom order", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "view filter coverage runs in the desktop project");
+
+    await expectNoConsoleErrors(page, async () => {
+      await page.goto("/");
+      await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+
+      const taskViews = page.locator(".task-filter-bar");
+      const activeRegion = page.getByRole("region", { name: "Active stickies" });
+      const overdueTitle = "Overdue filter proof";
+      const overdueDate = localDateKey(-1);
+
+      await page.getByLabel("Quick add sticky").fill(overdueTitle);
+      await quickAddButton(page, "Today").click();
+      await activeRegion.getByText(overdueTitle).click();
+
+      const details = page.getByLabel("Sticky details");
+      await details.locator('input[aria-label="Due date"]').fill(overdueDate);
+      await expect(activeRegion.locator(".task-card", { hasText: overdueTitle })).toContainText(
+        shortDateLabel(overdueDate),
+      );
+
+      await taskViews.getByRole("button", { name: /Overdue/ }).click();
+      await expect(taskViews.getByRole("button", { name: "Current task view: Overdue, 1 sticky" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      await expect(activeRegion.getByText(overdueTitle)).toBeVisible();
+      await expect(activeRegion.getByText("Daily planning pass")).toHaveCount(0);
+      await expect(
+        activeRegion.locator(".task-card", { hasText: overdueTitle }).getByRole("button", {
+          name: /Move Overdue filter proof up/,
+        }),
+      ).toBeDisabled();
+      await expect(page.getByText(/Reordering is locked while search, filters, or due-date sorting are active/)).toBeVisible();
+
+      await taskViews.getByRole("button", { name: /Repeating/ }).click();
+      await expect(taskViews.getByRole("button", { name: "Current task view: Repeating, 1 sticky" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      await expect(activeRegion.getByText("Daily planning pass")).toBeVisible();
+      await expect(activeRegion.getByText(overdueTitle)).toHaveCount(0);
+
+      await taskViews.getByRole("button", { name: /Subtasks/ }).click();
+      await expect(taskViews.getByRole("button", { name: "Current task view: Subtasks, 2 stickies" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      await expect(activeRegion.getByText("Clear the capture tray")).toBeVisible();
+      await expect(activeRegion.getByText("Make the details sheet feel expensive")).toBeVisible();
+      await expect(activeRegion.getByText("Daily planning pass")).toHaveCount(0);
+      await expect(activeRegion.getByText(overdueTitle)).toHaveCount(0);
+
+      await taskViews.getByRole("button", { name: /All/ }).click();
+      await expect(taskViews.getByRole("button", { name: "Current task view: All, 4 stickies" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      await expect(page.getByText(/Reordering is locked while search, filters, or due-date sorting are active/)).toHaveCount(0);
+      await expectTextBefore(page, ".task-title", "Clear the capture tray", "Make the details sheet feel expensive");
+      await expectTextBefore(page, ".task-title", "Daily planning pass", overdueTitle);
+    });
+  });
+
   test("quick capture can route a sticky to a list token and reveal it", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "capture routing runs in the desktop project");
 
