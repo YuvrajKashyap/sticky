@@ -306,8 +306,8 @@ The launch checker uses only Node built-ins plus the local Vercel CLI. It checks
 the CI workflow, local release branch, Git remote handoff status, Vercel project
 Git integration, local Vercel link, deployment status,
 domain attachment/configuration, the stable production alias, security headers,
-`/robots.txt`, `/manifest.webmanifest`, the unauthenticated recurrence cron
-guard, the local and deployed Vercel Cron schedule, the
+Deployment Protection state, `/robots.txt`, `/manifest.webmanifest`, the
+unauthenticated recurrence cron guard, the local and deployed Vercel Cron schedule, the
 `sticky.yuvrajkashyap.com` DNS A record, and required Vercel production env var
 names without printing values. If `SUPABASE_ACCESS_TOKEN` is present in the
 local shell, it also checks the Supabase Management API auth config endpoint for

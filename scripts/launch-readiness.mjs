@@ -176,6 +176,16 @@ function formatVercelGitLink(link) {
     .join(" ");
 }
 
+function formatDeploymentProtection(value) {
+  if (!value || typeof value !== "object") {
+    return String(value ?? "unknown");
+  }
+
+  return Object.entries(value)
+    .map(([key, entry]) => `${key}=${String(entry)}`)
+    .join(", ");
+}
+
 async function checkSourceControlReadiness() {
   try {
     const workflow = await readFile(".github/workflows/verify.yml", "utf8");
@@ -232,6 +242,26 @@ async function checkSourceControlReadiness() {
     warn(
       "Vercel Git integration",
       `could not inspect project Git link (${error instanceof Error ? error.message : String(error)})`,
+    );
+  }
+}
+
+async function checkDeploymentProtection() {
+  try {
+    const project = await getVercelProjectMetadata();
+
+    if (project.ssoProtection == null) {
+      pass("Vercel deployment protection", "Deployment Protection is disabled for public production smoke");
+    } else {
+      fail(
+        "Vercel deployment protection",
+        `Deployment Protection is enabled (${formatDeploymentProtection(project.ssoProtection)})`,
+      );
+    }
+  } catch (error) {
+    warn(
+      "Vercel deployment protection",
+      `could not inspect project protection settings (${error instanceof Error ? error.message : String(error)})`,
     );
   }
 }
@@ -639,6 +669,7 @@ async function main() {
   } else {
     await checkSourceControlReadiness();
     await checkLocalVercelLink();
+    await checkDeploymentProtection();
     await checkDeploymentInspect(normalizedProductionUrl);
     await checkRoot(normalizedProductionUrl, "production");
     await checkRobots(normalizedProductionUrl);
