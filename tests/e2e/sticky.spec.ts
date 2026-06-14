@@ -739,6 +739,33 @@ test.describe("Sticky workspace", () => {
     });
   });
 
+  test("completed pile preference survives reload", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "completed pile persistence runs in the desktop project");
+
+    await expectNoConsoleErrors(page, async () => {
+      await page.goto("/");
+      await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+
+      const completedToggle = page.locator(".completed-pile").getByRole("button", { name: /Completed/ });
+      await expect(completedToggle).toHaveAttribute("aria-expanded", "false");
+      await completedToggle.click();
+      await expect(completedToggle).toHaveAttribute("aria-expanded", "true");
+      await expect(page.locator("#completed-stickies-list")).toBeVisible();
+
+      await page.reload();
+      await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+      await expect(completedToggle).toHaveAttribute("aria-expanded", "true");
+      await expect(page.locator("#completed-stickies-list")).toBeVisible();
+
+      await completedToggle.click();
+      await expect(completedToggle).toHaveAttribute("aria-expanded", "false");
+      await page.reload();
+      await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+      await expect(completedToggle).toHaveAttribute("aria-expanded", "false");
+      await expect(page.locator("#completed-stickies-list")).toHaveCount(0);
+    });
+  });
+
   test("task view filters cover overdue, repeating, and subtasks without corrupting custom order", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "view filter coverage runs in the desktop project");
 
