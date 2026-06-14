@@ -146,6 +146,21 @@ async function runGit(args) {
   });
 }
 
+function formatVercelGitLink(link) {
+  const provider = typeof link.type === "string" ? link.type : "git provider";
+  const org = typeof link.org === "string" ? link.org : null;
+  const repo = typeof link.repo === "string" ? link.repo : null;
+  const branch = typeof link.productionBranch === "string" ? link.productionBranch : null;
+
+  return [
+    provider,
+    org && repo ? `${org}/${repo}` : repo,
+    branch ? `production branch ${branch}` : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
 async function checkSourceControlReadiness() {
   try {
     const workflow = await readFile(".github/workflows/verify.yml", "utf8");
@@ -185,6 +200,25 @@ async function checkSourceControlReadiness() {
     }
   } catch {
     warn("Git origin remote", "no origin remote configured; connect GitHub and Vercel Git integration before preview release");
+  }
+
+  try {
+    const { stdout } = await runVercel(["api", `/v9/projects/${vercelProjectId}`, "--scope", vercelScope, "--raw"]);
+    const project = JSON.parse(stdout);
+
+    if (project.link && typeof project.link === "object") {
+      pass("Vercel Git integration", formatVercelGitLink(project.link));
+    } else {
+      warn(
+        "Vercel Git integration",
+        "project has no connected Git repository; preview deployments and preview-scoped env vars still need Vercel Git setup",
+      );
+    }
+  } catch (error) {
+    warn(
+      "Vercel Git integration",
+      `could not inspect project Git link (${error instanceof Error ? error.message : String(error)})`,
+    );
   }
 }
 

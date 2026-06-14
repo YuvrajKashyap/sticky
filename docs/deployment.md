@@ -303,17 +303,18 @@ npm run launch:check
 ```
 
 The launch checker uses only Node built-ins plus the local Vercel CLI. It checks
-the CI workflow, local release branch, Git remote handoff status, local Vercel
-link, deployment status, domain attachment/configuration, the stable production
-alias, security headers, `/robots.txt`, `/manifest.webmanifest`, the
-unauthenticated recurrence cron guard, the `sticky.yuvrajkashyap.com` DNS A
-record, and required Vercel production env var names without printing values. If
-`SUPABASE_ACCESS_TOKEN` is present in the local shell, it also checks the
-Supabase Management API auth config endpoint for the final site URL and redirect
-allow-list. A failing result is expected until Porkbun DNS,
-`SUPABASE_SECRET_KEY`, `NEXT_PUBLIC_SITE_URL`, and Supabase Auth URL/callback
-configuration are complete. A warning is expected until the repo has a GitHub
-`origin` remote and Vercel Git integration for preview releases.
+the CI workflow, local release branch, Git remote handoff status, Vercel project
+Git integration, local Vercel link, deployment status,
+domain attachment/configuration, the stable production alias, security headers,
+`/robots.txt`, `/manifest.webmanifest`, the unauthenticated recurrence cron
+guard, the `sticky.yuvrajkashyap.com` DNS A record, and required Vercel
+production env var names without printing values. If `SUPABASE_ACCESS_TOKEN` is
+present in the local shell, it also checks the Supabase Management API auth
+config endpoint for the final site URL and redirect allow-list. A failing result
+is expected until Porkbun DNS, `SUPABASE_SECRET_KEY`, `NEXT_PUBLIC_SITE_URL`, and
+Supabase Auth URL/callback configuration are complete. A warning is expected
+until the repo has a GitHub `origin` remote and Vercel Git integration for
+preview releases.
 
 `SUPABASE_ACCESS_TOKEN` is only for this local launch check. Use a personal or
 fine-grained Management API token with auth config read permission, keep it out
