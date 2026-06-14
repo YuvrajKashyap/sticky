@@ -51,8 +51,10 @@ npm run launch:check
 This checks the local Vercel link, Vercel deployment readiness, Vercel domain
 attachment/configuration, the stable production alias, hardened route headers,
 `robots.txt`, the install manifest, the unauthenticated recurrence cron guard,
-the intended custom-domain DNS record, and the required Vercel production env
-names without printing secret values. It is expected to fail until
+the intended custom-domain DNS record, the required Vercel production env names,
+and, when `SUPABASE_ACCESS_TOKEN` is present locally, Supabase Auth site URL and
+redirect allow-list configuration. It does not print secret values. It is
+expected to fail until
 `sticky.yuvrajkashyap.com` resolves, `SUPABASE_SECRET_KEY` is set in Vercel,
 `NEXT_PUBLIC_SITE_URL` is set for the final domain, and Supabase Auth callback
 configuration is finished.

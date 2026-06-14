@@ -298,9 +298,16 @@ the local Vercel link, deployment status, domain attachment/configuration, the
 stable production alias, security headers, `/robots.txt`,
 `/manifest.webmanifest`, the unauthenticated recurrence cron guard, the
 `sticky.yuvrajkashyap.com` DNS A record, and required Vercel production env var
-names without printing values. A failing result is expected until Porkbun DNS,
-`SUPABASE_SECRET_KEY`, `NEXT_PUBLIC_SITE_URL`, and Supabase Auth URL/callback
-configuration are complete.
+names without printing values. If `SUPABASE_ACCESS_TOKEN` is present in the
+local shell, it also checks the Supabase Management API auth config endpoint for
+the final site URL and redirect allow-list. A failing result is expected until
+Porkbun DNS, `SUPABASE_SECRET_KEY`, `NEXT_PUBLIC_SITE_URL`, and Supabase Auth
+URL/callback configuration are complete.
+
+`SUPABASE_ACCESS_TOKEN` is only for this local launch check. Use a personal or
+fine-grained Management API token with auth config read permission, keep it out
+of Vercel runtime env vars, and remove it from the shell after verification if
+desired.
 
 ## Preview Deploy
 

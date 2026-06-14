@@ -11,6 +11,22 @@ const expectedARecord = process.env.STICKY_EXPECTED_A_RECORD ?? "76.76.21.21";
 const vercelScope = process.env.VERCEL_SCOPE ?? "yuvraj-kashyaps-projects";
 const vercelProject = process.env.VERCEL_PROJECT ?? "sticky";
 const vercelProjectId = process.env.VERCEL_PROJECT_ID ?? "prj_nfiyWrEfak04ah1pIqvFqcytQcmh";
+const supabaseProjectRef = process.env.SUPABASE_PROJECT_REF ?? "sqskfdcwfwywjoobbpos";
+const supabaseAuthSiteUrl =
+  process.env.SUPABASE_AUTH_SITE_URL ?? `https://${customDomain}`;
+const supabaseAuthRedirectUrls = (
+  process.env.SUPABASE_AUTH_REDIRECT_URLS ??
+  [
+    "http://localhost:3000/auth/callback",
+    "http://localhost:3100/auth/callback",
+    `https://${customDomain}/auth/callback`,
+    "https://sticky-green.vercel.app/auth/callback",
+    "https://sticky-yuvraj-kashyaps-projects.vercel.app/auth/callback",
+  ].join(",")
+)
+  .split(",")
+  .map((url) => url.trim())
+  .filter(Boolean);
 
 const results = [];
 
@@ -52,6 +68,43 @@ async function fetchText(path, baseUrl) {
 
 function headerIncludes(headers, name, expected) {
   return headers.get(name)?.toLowerCase().includes(expected.toLowerCase()) ?? false;
+}
+
+function asArray(value) {
+  if (Array.isArray(value)) {
+    return value.flatMap(asArray);
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(/[,\n]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function findConfigValue(value, acceptedKeys) {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  for (const [key, entry] of Object.entries(value)) {
+    if (acceptedKeys.includes(key.toLowerCase())) {
+      return entry;
+    }
+  }
+
+  for (const entry of Object.values(value)) {
+    const found = findConfigValue(entry, acceptedKeys);
+
+    if (found !== undefined) {
+      return found;
+    }
+  }
+
+  return undefined;
 }
 
 function hasLineValue(output, label, expected) {
@@ -364,6 +417,66 @@ async function checkVercelEnv() {
   }
 }
 
+async function checkSupabaseAuthConfig() {
+  const accessToken = process.env.SUPABASE_ACCESS_TOKEN;
+
+  if (!accessToken) {
+    warn(
+      "Supabase Auth config",
+      "SUPABASE_ACCESS_TOKEN is not set; skipped Management API callback verification",
+    );
+    return;
+  }
+
+  try {
+    const response = await fetch(`https://api.supabase.com/v1/projects/${supabaseProjectRef}/config/auth`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    if (!response.ok) {
+      fail("Supabase Auth config", `Management API returned HTTP ${response.status}`);
+      return;
+    }
+
+    const config = await response.json();
+    const siteUrlValue = findConfigValue(config, ["site_url", "siteurl"]);
+    const redirectListValue = findConfigValue(config, [
+      "uri_allow_list",
+      "additional_redirect_urls",
+      "redirect_urls",
+      "redirect_uris",
+    ]);
+    const redirectUrls = new Set(asArray(redirectListValue));
+
+    if (String(siteUrlValue ?? "") === supabaseAuthSiteUrl) {
+      pass("Supabase Auth site URL", `site URL is ${supabaseAuthSiteUrl}`);
+    } else {
+      fail(
+        "Supabase Auth site URL",
+        `site URL is ${siteUrlValue ? String(siteUrlValue) : "missing"}, expected ${supabaseAuthSiteUrl}`,
+      );
+    }
+
+    if (!redirectUrls.size) {
+      fail("Supabase Auth redirect URLs", "redirect allow list was missing from Management API response");
+      return;
+    }
+
+    for (const redirectUrl of supabaseAuthRedirectUrls) {
+      if (redirectUrls.has(redirectUrl)) {
+        pass("Supabase Auth redirect URL", `${redirectUrl} is allowed`);
+      } else {
+        fail("Supabase Auth redirect URL", `${redirectUrl} is missing`);
+      }
+    }
+  } catch (error) {
+    fail("Supabase Auth config", error instanceof Error ? error.message : String(error));
+  }
+}
+
 async function main() {
   console.log("Sticky launch readiness");
   console.log(`Production URL: ${productionUrl}`);
@@ -393,6 +506,7 @@ async function main() {
   }
 
   await checkVercelEnv();
+  await checkSupabaseAuthConfig();
 
   const failCount = results.filter((result) => result.status === "fail").length;
   const warnCount = results.filter((result) => result.status === "warn").length;
