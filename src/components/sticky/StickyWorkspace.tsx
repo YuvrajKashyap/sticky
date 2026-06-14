@@ -53,6 +53,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { format } from "date-fns";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { listToDb, recurrenceToDb, subtaskToDb, taskToDb } from "@/lib/sticky/mappers";
+import { userFacingStickySaveMessage } from "@/lib/sticky/messages";
 import {
   nextOccurrenceCount,
   nextRecurrenceDate,
@@ -1392,20 +1393,22 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       error: null,
     }));
 
-    let saveError: string | null = null;
+    let rawSaveError: string | null = null;
 
     try {
       if (!supabase) {
-        saveError = "Sticky is not connected in this environment.";
+        rawSaveError = "Sticky is not connected in this environment.";
       } else {
         const result = await operation();
         const results = Array.isArray(result) ? result : [result];
         const failed = results.find(hasResultError);
-        saveError = failed?.error?.message ?? null;
+        rawSaveError = failed?.error?.message ?? null;
       }
     } catch (error) {
-      saveError = errorMessageFromUnknown(error);
+      rawSaveError = errorMessageFromUnknown(error);
     }
+
+    const saveError = rawSaveError ? userFacingStickySaveMessage(rawSaveError) : null;
 
     if (saveError) {
       if (rollbackData) {

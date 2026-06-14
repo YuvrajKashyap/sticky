@@ -20,6 +20,9 @@ const TECHNICAL_MESSAGE_PATTERNS = [
 export const GENERIC_STICKY_ACCESS_MESSAGE =
   "Sticky could not open this workspace yet. Please try again, or ask the workspace owner to check access.";
 
+export const GENERIC_STICKY_SAVE_MESSAGE =
+  "Sticky could not save this change yet. Please try again in a moment.";
+
 export function userFacingStickyMessage(
   message: string | null | undefined,
   fallback = GENERIC_STICKY_ACCESS_MESSAGE,
@@ -38,4 +41,8 @@ export function userFacingStickyMessage(
   }
 
   return normalized;
+}
+
+export function userFacingStickySaveMessage(message: string | null | undefined) {
+  return userFacingStickyMessage(message, GENERIC_STICKY_SAVE_MESSAGE) || GENERIC_STICKY_SAVE_MESSAGE;
 }

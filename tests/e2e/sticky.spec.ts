@@ -1,4 +1,9 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import {
+  GENERIC_STICKY_SAVE_MESSAGE,
+  userFacingStickyMessage,
+  userFacingStickySaveMessage,
+} from "../../src/lib/sticky/messages";
 
 const TEST_CRON_SECRET = process.env.CRON_SECRET ?? "test-cron-secret";
 
@@ -117,6 +122,19 @@ async function expectNoPartiallyVisibleListTabs(page: Page) {
 function quickAddButton(page: Page, listName: string) {
   return page.getByRole("button", { name: `Add sticky to ${listName}` });
 }
+
+test.describe("Sticky message hygiene", () => {
+  test("keeps friendly messages while replacing technical save errors", () => {
+    expect(userFacingStickyMessage("Magic link expired")).toBe("Magic link expired");
+    expect(userFacingStickySaveMessage("Sticky is not connected in this environment.")).toBe(
+      "Sticky is not connected in this environment.",
+    );
+    expect(
+      userFacingStickySaveMessage('new row violates row-level security policy for table "lists"'),
+    ).toBe(GENERIC_STICKY_SAVE_MESSAGE);
+    expect(userFacingStickySaveMessage("")).toBe(GENERIC_STICKY_SAVE_MESSAGE);
+  });
+});
 
 async function expectSpecificVisibleControlNames(page: Page) {
   const weakNames = await page.evaluate(() => {
