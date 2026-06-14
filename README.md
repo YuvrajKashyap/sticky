@@ -52,6 +52,10 @@ The repository also includes a GitHub Actions workflow at
 runs the same `npm run verify` gate on pushes to `main`, pull requests, and
 manual dispatches.
 
+`.github/workflows/production-smoke.yml` adds a manual hosted-smoke workflow with
+a URL input. Use it after the repo is connected to GitHub to run
+`npm run test:production-smoke` against a production or preview deployment.
+
 `npm run test:production-smoke` defaults to the stable production alias and runs
 read-only desktop/mobile Playwright checks against the signed-out shell,
 callback hygiene, hardened headers, install assets, console errors, and

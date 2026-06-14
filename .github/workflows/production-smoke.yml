@@ -1,0 +1,46 @@
+name: Production Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Hosted Sticky URL to smoke test
+        required: true
+        default: https://sticky-green.vercel.app
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-smoke-${{ github.workflow }}-${{ inputs.url }}
+  cancel-in-progress: true
+
+jobs:
+  production-smoke:
+    name: Production Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: true
+      NEXT_TELEMETRY_DISABLED: "1"
+      STICKY_PRODUCTION_URL: ${{ inputs.url }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chrome
+
+      - name: Run hosted production smoke
+        run: npm run test:production-smoke

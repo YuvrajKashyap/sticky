@@ -12,6 +12,9 @@ Use this before calling a Sticky release ready.
   intentionally not a git checkout.
 - GitHub Actions `Verify Sticky` passes after the repo is connected to GitHub,
   or the release notes explicitly say CI is not connected yet.
+- GitHub Actions `Production Smoke` passes for the hosted release URL after the
+  repo is connected to GitHub, or the local `npm run test:production-smoke`
+  result is used until CI is connected.
 - Local app opens at `http://localhost:3100` during Playwright verification.
 - No browser console errors appear on the primary app route.
 
@@ -80,10 +83,10 @@ Use this before calling a Sticky release ready.
 - `npm run launch:check` succeeds against the local Vercel link, production
   deployment status, stable production alias, target custom domain, route
   headers, Deployment Protection state, install manifest, recent production
-  runtime error logs, cron guard, Vercel Cron schedule, CI workflow, release
-  branch, Git remote handoff, Vercel Git integration, Vercel production env
-  names, and Supabase Auth URL/callback settings when a local Management API
-  token is supplied.
+  runtime error logs, cron guard, Vercel Cron schedule, CI workflow, hosted-smoke
+  workflow, release branch, Git remote handoff, Vercel Git integration, Vercel
+  production env names, and Supabase Auth URL/callback settings when a local
+  Management API token is supplied.
 - Vercel project is linked in `.vercel/project.json`.
 - GitHub `origin` remote and Vercel Git integration are connected before
   relying on CI or preview-scoped env vars.

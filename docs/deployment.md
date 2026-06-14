@@ -296,6 +296,10 @@ pushes to `main`, pull requests, and manual GitHub Actions dispatches once the
 local repository is connected to GitHub. CI installs the Playwright Chrome
 channel so it matches the local browser smoke configuration.
 
+`.github/workflows/production-smoke.yml` provides a manual hosted-smoke workflow
+with a URL input for `npm run test:production-smoke`. Use it for release URLs and
+previews after the GitHub remote is connected.
+
 Run the hosted launch-readiness gate separately:
 
 ```powershell
@@ -304,8 +308,8 @@ npm run test:production-smoke
 ```
 
 The launch checker uses only Node built-ins plus the local Vercel CLI. It checks
-the CI workflow, local release branch, Git remote handoff status, Vercel project
-Git integration, local Vercel link, deployment status,
+the CI and hosted-smoke workflows, local release branch, Git remote handoff
+status, Vercel project Git integration, local Vercel link, deployment status,
 domain attachment/configuration, the stable production alias, security headers,
 Deployment Protection state, `/robots.txt`, `/manifest.webmanifest`, the
 recent production runtime error-log window, the unauthenticated recurrence cron

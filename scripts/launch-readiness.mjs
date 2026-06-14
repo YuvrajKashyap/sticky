@@ -202,18 +202,33 @@ function parseJsonLogLines(output) {
     .filter(Boolean);
 }
 
-async function checkSourceControlReadiness() {
+async function checkWorkflow(path, pattern, label, detail) {
   try {
-    const workflow = await readFile(".github/workflows/verify.yml", "utf8");
+    const workflow = await readFile(path, "utf8");
 
-    if (/name:\s+Verify/i.test(workflow) && /npm\s+run\s+verify/i.test(workflow)) {
-      pass("CI workflow", ".github/workflows/verify.yml runs npm run verify");
+    if (pattern.test(workflow)) {
+      pass(label, detail);
     } else {
-      fail("CI workflow", ".github/workflows/verify.yml does not clearly run npm run verify");
+      fail(label, `${path} does not include the expected command`);
     }
   } catch (error) {
-    fail("CI workflow", error instanceof Error ? error.message : String(error));
+    fail(label, error instanceof Error ? error.message : String(error));
   }
+}
+
+async function checkSourceControlReadiness() {
+  await checkWorkflow(
+    ".github/workflows/verify.yml",
+    /name:\s+Verify[\s\S]*npm\s+run\s+verify/i,
+    "CI workflow",
+    ".github/workflows/verify.yml runs npm run verify",
+  );
+  await checkWorkflow(
+    ".github/workflows/production-smoke.yml",
+    /name:\s+Production Smoke[\s\S]*npm\s+run\s+test:production-smoke/i,
+    "Production smoke workflow",
+    ".github/workflows/production-smoke.yml runs npm run test:production-smoke",
+  );
 
   try {
     const { stdout } = await runGit(["rev-parse", "--abbrev-ref", "HEAD"]);
