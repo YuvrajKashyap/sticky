@@ -1054,6 +1054,49 @@ test.describe("Sticky workspace", () => {
     });
   });
 
+  test("monthly and yearly repeats generate clamped next dates", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "recurrence date math runs in the desktop project");
+
+    await expectNoConsoleErrors(page, async () => {
+      await page.goto("/");
+
+      const details = page.getByLabel("Sticky details");
+      const activeRegion = page.getByRole("region", { name: "Active stickies" });
+
+      await page.getByLabel("Quick add sticky").fill("Monthly closeout");
+      await quickAddButton(page, "Today").click();
+      await details.locator('input[aria-label="Due date"]').fill("2026-08-31");
+      await details.getByLabel("Not repeating").check();
+      await details.getByLabel("Frequency").selectOption("monthly");
+      await expect(details.getByLabel("Month day")).toHaveValue("31");
+      await expect(details.getByText("Every month on day 31")).toBeVisible();
+
+      await details.getByRole("button", { name: "Complete Monthly closeout" }).click();
+      await expect(page.locator(".toast", { hasText: "Next repeat: Sep 30, 2026" })).toBeVisible();
+      const monthlyRepeat = activeRegion.locator(".task-card", { hasText: "Sep 30" });
+      await expect(monthlyRepeat).toContainText("Sep 30");
+      await expect(monthlyRepeat).toContainText("Every month on day 31");
+      await monthlyRepeat.click();
+      await expect(details.locator('input[aria-label="Due date"]')).toHaveValue("2026-09-30");
+
+      await page.getByLabel("Quick add sticky").fill("Leap review");
+      await quickAddButton(page, "Today").click();
+      await details.locator('input[aria-label="Due date"]').fill("2028-02-29");
+      await details.getByLabel("Not repeating").check();
+      await details.getByLabel("Frequency").selectOption("yearly");
+      await expect(details.getByLabel("Month day")).toHaveValue("29");
+      await expect(details.getByText("Every year on Feb 29")).toBeVisible();
+
+      await details.getByRole("button", { name: "Complete Leap review" }).click();
+      await expect(page.locator(".toast", { hasText: "Next repeat: Feb 28, 2029" })).toBeVisible();
+      const yearlyRepeat = activeRegion.locator(".task-card", { hasText: "Feb 28" });
+      await expect(yearlyRepeat).toContainText("Feb 28");
+      await expect(yearlyRepeat).toContainText("Every year on Feb 29");
+      await yearlyRepeat.click();
+      await expect(details.locator('input[aria-label="Due date"]')).toHaveValue("2029-02-28");
+    });
+  });
+
   test("selected sticky commands cover color persistence, completion, restore, delete, and undo", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "selected sticky command workflow runs in the desktop project");
 

@@ -46,6 +46,9 @@ activated in production.
   recurrence rule.
 - Undo for task delete and completed-clear restores recurrence rules together
   with the task rows.
+- E2E coverage now verifies weekly recurrence duplication, end-on-date
+  persistence, monthly month-end clamping, and yearly leap-day clamping through
+  the real workspace flow.
 
 ## Remaining Limitation
 
@@ -81,9 +84,9 @@ active repeating sticky, use this path:
    or explicit recurrence instance columns.
 5. Keep the current subtask restriction unless the product intentionally chooses
    a different behavior and updates both UI and database constraints.
-6. Add tests for daily, weekly weekday, monthly day, yearly date, end-on-date,
-   end-after-count, paused rules, missed-run catch-up, and duplicate-run
-   prevention.
+6. Keep expanding tests around remaining recurrence worker edges: daily and
+   custom cycles, missed-run catch-up, duplicate-run prevention, and any future
+   historical-instance backfill behavior.
 
 ## Verification Before Shipping The Worker
 
