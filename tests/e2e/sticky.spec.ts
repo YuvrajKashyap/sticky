@@ -895,6 +895,24 @@ test.describe("Sticky workspace", () => {
     });
   });
 
+  test("auth shell replaces technical access errors", async ({ page }) => {
+    await expectNoConsoleErrors(page, async () => {
+      await page.goto("/?auth_error=permission%20denied%20for%20schema%20sticky");
+      await expect(page.getByRole("heading", { name: "Sign in to Sticky" })).toBeVisible();
+      await expect(
+        page.getByText(
+          "Sticky could not open this workspace yet. Please try again, or ask the workspace owner to check access.",
+        ),
+      ).toBeVisible();
+      await expect(page.getByText("permission denied")).toHaveCount(0);
+      await expect(page.getByText("schema")).toHaveCount(0);
+      await expect(page.getByText("row-level security")).toHaveCount(0);
+      await expect(page.getByText("Supabase")).toHaveCount(0);
+      await expect(page.getByText("sticky.allowed_emails")).toHaveCount(0);
+      await expect(page.getByText("NEXT_PUBLIC_SUPABASE")).toHaveCount(0);
+    });
+  });
+
   test("auth callback preserves the request origin when reporting provider errors", async ({ page }) => {
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/auth/callback?error_description=Provider%20denied");

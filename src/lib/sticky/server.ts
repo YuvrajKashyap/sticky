@@ -1,6 +1,10 @@
 import { unstable_noStore as noStore } from "next/cache";
 import { createDemoWorkspaceData } from "@/lib/sticky/demo-data";
 import {
+  GENERIC_STICKY_ACCESS_MESSAGE,
+  userFacingStickyMessage,
+} from "@/lib/sticky/messages";
+import {
   mapList,
   mapPreferences,
   mapRecurrenceRule,
@@ -104,8 +108,10 @@ export async function loadWorkspace(): Promise<WorkspaceLoadResult> {
     const activationMessage =
       bootstrapError?.code === "42501"
         ? "This email is not approved for Sticky yet. Ask the workspace owner to grant access."
-        : bootstrapError?.message ??
-          "Sticky could not activate this account. Ask the workspace owner to approve this email.";
+        : userFacingStickyMessage(
+            bootstrapError?.message,
+            "Sticky could not activate this account. Ask the workspace owner to approve this email.",
+          );
 
     return {
       status: "access_denied",
@@ -144,9 +150,14 @@ export async function loadWorkspace(): Promise<WorkspaceLoadResult> {
     prefsResult.error;
 
   if (firstError) {
+    console.error("Sticky workspace load failed", {
+      code: firstError.code,
+      message: firstError.message,
+    });
+
     return {
       status: "access_denied",
-      message: firstError.message,
+      message: GENERIC_STICKY_ACCESS_MESSAGE,
     };
   }
 

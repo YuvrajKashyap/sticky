@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ArrowRight, CheckCircle2, KeyRound, LockKeyhole, Sparkles } from "lucide-react";
+import { userFacingStickyMessage } from "@/lib/sticky/messages";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getAuthCallbackUrl } from "@/lib/supabase/redirect";
 
@@ -11,9 +12,10 @@ type AuthPanelProps = {
 };
 
 export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProps) {
+  const safeAccessMessage = userFacingStickyMessage(accessMessage);
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
-  const [message, setMessage] = useState(accessMessage ?? "");
+  const [message, setMessage] = useState(safeAccessMessage);
 
   useEffect(() => {
     const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
@@ -26,7 +28,7 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
     window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
     const handle = window.setTimeout(() => {
       setStatus("error");
-      setMessage(hashError);
+      setMessage(userFacingStickyMessage(hashError));
     });
 
     return () => window.clearTimeout(handle);
@@ -56,7 +58,7 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
 
     if (error) {
       setStatus("error");
-      setMessage(error.message);
+      setMessage(userFacingStickyMessage(error.message, "Sticky could not send a sign-in link. Please try again."));
       return;
     }
 
@@ -85,7 +87,7 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
 
     if (error) {
       setStatus("error");
-      setMessage(error.message);
+      setMessage(userFacingStickyMessage(error.message, "Sticky could not start Google sign-in. Please try again."));
     }
   }
 
@@ -152,7 +154,7 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
         </button>
 
         {message ? (
-          <div className={`notice ${status === "error" || accessMessage ? "error" : "success"}`}>
+          <div className={`notice ${status === "error" || safeAccessMessage ? "error" : "success"}`}>
             {message}
           </div>
         ) : null}
