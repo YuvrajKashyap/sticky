@@ -16,9 +16,9 @@ This runbook is for deploying Sticky to `sticky.yuvrajkashyap.com`.
 - Local Vercel link status: `.vercel/project.json` exists and is ignored.
 - Local git status: repository initialized on branch `main`; no remote is
   configured yet.
-- Latest production deployment: `dpl_G72BMKbeAxy58tHbPNvnuNNXDtAK`.
+- Latest production deployment: `dpl_EBj6q4VMEqBkqMPpxiYxnmg4YHrz`.
 - Public production URL:
-  `https://sticky-phwrhbdas-yuvraj-kashyaps-projects.vercel.app`.
+  `https://sticky-6i6ekvmza-yuvraj-kashyaps-projects.vercel.app`.
 - Production aliases observed:
   `https://sticky-green.vercel.app`,
   `https://sticky.yuvrajkashyap.com`,
@@ -377,6 +377,29 @@ Current DNS check result: `sticky.yuvrajkashyap.com` does not resolve yet.
 
 Latest smoke evidence:
 
+- Local `npm.cmd run verify` passed on 2026-06-14 after user-facing access
+  error hardening: typecheck, lint, production build, moderate audit with zero
+  vulnerabilities, and Playwright `25 passed, 13 skipped`.
+- Production source deploy from local commit `1e74dc4` passed on 2026-06-14.
+  Remote Vercel build completed successfully and produced production deployment
+  `dpl_EBj6q4VMEqBkqMPpxiYxnmg4YHrz`.
+- `vercel inspect sticky-6i6ekvmza-yuvraj-kashyaps-projects.vercel.app`
+  reports production deployment `dpl_EBj6q4VMEqBkqMPpxiYxnmg4YHrz` as `Ready`
+  with `sticky-green.vercel.app`, `sticky.yuvrajkashyap.com`,
+  `sticky-yuvraj-kashyaps-projects.vercel.app`, and
+  `sticky-yuvrajkashyap-yuvraj-kashyaps-projects.vercel.app` in the alias list.
+- Production-safe Playwright smoke passed against `https://sticky-green.vercel.app`
+  after deployment `dpl_EBj6q4VMEqBkqMPpxiYxnmg4YHrz`: route chrome, auth
+  callback errors/origin preservation, sanitized technical access errors,
+  unauthenticated cron, production security headers, install manifest
+  screenshots/shortcuts, and generated social previews reported `8 passed`.
+- Mobile production auth smoke passed against `https://sticky-green.vercel.app`
+  after deployment `dpl_EBj6q4VMEqBkqMPpxiYxnmg4YHrz`: callback errors,
+  sanitized technical access errors, and provider-origin preservation reported
+  `3 passed`.
+- Deployment error-log query for `dpl_EBj6q4VMEqBkqMPpxiYxnmg4YHrz` returned no
+  records in the last 15 minutes, and `sticky.yuvrajkashyap.com` still did not
+  resolve in DNS.
 - Production source deploy from local commit `d34701d` passed on 2026-06-14.
   Remote Vercel build completed successfully and produced production deployment
   `dpl_G72BMKbeAxy58tHbPNvnuNNXDtAK`.
