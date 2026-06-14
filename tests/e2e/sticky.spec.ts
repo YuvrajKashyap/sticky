@@ -1097,6 +1097,40 @@ test.describe("Sticky workspace", () => {
     });
   });
 
+  test("after-count repeats stop when the series is exhausted", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "finite recurrence runs in the desktop project");
+
+    await expectNoConsoleErrors(page, async () => {
+      await page.goto("/");
+
+      const startDate = localDateKey(1);
+      const secondDate = localDateKey(2);
+      const thirdDate = localDateKey(3);
+      const details = page.getByLabel("Sticky details");
+      const activeRegion = page.getByRole("region", { name: "Active stickies" });
+
+      await page.getByLabel("Quick add sticky").fill("Two-shot repeat");
+      await quickAddButton(page, "Today").click();
+      await details.locator('input[aria-label="Due date"]').fill(startDate);
+      await details.getByLabel("Not repeating").check();
+      await details.getByLabel("Ends").selectOption("after_count");
+      await details.getByRole("spinbutton", { name: "Count" }).fill("2");
+      await expect(details.getByText("Ends after 2 times")).toBeVisible();
+
+      await details.getByRole("button", { name: "Complete Two-shot repeat" }).click();
+      await expect(page.locator(".toast", { hasText: "Next repeat:" })).toContainText(shortDateLabel(secondDate));
+      const secondOccurrence = activeRegion.locator(".task-card", { hasText: shortDateLabel(secondDate) });
+      await expect(secondOccurrence).toContainText("Two-shot repeat");
+      await secondOccurrence.click();
+      await expect(details.getByText("Ends after 1 time")).toBeVisible();
+
+      await details.getByRole("button", { name: "Complete Two-shot repeat" }).click();
+      await expect(activeRegion.locator(".task-card", { hasText: "Two-shot repeat" })).toHaveCount(0);
+      await expect(activeRegion.locator(".task-card", { hasText: shortDateLabel(thirdDate) })).toHaveCount(0);
+      await expect(page.locator(".toast", { hasText: `Next repeat: ${shortDateLabel(thirdDate)}` })).toHaveCount(0);
+    });
+  });
+
   test("selected sticky commands cover color persistence, completion, restore, delete, and undo", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "selected sticky command workflow runs in the desktop project");
 

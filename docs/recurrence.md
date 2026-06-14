@@ -47,8 +47,8 @@ activated in production.
 - Undo for task delete and completed-clear restores recurrence rules together
   with the task rows.
 - E2E coverage now verifies weekly recurrence duplication, end-on-date
-  persistence, monthly month-end clamping, and yearly leap-day clamping through
-  the real workspace flow.
+  persistence, after-count exhaustion, monthly month-end clamping, and yearly
+  leap-day clamping through the real workspace flow.
 
 ## Remaining Limitation
 
