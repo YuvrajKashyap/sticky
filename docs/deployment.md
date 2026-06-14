@@ -287,6 +287,20 @@ npm run verify
 - npm moderate audit
 - Playwright desktop/mobile e2e smoke tests
 
+Run the hosted launch-readiness gate separately:
+
+```powershell
+npm run launch:check
+```
+
+The launch checker uses only Node built-ins plus the local Vercel CLI. It checks
+the stable production alias, security headers, `/robots.txt`,
+`/manifest.webmanifest`, the unauthenticated recurrence cron guard, the
+`sticky.yuvrajkashyap.com` DNS A record, and required Vercel production env var
+names without printing values. A failing result is expected until Porkbun DNS,
+`SUPABASE_SECRET_KEY`, `NEXT_PUBLIC_SITE_URL`, and Supabase Auth URL/callback
+configuration are complete.
+
 ## Preview Deploy
 
 Preview env vars require a connected Git repository in the current Vercel
@@ -364,6 +378,11 @@ Current DNS check result: `sticky.yuvrajkashyap.com` does not resolve yet.
 
 ## Post-Deploy Smoke
 
+0. Run `npm run launch:check`. Any failure should map to a known launch blocker
+   before release. On 2026-06-14, the expected blockers are unresolved
+   `sticky.yuvrajkashyap.com` DNS, missing Vercel `SUPABASE_SECRET_KEY`, missing
+   Vercel `NEXT_PUBLIC_SITE_URL`, and pending Supabase Auth URL/callback
+   configuration.
 1. Visit `https://sticky.yuvrajkashyap.com`.
 2. Sign in with an allowlisted owner email.
 3. Confirm the workspace loads with Supabase-backed data, not demo mode.

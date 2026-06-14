@@ -73,6 +73,9 @@ Use this before calling a Sticky release ready.
 
 ## Deployment Acceptance
 
+- `npm run launch:check` succeeds against the stable production alias, target
+  custom domain, route headers, install manifest, cron guard, and Vercel
+  production env names.
 - Vercel project is linked in `.vercel/project.json`.
 - Production, preview, and development Vercel env vars are set.
 - Server-only `CRON_SECRET` and `SUPABASE_SECRET_KEY` are set before enabling

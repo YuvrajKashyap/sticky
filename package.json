@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
     "audit:moderate": "npm audit --audit-level=moderate",
+    "launch:check": "node scripts/launch-readiness.mjs",
     "verify": "npm run typecheck && npm run lint && npm run build && npm run audit:moderate && npm run test:e2e"
   },
   "overrides": {

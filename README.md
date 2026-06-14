@@ -42,6 +42,20 @@ npm run build
 npm run test:e2e
 ```
 
+Before calling the hosted app launch-ready, run:
+
+```powershell
+npm run launch:check
+```
+
+This checks the stable production alias, hardened route headers,
+`robots.txt`, the install manifest, the unauthenticated recurrence cron guard,
+the intended custom-domain DNS record, and the required Vercel production env
+names without printing secret values. It is expected to fail until
+`sticky.yuvrajkashyap.com` resolves, `SUPABASE_SECRET_KEY` is set in Vercel,
+`NEXT_PUBLIC_SITE_URL` is set for the final domain, and Supabase Auth callback
+configuration is finished.
+
 ## Production Handoff
 
 - Deployment runbook: [docs/deployment.md](docs/deployment.md)
