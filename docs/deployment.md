@@ -373,6 +373,13 @@ Current DNS check result: `sticky.yuvrajkashyap.com` does not resolve yet.
 
 Latest smoke evidence:
 
+- Local `npm.cmd run verify` passed on 2026-06-14 after subtask row action-name
+  accessibility polish: typecheck, lint, production build, moderate audit with
+  zero vulnerabilities, and Playwright `18 passed, 10 skipped`.
+- Local production preview at `http://localhost:3100` passed desktop and mobile
+  Chrome Playwright smoke with no console/page errors, no horizontal overflow,
+  and desktop verification that subtask complete/restore, reorder, and delete
+  actions include the current subtask title in their accessible names.
 - Local `npm.cmd run verify` passed on 2026-06-14 after due-remove control
   polish: typecheck, lint, production build, moderate audit with zero
   vulnerabilities, and Playwright `18 passed, 10 skipped`.

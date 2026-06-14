@@ -4170,7 +4170,7 @@ function SortableSubtaskRow({
             completedAt: subtask.isCompleted ? null : nowIso(),
           })
         }
-        aria-label={subtask.isCompleted ? "Restore subtask" : "Complete subtask"}
+        aria-label={`${subtask.isCompleted ? "Restore" : "Complete"} subtask: ${subtask.title}`}
       >
         <Check size={13} />
       </button>
@@ -4216,11 +4216,16 @@ function SortableSubtaskRow({
         type="button"
         {...sortable.attributes}
         {...sortable.listeners}
-        aria-label="Reorder subtask"
+        aria-label={`Reorder subtask: ${subtask.title}`}
       >
         <GripVertical size={15} />
       </button>
-      <button className="subtask-delete" type="button" onClick={onDelete} aria-label="Delete subtask">
+      <button
+        className="subtask-delete"
+        type="button"
+        onClick={onDelete}
+        aria-label={`Delete subtask: ${subtask.title}`}
+      >
         <X size={14} />
       </button>
     </div>
