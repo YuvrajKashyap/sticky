@@ -79,6 +79,8 @@ Use this before calling a Sticky release ready.
   callback URL.
 - Preview deployment passes Playwright with `PLAYWRIGHT_BASE_URL`.
 - Production deployment passes a manual smoke test.
+- Production routes include the hardened browser headers: Content Security
+  Policy, HSTS, frame denial, nosniff, referrer policy, and permissions policy.
 - Vercel domain inspection shows `sticky.yuvrajkashyap.com` configured.
 - Porkbun DNS matches the exact current Vercel instructions.
 - The protected recurrence cron route refuses unauthenticated requests and
