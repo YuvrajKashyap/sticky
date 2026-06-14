@@ -766,6 +766,29 @@ test.describe("Sticky workspace", () => {
     });
   });
 
+  test("selected list and search state survive reload", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "user state persistence runs in the desktop project");
+
+    await expectNoConsoleErrors(page, async () => {
+      await page.goto("/");
+      await page.locator("button.list-tab", { hasText: "Launch polish" }).click();
+      await expect(page.getByRole("heading", { name: "Launch polish", exact: true })).toBeVisible();
+
+      const searchInput = page.getByLabel("Search current list");
+      await searchInput.fill("domain");
+      const activeRegion = page.getByRole("region", { name: "Active stickies" });
+      await expect(activeRegion.getByText("Prepare Vercel domain checklist")).toBeVisible();
+
+      await page.reload();
+      await expect(page.getByRole("heading", { name: "Launch polish", exact: true })).toBeVisible();
+      await expect(searchInput).toHaveValue("domain");
+      await expect(activeRegion.getByText("Prepare Vercel domain checklist")).toBeVisible();
+      await expect(page.locator("button.list-tab", { hasText: "Launch polish" })).toHaveAccessibleName(
+        /current list/,
+      );
+    });
+  });
+
   test("task view filters cover overdue, repeating, and subtasks without corrupting custom order", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "view filter coverage runs in the desktop project");
 
