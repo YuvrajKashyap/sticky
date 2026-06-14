@@ -14,8 +14,9 @@ Use this before calling a Sticky release ready.
 ## Product Acceptance
 
 - Sign-in path works, or demo mode is intentionally active for local smoke only.
-- Access and sign-in error messages do not expose raw Supabase, schema, policy,
-  table, or environment-variable implementation details.
+- Access, sign-in, and workspace save error messages do not expose raw
+  Supabase, schema, policy, table, or environment-variable implementation
+  details.
 - Create, rename, reorder, switch, and delete lists.
 - Quick-add a sticky.
 - Quick-add a sticky with smart schedule text such as `tomorrow 2pm`.
@@ -83,8 +84,8 @@ Use this before calling a Sticky release ready.
 - Production deployment passes a manual smoke test.
 - Production routes include the hardened browser headers: Content Security
   Policy, HSTS, frame denial, nosniff, referrer policy, and permissions policy.
-- Production auth smoke confirms technical access errors are replaced with
-  product-facing copy.
+- Production auth and message-hygiene smoke confirms technical access/save
+  errors are replaced with product-facing copy.
 - Vercel domain inspection shows `sticky.yuvrajkashyap.com` configured.
 - Porkbun DNS matches the exact current Vercel instructions.
 - The protected recurrence cron route refuses unauthenticated requests and
