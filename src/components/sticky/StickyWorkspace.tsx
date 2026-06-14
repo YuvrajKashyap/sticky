@@ -2178,7 +2178,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       body: task.title,
       actionLabel: "Undo",
       onAction: () => {
-        const restoreBefore = workspace;
+        const restoreBefore = workspaceRef.current;
         setWorkspace((current) => ({
           ...current,
           tasks: [...current.tasks, task],
@@ -2416,7 +2416,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       body: "You can undo this while the toast is visible.",
       actionLabel: "Undo",
       onAction: () => {
-        const restoreBefore = workspace;
+        const restoreBefore = workspaceRef.current;
         setWorkspace((current) => ({
           ...current,
           tasks: [...current.tasks, ...deletedTasks],
