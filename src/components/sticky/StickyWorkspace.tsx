@@ -3618,6 +3618,7 @@ function TaskDetailsPanel({
 
   const activeTask = task;
   const dueTimeNeedsDate = !activeTask.dueDate;
+  const hasDueSchedule = Boolean(activeTask.dueDate || activeTask.dueTime);
 
   function submitSubtask(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3826,7 +3827,12 @@ function TaskDetailsPanel({
             disabled={dueTimeNeedsDate}
             aria-describedby={dueTimeNeedsDate ? dueTimeRestrictionId : undefined}
           />
-          <button type="button" onClick={() => onSavePatch({ dueDate: null, dueTime: null })}>
+          <button
+            type="button"
+            onClick={() => onSavePatch({ dueDate: null, dueTime: null })}
+            disabled={!hasDueSchedule}
+            aria-label="Remove due date and time"
+          >
             Remove
           </button>
         </div>

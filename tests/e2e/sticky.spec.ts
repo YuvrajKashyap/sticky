@@ -275,18 +275,22 @@ test.describe("Sticky workspace", () => {
       await expect(details.locator('input[aria-label="Due time"]')).toHaveValue("14:00");
       await expect(details.getByText(`${shortDateLabel(tomorrow)} at 14:00`, { exact: true })).toBeVisible();
       await details.getByRole("button", { name: "No date" }).click();
+      const removeDueButton = details.getByRole("button", { name: "Remove due date and time", exact: true });
       await expect(details.locator('input[aria-label="Due date"]')).toHaveValue("");
       await expect(details.locator('input[aria-label="Due time"]')).toBeDisabled();
       await expect(details.locator('input[aria-label="Due time"]')).toHaveAccessibleDescription(
         "Choose a due date before adding a time.",
       );
+      await expect(removeDueButton).toBeDisabled();
       await expect(details.getByText(`${shortDateLabel(tomorrow)} at 14:00`)).toHaveCount(0);
       await details.locator('input[aria-label="Due date"]').fill("2026-06-15");
       await expect(details.getByText("Choose a due date before adding a time.")).toHaveCount(0);
       await details.locator('input[aria-label="Due time"]').fill("14:30");
       await expect(details.getByText("Jun 15 at 14:30", { exact: true })).toBeVisible();
-      await details.getByRole("button", { name: "Remove" }).click();
+      await expect(removeDueButton).toBeEnabled();
+      await removeDueButton.click();
       await expect(page.getByText("Jun 15 at 14:30")).toHaveCount(0);
+      await expect(removeDueButton).toBeDisabled();
       await details.locator('input[aria-label="Due date"]').fill("2026-06-15");
       await details.locator('input[aria-label="Due time"]').fill("14:30");
       await expect(details.getByText("Jun 15 at 14:30", { exact: true })).toBeVisible();
@@ -307,7 +311,7 @@ test.describe("Sticky workspace", () => {
       await expect(page.getByText(/Reordering is locked while search, filters, or due-date sorting are active/)).toBeVisible();
       await page.getByRole("button", { name: /All/ }).click();
       await expect(filteredActiveRegion.getByText("Second order sticky")).toBeVisible();
-      await page.getByRole("button", { name: "Due date" }).click();
+      await page.getByRole("button", { name: "Due date", exact: true }).click();
       await expectTextBefore(page, ".task-title", "Smart parsed sticky", "Verification sticky polished");
       await expect(
         filteredActiveRegion.locator(".task-card", { hasText: "Smart parsed sticky" }).getByRole("button", {
@@ -520,15 +524,15 @@ test.describe("Sticky workspace", () => {
       const taskViews = page.locator(".task-filter-bar");
 
       await taskViews.getByRole("button", { name: /Today/ }).click();
-      await page.getByRole("button", { name: "Due date" }).click();
+      await page.getByRole("button", { name: "Due date", exact: true }).click();
       await expect(taskViews.getByRole("button", { name: /Today/ })).toHaveAttribute("aria-pressed", "true");
-      await expect(page.getByRole("button", { name: "Due date" })).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByRole("button", { name: "Due date", exact: true })).toHaveAttribute("aria-pressed", "true");
       await expect(page.getByText(/Reordering is locked while search, filters, or due-date sorting are active/)).toBeVisible();
 
       await page.reload();
       await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
       await expect(taskViews.getByRole("button", { name: /Today/ })).toHaveAttribute("aria-pressed", "true");
-      await expect(page.getByRole("button", { name: "Due date" })).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByRole("button", { name: "Due date", exact: true })).toHaveAttribute("aria-pressed", "true");
       await expect(page.getByText(/Reordering is locked while search, filters, or due-date sorting are active/)).toBeVisible();
     });
   });
