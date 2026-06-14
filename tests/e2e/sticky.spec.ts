@@ -909,6 +909,31 @@ test.describe("Sticky workspace", () => {
     expect([401, 503]).toContain(response.status());
   });
 
+  test("route responses include production security headers", async ({ request }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "security header check only needs one browser project");
+
+    for (const route of ["/", "/api/recurrence/catch-up"]) {
+      const response = await request.get(route);
+      const csp = response.headers()["content-security-policy"];
+
+      expect(csp).toContain("default-src 'self'");
+      expect(csp).toContain("object-src 'none'");
+      expect(csp).toContain("frame-ancestors 'none'");
+      expect(csp).toContain("connect-src 'self'");
+      expect(csp).toContain("https://*.supabase.co");
+      expect(csp).toContain("wss://*.supabase.co");
+      expect(response.headers()["strict-transport-security"]).toContain("max-age=63072000");
+      expect(response.headers()["x-frame-options"]).toBe("DENY");
+      expect(response.headers()["x-content-type-options"]).toBe("nosniff");
+      expect(response.headers()["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+      expect(response.headers()["permissions-policy"]).toContain("camera=()");
+      expect(response.headers()["cross-origin-opener-policy"]).toBe("same-origin");
+      expect(response.headers()["origin-agent-cluster"]).toBe("?1");
+      expect(response.headers()["x-dns-prefetch-control"]).toBe("off");
+      expect(response.headers()["x-permitted-cross-domain-policies"]).toBe("none");
+    }
+  });
+
   test("recurrence cron route stays disabled without an admin secret", async ({ request }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "cron credential check only needs one browser project");
 
