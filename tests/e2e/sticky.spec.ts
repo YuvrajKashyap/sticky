@@ -78,6 +78,13 @@ async function expectNoHorizontalOverflow(page: Page) {
     .toBe(true);
 }
 
+async function expectMobileZoomAllowed(page: Page) {
+  const viewport = page.locator('meta[name="viewport"]');
+
+  await expect(viewport).toHaveAttribute("content", /width=device-width/);
+  await expect(viewport).not.toHaveAttribute("content", /maximum-scale=1|user-scalable=no/i);
+}
+
 async function expectSingleLine(locator: Locator) {
   const lineRatio = await locator.evaluate((node) => {
     const lineHeight = Number.parseFloat(window.getComputedStyle(node).lineHeight);
@@ -632,6 +639,7 @@ test.describe("Sticky workspace", () => {
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
       await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+      await expectMobileZoomAllowed(page);
       await expectSingleLine(page.locator(".workspace-title h2"));
       await expectNoHorizontalOverflow(page);
       await expect(page.locator(".save-status")).toContainText("Local demo saved");

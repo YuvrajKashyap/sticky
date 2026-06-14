@@ -24,6 +24,13 @@ async function expectNoHorizontalOverflow(page: Page) {
     .toBe(true);
 }
 
+async function expectMobileZoomAllowed(page: Page) {
+  const viewport = page.locator('meta[name="viewport"]');
+
+  await expect(viewport).toHaveAttribute("content", /width=device-width/);
+  await expect(viewport).not.toHaveAttribute("content", /maximum-scale=1|user-scalable=no/i);
+}
+
 async function expectNoTechnicalTerms(page: Page) {
   await expect(page.locator("body")).not.toContainText(
     /sticky\.allowed_emails|row-level security|Supabase Auth|NEXT_PUBLIC_SUPABASE|permission denied|schema sticky/i,
@@ -40,6 +47,7 @@ test.describe("Sticky production smoke", () => {
     await expect(page.getByText("Tactile planning")).toBeVisible();
     await expect(page.getByText("Private by default")).toBeVisible();
     await expectNoTechnicalTerms(page);
+    await expectMobileZoomAllowed(page);
     await expectNoHorizontalOverflow(page);
     expect(consoleErrors).toEqual([]);
   });
