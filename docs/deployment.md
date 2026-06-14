@@ -16,9 +16,9 @@ This runbook is for deploying Sticky to `sticky.yuvrajkashyap.com`.
 - Local Vercel link status: `.vercel/project.json` exists and is ignored.
 - Local git status: repository initialized on branch `main`; no remote is
   configured yet.
-- Latest production deployment: `dpl_AZgAkSdUYUcbEb2SQ127GAFvSLFA`.
+- Latest production deployment: `dpl_7WajY8bHE2eXg6ZvvHEK2YbsCLK4`.
 - Public production URL:
-  `https://sticky-e7fsmet4q-yuvraj-kashyaps-projects.vercel.app`.
+  `https://sticky-kpa1ujqa1-yuvraj-kashyaps-projects.vercel.app`.
 - Production aliases observed:
   `https://sticky-green.vercel.app`,
   `https://sticky.yuvrajkashyap.com`,
@@ -179,7 +179,7 @@ https://sticky.yuvrajkashyap.com
 http://localhost:3000/auth/callback
 http://localhost:3100/auth/callback
 https://sticky.yuvrajkashyap.com/auth/callback
-https://sticky-e7fsmet4q-yuvraj-kashyaps-projects.vercel.app/auth/callback
+https://sticky-kpa1ujqa1-yuvraj-kashyaps-projects.vercel.app/auth/callback
 https://sticky-green.vercel.app/auth/callback
 https://sticky-yuvraj-kashyaps-projects.vercel.app/auth/callback
 ```
@@ -198,7 +198,7 @@ $redirects = @(
   "http://localhost:3000/auth/callback",
   "http://localhost:3100/auth/callback",
   "https://sticky.yuvrajkashyap.com/auth/callback",
-  "https://sticky-e7fsmet4q-yuvraj-kashyaps-projects.vercel.app/auth/callback",
+  "https://sticky-kpa1ujqa1-yuvraj-kashyaps-projects.vercel.app/auth/callback",
   "https://sticky-green.vercel.app/auth/callback",
   "https://sticky-yuvraj-kashyaps-projects.vercel.app/auth/callback"
 ) -join ","
@@ -377,6 +377,24 @@ Current DNS check result: `sticky.yuvrajkashyap.com` does not resolve yet.
 
 Latest smoke evidence:
 
+- Production source deploy from local commit `9681616` passed on 2026-06-14.
+  Remote Vercel build completed successfully and produced production deployment
+  `dpl_7WajY8bHE2eXg6ZvvHEK2YbsCLK4`.
+- `vercel inspect sticky-kpa1ujqa1-yuvraj-kashyaps-projects.vercel.app`
+  reports production deployment `dpl_7WajY8bHE2eXg6ZvvHEK2YbsCLK4` as `Ready`
+  with `sticky-green.vercel.app`, `sticky.yuvrajkashyap.com`,
+  `sticky-yuvraj-kashyaps-projects.vercel.app`, and
+  `sticky-yuvrajkashyap-yuvraj-kashyaps-projects.vercel.app` in the alias list.
+- Production-safe Playwright smoke passed against `https://sticky-green.vercel.app`
+  after deployment `dpl_7WajY8bHE2eXg6ZvvHEK2YbsCLK4`: route chrome, auth
+  callback errors/origin preservation, unauthenticated cron, and generated
+  social previews reported `9 passed, 3 skipped`.
+- Chrome-channel Playwright smoke passed against `https://sticky-green.vercel.app`
+  in desktop and mobile viewports with title `Sticky`, the signed-out auth
+  shell visible, no console/page errors, and no horizontal overflow.
+- Deployment error logs for `dpl_7WajY8bHE2eXg6ZvvHEK2YbsCLK4` returned no
+  records in the last 15 minutes, and `sticky.yuvrajkashyap.com` still did not
+  resolve in DNS.
 - Local `npm.cmd run verify` passed on 2026-06-14 after list drag-handle and
   current-list rename action-name accessibility polish: typecheck, lint,
   production build, moderate audit with zero vulnerabilities, and Playwright
