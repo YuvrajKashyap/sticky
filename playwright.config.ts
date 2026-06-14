@@ -3,11 +3,13 @@ import { defineConfig, devices } from "@playwright/test";
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3100";
 const parsedBaseURL = new URL(baseURL);
 const shouldStartLocalServer = ["localhost", "127.0.0.1"].includes(parsedBaseURL.hostname);
+const shouldRunProductionSmoke = process.env.STICKY_RUN_PRODUCTION_SMOKE === "true";
 const devServerPort =
   parsedBaseURL.port || (parsedBaseURL.protocol === "https:" ? "443" : "80");
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  testIgnore: shouldRunProductionSmoke ? [] : ["**/production-smoke.spec.ts"],
   timeout: 30_000,
   expect: {
     timeout: 8_000,

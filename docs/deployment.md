@@ -327,8 +327,9 @@ desired.
 `npm run test:production-smoke` defaults to `https://sticky-green.vercel.app` and
 runs read-only desktop/mobile browser checks against the signed-out production
 shell, auth callback hygiene, route headers, install assets, console errors, and
-horizontal overflow. Set `STICKY_PRODUCTION_URL` or `PLAYWRIGHT_BASE_URL` to
-smoke-test a generated production URL or preview URL.
+horizontal overflow. It is isolated from the local `npm run verify` gate so
+localhost/demo product workflows stay deterministic. Set `STICKY_PRODUCTION_URL`
+or `PLAYWRIGHT_BASE_URL` to smoke-test a generated production URL or preview URL.
 
 ## Preview Deploy
 

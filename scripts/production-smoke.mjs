@@ -24,6 +24,7 @@ const child = spawn(command, args, {
   env: {
     ...process.env,
     PLAYWRIGHT_BASE_URL: baseURL,
+    STICKY_RUN_PRODUCTION_SMOKE: "true",
   },
   stdio: "inherit",
 });

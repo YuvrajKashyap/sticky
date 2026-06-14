@@ -55,8 +55,9 @@ manual dispatches.
 `npm run test:production-smoke` defaults to the stable production alias and runs
 read-only desktop/mobile Playwright checks against the signed-out shell,
 callback hygiene, hardened headers, install assets, console errors, and
-horizontal overflow. Override it with `STICKY_PRODUCTION_URL` or
-`PLAYWRIGHT_BASE_URL` when checking a different hosted deployment.
+horizontal overflow. It is intentionally separate from the local `npm run verify`
+gate. Override it with `STICKY_PRODUCTION_URL` or `PLAYWRIGHT_BASE_URL` when
+checking a different hosted deployment.
 
 Before calling the hosted app launch-ready, run:
 
