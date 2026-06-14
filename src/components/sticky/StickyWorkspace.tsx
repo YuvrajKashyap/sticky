@@ -3285,6 +3285,14 @@ function SortableListItem({
     transform: CSS.Transform.toString(sortable.transform),
     transition: sortable.transition,
   };
+  const listTabLabel = [
+    `Open list ${list.name}`,
+    `${stats.active} active ${plural(stats.active, "sticky", "stickies")}`,
+    `${stats.completed} completed ${plural(stats.completed, "sticky", "stickies")}`,
+    active ? "current list" : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <div ref={sortable.setNodeRef} style={style} className={`list-tab-wrap ${sortable.isDragging ? "dragging" : ""}`}>
@@ -3292,6 +3300,7 @@ function SortableListItem({
         className={`list-tab color-${list.color}${active ? " active" : ""}`}
         type="button"
         onClick={onSelect}
+        aria-label={listTabLabel}
       >
         <span className="drag-handle" {...sortable.attributes} {...sortable.listeners}>
           <GripVertical size={16} />

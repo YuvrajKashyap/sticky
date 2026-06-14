@@ -129,6 +129,11 @@ test.describe("Sticky workspace", () => {
       await page.goto("/");
       await expect(page.getByRole("heading", { name: "Workspace" })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+      await expect(
+        page.getByRole("button", {
+          name: "Open list Today, 3 active stickies, 1 completed sticky, current list",
+        }),
+      ).toBeVisible();
       await expectSingleLine(page.locator(".workspace-title h2"));
       await expectNoHorizontalOverflow(page);
       await expect(page.locator(".save-status")).toContainText("Local demo saved");
@@ -188,6 +193,11 @@ test.describe("Sticky workspace", () => {
       await page.getByText("Sky", { exact: true }).click();
       await page.getByRole("button", { name: "Save list" }).click();
       await expect(page.getByRole("heading", { name: "Verification" })).toBeVisible();
+      await expect(
+        page.getByRole("button", {
+          name: "Open list Verification, 0 active stickies, 0 completed stickies, current list",
+        }),
+      ).toBeVisible();
       await expect(newListButton).toBeFocused();
 
       const renameButton = page.getByRole("button", { name: "Rename", exact: true });
@@ -196,6 +206,11 @@ test.describe("Sticky workspace", () => {
       await page.getByRole("textbox", { name: "Name" }).fill("Verification Prime");
       await page.getByRole("button", { name: "Save list" }).click();
       await expect(page.getByRole("heading", { name: "Verification Prime" })).toBeVisible();
+      await expect(
+        page.getByRole("button", {
+          name: "Open list Verification Prime, 0 active stickies, 0 completed stickies, current list",
+        }),
+      ).toBeVisible();
       await expect(renameButton).toBeFocused();
 
       await page.getByRole("button", { name: "New list" }).click();
