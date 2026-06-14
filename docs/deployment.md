@@ -291,6 +291,11 @@ npm run verify
 - npm moderate audit
 - Playwright desktop/mobile e2e smoke tests
 
+The same verification gate is mirrored in `.github/workflows/verify.yml` for
+pushes to `main`, pull requests, and manual GitHub Actions dispatches once the
+local repository is connected to GitHub. CI installs the Playwright Chrome
+channel so it matches the local browser smoke configuration.
+
 Run the hosted launch-readiness gate separately:
 
 ```powershell

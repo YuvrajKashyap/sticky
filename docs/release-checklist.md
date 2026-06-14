@@ -10,6 +10,8 @@ Use this before calling a Sticky release ready.
   server-only Supabase helpers or reference server-only Supabase/cron secrets.
 - `git status --short --branch` has no unexpected changes, or the repo is
   intentionally not a git checkout.
+- GitHub Actions `Verify Sticky` passes after the repo is connected to GitHub,
+  or the release notes explicitly say CI is not connected yet.
 - Local app opens at `http://localhost:3100` during Playwright verification.
 - No browser console errors appear on the primary app route.
 

@@ -46,6 +46,11 @@ npm run build
 npm run test:e2e
 ```
 
+The repository also includes a GitHub Actions workflow at
+`.github/workflows/verify.yml`. Once this local repo is pushed to GitHub, it
+runs the same `npm run verify` gate on pushes to `main`, pull requests, and
+manual dispatches.
+
 Before calling the hosted app launch-ready, run:
 
 ```powershell

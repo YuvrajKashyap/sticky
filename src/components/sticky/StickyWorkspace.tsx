@@ -142,6 +142,8 @@ type CommandItem = {
   run: () => void;
 };
 
+type CommandFocusTarget = "capture" | "search";
+
 type QuickCaptureIntent = {
   title: string;
   dueDate: string | null;
@@ -710,6 +712,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   const workspaceRef = useRef(workspace);
   const launchIntentAppliedRef = useRef(false);
   const dialogReturnFocusRef = useRef<HTMLElement | null>(null);
+  const commandFocusTargetRef = useRef<CommandFocusTarget | null>(null);
   const quickInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const commandInputRef = useRef<HTMLInputElement>(null);
@@ -820,6 +823,42 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
     window.setTimeout(() => commandInputRef.current?.focus(), 0);
   }, [commandOpen]);
+
+  useEffect(() => {
+    if (commandOpen || !commandFocusTargetRef.current) {
+      return;
+    }
+
+    const targetIntent = commandFocusTargetRef.current;
+    commandFocusTargetRef.current = null;
+    const target =
+      targetIntent === "capture" ? quickInputRef.current : searchInputRef.current;
+
+    if (!target) {
+      return;
+    }
+
+    const focusTarget = () => {
+      target.scrollIntoView({ block: "center", inline: "nearest" });
+      target.focus({ preventScroll: true });
+    };
+
+    window.setTimeout(focusTarget, 0);
+    window.setTimeout(focusTarget, 80);
+  }, [commandOpen]);
+
+  function focusCommandTarget(targetIntent: CommandFocusTarget) {
+    commandFocusTargetRef.current = targetIntent;
+    const target =
+      targetIntent === "capture" ? quickInputRef.current : searchInputRef.current;
+
+    if (!target) {
+      return;
+    }
+
+    target.scrollIntoView({ block: "center", inline: "nearest" });
+    target.focus({ preventScroll: true });
+  }
 
   useEffect(() => {
     setCommandIndex(0);
@@ -1161,7 +1200,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       title: "Capture a new sticky",
       detail: activeList ? `Add to ${activeList.name}` : "Focus the quick capture tray",
       keywords: "new add quick capture task sticky n",
-      run: () => window.setTimeout(() => quickInputRef.current?.focus(), 0),
+      run: () => focusCommandTarget("capture"),
     },
     {
       id: "action-search",
@@ -1169,7 +1208,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       title: "Search this list",
       detail: activeList ? `Filter ${activeList.name}` : "Focus search",
       keywords: "find filter search current list",
-      run: () => window.setTimeout(() => searchInputRef.current?.focus(), 0),
+      run: () => focusCommandTarget("search"),
     },
     {
       id: "action-new-list",
