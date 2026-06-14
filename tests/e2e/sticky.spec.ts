@@ -277,8 +277,12 @@ test.describe("Sticky workspace", () => {
       await details.getByRole("button", { name: "No date" }).click();
       await expect(details.locator('input[aria-label="Due date"]')).toHaveValue("");
       await expect(details.locator('input[aria-label="Due time"]')).toBeDisabled();
+      await expect(details.locator('input[aria-label="Due time"]')).toHaveAccessibleDescription(
+        "Choose a due date before adding a time.",
+      );
       await expect(details.getByText(`${shortDateLabel(tomorrow)} at 14:00`)).toHaveCount(0);
       await details.locator('input[aria-label="Due date"]').fill("2026-06-15");
+      await expect(details.getByText("Choose a due date before adding a time.")).toHaveCount(0);
       await details.locator('input[aria-label="Due time"]').fill("14:30");
       await expect(details.getByText("Jun 15 at 14:30", { exact: true })).toBeVisible();
       await details.getByRole("button", { name: "Remove" }).click();

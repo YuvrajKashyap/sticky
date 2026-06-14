@@ -3511,6 +3511,7 @@ function TaskDetailsPanel({
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [titleDraft, setTitleDraft] = useState(task?.title ?? "");
   const [detailsDraft, setDetailsDraft] = useState(task?.details ?? "");
+  const dueTimeRestrictionId = useId();
   const subtaskTitleId = useId();
   const recurrenceRestrictionId = useId();
   const subtaskRestrictionId = useId();
@@ -3616,6 +3617,7 @@ function TaskDetailsPanel({
   }
 
   const activeTask = task;
+  const dueTimeNeedsDate = !activeTask.dueDate;
 
   function submitSubtask(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3821,12 +3823,18 @@ function TaskDetailsPanel({
             value={task.dueTime ?? ""}
             onChange={(event) => onSavePatch({ dueTime: event.target.value || null })}
             aria-label="Due time"
-            disabled={!task.dueDate}
+            disabled={dueTimeNeedsDate}
+            aria-describedby={dueTimeNeedsDate ? dueTimeRestrictionId : undefined}
           />
           <button type="button" onClick={() => onSavePatch({ dueDate: null, dueTime: null })}>
             Remove
           </button>
         </div>
+        {dueTimeNeedsDate ? (
+          <p className="helper-copy" id={dueTimeRestrictionId}>
+            Choose a due date before adding a time.
+          </p>
+        ) : null}
         <div className="due-chip-row time-chip-row" aria-label="Quick due times">
           {QUICK_TIME_OPTIONS.map((option) => {
             const active = task.dueTime === option.value;
