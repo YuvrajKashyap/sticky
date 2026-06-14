@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { resolve4 } from "node:dns/promises";
+import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -8,6 +9,8 @@ const productionUrl = process.env.STICKY_PRODUCTION_URL ?? "https://sticky-green
 const customDomain = process.env.STICKY_DOMAIN ?? "sticky.yuvrajkashyap.com";
 const expectedARecord = process.env.STICKY_EXPECTED_A_RECORD ?? "76.76.21.21";
 const vercelScope = process.env.VERCEL_SCOPE ?? "yuvraj-kashyaps-projects";
+const vercelProject = process.env.VERCEL_PROJECT ?? "sticky";
+const vercelProjectId = process.env.VERCEL_PROJECT_ID ?? "prj_nfiyWrEfak04ah1pIqvFqcytQcmh";
 
 const results = [];
 
@@ -49,6 +52,12 @@ async function fetchText(path, baseUrl) {
 
 function headerIncludes(headers, name, expected) {
   return headers.get(name)?.toLowerCase().includes(expected.toLowerCase()) ?? false;
+}
+
+function hasLineValue(output, label, expected) {
+  const matcher = new RegExp(`^\\s*${label}\\s+.*${expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "im");
+
+  return matcher.test(output);
 }
 
 function quoteCmdArg(value) {
@@ -93,6 +102,93 @@ async function checkDns() {
     );
     warn("custom domain DNS detail", error instanceof Error ? error.message : String(error));
     return false;
+  }
+}
+
+async function checkLocalVercelLink() {
+  try {
+    const projectFile = await readFile(".vercel/project.json", "utf8");
+    const project = JSON.parse(projectFile);
+
+    if (project.projectName === vercelProject) {
+      pass("Vercel local link", `.vercel/project.json is linked to ${vercelProject}`);
+    } else {
+      fail("Vercel local link", `linked project is ${project.projectName || "missing"}, expected ${vercelProject}`);
+    }
+
+    if (project.projectId === vercelProjectId) {
+      pass("Vercel project id", `.vercel/project.json matches ${vercelProjectId}`);
+    } else {
+      fail("Vercel project id", `project id is ${project.projectId || "missing"}, expected ${vercelProjectId}`);
+    }
+  } catch (error) {
+    fail("Vercel local link", error instanceof Error ? error.message : String(error));
+  }
+}
+
+async function checkDeploymentInspect(origin) {
+  try {
+    const { stdout, stderr } = await runVercel(["inspect", origin, "--scope", vercelScope]);
+    const output = `${stdout}\n${stderr}`;
+
+    if (hasLineValue(output, "name", vercelProject)) {
+      pass("Vercel deployment project", `deployment belongs to ${vercelProject}`);
+    } else {
+      fail("Vercel deployment project", `deployment inspect did not show project ${vercelProject}`);
+    }
+
+    if (hasLineValue(output, "target", "production")) {
+      pass("Vercel deployment target", "deployment target is production");
+    } else {
+      fail("Vercel deployment target", "deployment target is not production");
+    }
+
+    if (/^\s*status\s+.*Ready/im.test(output)) {
+      pass("Vercel deployment status", "deployment is Ready");
+    } else {
+      fail("Vercel deployment status", "deployment is not Ready");
+    }
+
+    if (output.includes(new URL(origin).hostname)) {
+      pass("Vercel deployment alias", `${new URL(origin).hostname} is an alias`);
+    } else {
+      fail("Vercel deployment alias", `${new URL(origin).hostname} was not listed as an alias`);
+    }
+
+    if (output.includes(customDomain)) {
+      pass("Vercel custom-domain alias", `${customDomain} is attached as an alias`);
+    } else {
+      fail("Vercel custom-domain alias", `${customDomain} was not listed as an alias`);
+    }
+  } catch (error) {
+    fail(
+      "Vercel deployment inspect",
+      `could not inspect ${origin} (${error instanceof Error ? error.message : String(error)})`,
+    );
+  }
+}
+
+async function checkDomainInspect() {
+  try {
+    const { stdout, stderr } = await runVercel(["domains", "inspect", customDomain, "--scope", vercelScope]);
+    const output = `${stdout}\n${stderr}`;
+
+    if (output.includes(vercelProject) && output.includes(customDomain)) {
+      pass("Vercel domain attachment", `${customDomain} is attached to ${vercelProject}`);
+    } else {
+      fail("Vercel domain attachment", `${customDomain} is not attached to ${vercelProject}`);
+    }
+
+    if (/not configured properly/i.test(output)) {
+      fail("Vercel domain configuration", `Vercel still requires A ${customDomain} ${expectedARecord}`);
+    } else {
+      pass("Vercel domain configuration", "Vercel reports the domain as configured");
+    }
+  } catch (error) {
+    fail(
+      "Vercel domain inspect",
+      `could not inspect ${customDomain} (${error instanceof Error ? error.message : String(error)})`,
+    );
   }
 }
 
@@ -281,6 +377,8 @@ async function main() {
   if (!normalizedProductionUrl) {
     fail("production URL", `${productionUrl} is not a valid URL`);
   } else {
+    await checkLocalVercelLink();
+    await checkDeploymentInspect(normalizedProductionUrl);
     await checkRoot(normalizedProductionUrl, "production");
     await checkRobots(normalizedProductionUrl);
     await checkManifest(normalizedProductionUrl);
@@ -288,6 +386,7 @@ async function main() {
   }
 
   const dnsReady = await checkDns();
+  await checkDomainInspect();
 
   if (dnsReady) {
     await checkRoot(`https://${customDomain}`, "custom domain");

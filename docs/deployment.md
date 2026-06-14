@@ -294,7 +294,8 @@ npm run launch:check
 ```
 
 The launch checker uses only Node built-ins plus the local Vercel CLI. It checks
-the stable production alias, security headers, `/robots.txt`,
+the local Vercel link, deployment status, domain attachment/configuration, the
+stable production alias, security headers, `/robots.txt`,
 `/manifest.webmanifest`, the unauthenticated recurrence cron guard, the
 `sticky.yuvrajkashyap.com` DNS A record, and required Vercel production env var
 names without printing values. A failing result is expected until Porkbun DNS,

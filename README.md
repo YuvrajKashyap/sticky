@@ -48,7 +48,8 @@ Before calling the hosted app launch-ready, run:
 npm run launch:check
 ```
 
-This checks the stable production alias, hardened route headers,
+This checks the local Vercel link, Vercel deployment readiness, Vercel domain
+attachment/configuration, the stable production alias, hardened route headers,
 `robots.txt`, the install manifest, the unauthenticated recurrence cron guard,
 the intended custom-domain DNS record, and the required Vercel production env
 names without printing secret values. It is expected to fail until
