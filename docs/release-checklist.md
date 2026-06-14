@@ -79,10 +79,12 @@ Use this before calling a Sticky release ready.
 
 - `npm run launch:check` succeeds against the local Vercel link, production
   deployment status, stable production alias, target custom domain, route
-  headers, install manifest, cron guard, Vercel production env names, and
-  Supabase Auth URL/callback settings when a local Management API token is
-  supplied.
+  headers, install manifest, cron guard, CI workflow, release branch, Vercel
+  production env names, and Supabase Auth URL/callback settings when a local
+  Management API token is supplied.
 - Vercel project is linked in `.vercel/project.json`.
+- GitHub `origin` remote and Vercel Git integration are connected before
+  relying on CI or preview-scoped env vars.
 - Production, preview, and development Vercel env vars are set.
 - Server-only `CRON_SECRET` and `SUPABASE_SECRET_KEY` are set before enabling
   production recurrence automation.

@@ -139,6 +139,55 @@ async function runVercel(args) {
   });
 }
 
+async function runGit(args) {
+  return execFileAsync("git", args, {
+    timeout: 10_000,
+    windowsHide: true,
+  });
+}
+
+async function checkSourceControlReadiness() {
+  try {
+    const workflow = await readFile(".github/workflows/verify.yml", "utf8");
+
+    if (/name:\s+Verify/i.test(workflow) && /npm\s+run\s+verify/i.test(workflow)) {
+      pass("CI workflow", ".github/workflows/verify.yml runs npm run verify");
+    } else {
+      fail("CI workflow", ".github/workflows/verify.yml does not clearly run npm run verify");
+    }
+  } catch (error) {
+    fail("CI workflow", error instanceof Error ? error.message : String(error));
+  }
+
+  try {
+    const { stdout } = await runGit(["rev-parse", "--abbrev-ref", "HEAD"]);
+    const branch = stdout.trim();
+
+    if (branch === "main") {
+      pass("Git release branch", "local checkout is on main");
+    } else {
+      warn("Git release branch", `local checkout is on ${branch || "unknown"}, expected main for release`);
+    }
+  } catch (error) {
+    warn("Git release branch", `could not inspect local branch (${error instanceof Error ? error.message : String(error)})`);
+  }
+
+  try {
+    const { stdout } = await runGit(["remote", "get-url", "origin"]);
+    const origin = stdout.trim();
+
+    if (!origin) {
+      warn("Git origin remote", "origin is empty; connect a GitHub remote before relying on CI or preview env vars");
+    } else if (/github\.com[:/]/i.test(origin)) {
+      pass("Git origin remote", `origin points to ${origin}`);
+    } else {
+      warn("Git origin remote", `origin points to ${origin}; connect GitHub/Vercel Git integration before preview release`);
+    }
+  } catch {
+    warn("Git origin remote", "no origin remote configured; connect GitHub and Vercel Git integration before preview release");
+  }
+}
+
 async function checkDns() {
   try {
     const records = await resolve4(customDomain);
@@ -503,6 +552,7 @@ async function main() {
   if (!normalizedProductionUrl) {
     fail("production URL", `${productionUrl} is not a valid URL`);
   } else {
+    await checkSourceControlReadiness();
     await checkLocalVercelLink();
     await checkDeploymentInspect(normalizedProductionUrl);
     await checkRoot(normalizedProductionUrl, "production");
