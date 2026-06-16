@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 const baseURL =
   process.env.PLAYWRIGHT_BASE_URL ??
   process.env.STICKY_PRODUCTION_URL ??
-  "https://sticky-green.vercel.app";
+  "https://sticky.yuvrajkashyap.com";
 const playwrightArgs = ["playwright", "test", "tests/e2e/production-smoke.spec.ts", ...process.argv.slice(2)];
 
 function quoteCmdArg(value) {

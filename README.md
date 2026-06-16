@@ -59,7 +59,7 @@ manual dispatches.
 a URL input. Use it after the repo is connected to GitHub to run
 `npm run test:production-smoke` against a production or preview deployment.
 
-`npm run test:production-smoke` defaults to the stable production alias and runs
+`npm run test:production-smoke` defaults to the canonical production domain and runs
 read-only desktop/mobile Playwright checks against the signed-out shell,
 callback hygiene, hardened headers, install assets, console errors, and
 horizontal overflow. It is intentionally separate from the local `npm run verify`
@@ -95,14 +95,8 @@ can run outside this machine.
 - Recurrence runbook: [docs/recurrence.md](docs/recurrence.md)
 
 The current workspace is linked to the Vercel project
-`yuvraj-kashyaps-projects/sticky` and has a production deployment at
-`https://sticky-dmjsljlat-yuvraj-kashyaps-projects.vercel.app`, with the stable
-alias `https://sticky-green.vercel.app`. The latest deployment metadata lists
-`https://sticky.yuvrajkashyap.com` as an alias, and Vercel domain inspection now
-finds it attached to `yuvraj-kashyaps-projects/sticky`; Porkbun still needs the
-Vercel-provided `A sticky.yuvrajkashyap.com 76.76.21.21` record before DNS
-resolves. The protected recurrence cron route and live worker RPC are prepared,
-but Vercel still needs `SUPABASE_SECRET_KEY` before scheduled catch-up can mutate
-production data. Supabase Auth URL configuration also still needs the dashboard
-or Management API step from the runbook before real email/OAuth sign-in can be
-fully verified.
+`yuvraj-kashyaps-projects/sticky`, with the stable alias
+`https://sticky-green.vercel.app` and canonical custom domain
+`https://sticky.yuvrajkashyap.com`. Porkbun DNS resolves the custom domain to
+Vercel, Vercel reports the domain configured, and the required production env
+vars include `SUPABASE_SECRET_KEY` for the protected recurrence worker.

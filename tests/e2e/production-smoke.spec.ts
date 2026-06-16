@@ -72,7 +72,7 @@ test.describe("Sticky production smoke", () => {
   test("provider callback errors preserve the production origin", async ({ page }, testInfo) => {
     const consoleErrors = recordConsoleErrors(page);
     const expectedOrigin = new URL(
-      String(testInfo.project.use.baseURL ?? process.env.PLAYWRIGHT_BASE_URL ?? "https://sticky-green.vercel.app"),
+      String(testInfo.project.use.baseURL ?? process.env.PLAYWRIGHT_BASE_URL ?? "https://sticky.yuvrajkashyap.com"),
     ).origin;
 
     await page.goto("/auth/callback?error_description=Provider%20denied");

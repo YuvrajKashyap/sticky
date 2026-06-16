@@ -6,7 +6,7 @@ on:
       url:
         description: Hosted Sticky URL to smoke test
         required: true
-        default: https://sticky-green.vercel.app
+        default: https://sticky.yuvrajkashyap.com
         type: string
 
 permissions:
