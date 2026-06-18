@@ -2903,7 +2903,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
             </div>
             <div>
               <p className="eyebrow">Sticky</p>
-              <h1>Workspace</h1>
+              <h1>Tasks</h1>
             </div>
           </div>
 
@@ -3136,7 +3136,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                 {TASK_SORT_LABELS.due}
               </button>
             </div>
-            <span>{taskSortMode === "due" ? "Earliest scheduled stickies first" : "Saved drag order"}</span>
+            <span>{taskSortMode === "due" ? "Earliest scheduled tasks first" : "My order"}</span>
           </div>
 
           <form className="quick-capture" onSubmit={createTask}>
@@ -3147,7 +3147,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
               ref={quickInputRef}
               value={quickTitle}
               onChange={(event) => setQuickTitle(event.target.value)}
-              placeholder={`Add a sticky to ${activeList?.name ?? "this list"}`}
+              placeholder="Add a task"
               aria-label="Quick add sticky"
             />
             <button
@@ -3230,15 +3230,15 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                   searchQuery
                     ? "No matching stickies"
                     : taskViewFiltered
-                      ? `No ${TASK_VIEW_LABELS[taskViewFilter].toLowerCase()} stickies`
-                      : "Fresh list, clean desk"
+                      ? `No ${TASK_VIEW_LABELS[taskViewFilter].toLowerCase()} tasks`
+                      : "No tasks yet"
                 }
                 body={
                   searchQuery
                     ? "Try a different phrase or clear search to see the full order."
                     : taskViewFiltered
                       ? "Switch back to All to see the full custom order."
-                    : "Capture one small thing. Sticky will keep the rest organized."
+                    : "Add a task to start this list."
                 }
               />
             )}
@@ -3281,7 +3281,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                       Clear completed
                     </button>
                   ) : (
-                    <p className="completed-empty">Completed stickies land here.</p>
+                    <p className="completed-empty">Completed tasks land here.</p>
                   )}
                 </motion.div>
               ) : null}
@@ -3651,8 +3651,8 @@ function TaskDetailsPanel({
               <Sparkles size={20} />
             </div>
             <div>
-              <p className="eyebrow">Workspace pulse</p>
-              <h3>Daily pulse</h3>
+              <p className="eyebrow">Details</p>
+              <h3>Select a task</h3>
             </div>
           </div>
 
@@ -3837,7 +3837,7 @@ function TaskDetailsPanel({
       <div className="details-head">
         <div>
           <p className="eyebrow">Sticky details</p>
-          <h3>{task.isCompleted ? "Completed sticky" : "Active sticky"}</h3>
+          <h3>{task.isCompleted ? "Completed task" : "Task details"}</h3>
         </div>
         <button className="icon-chip" type="button" onClick={onClose} aria-label="Close details">
           <X size={18} />

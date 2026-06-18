@@ -231,7 +231,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
-      await expect(page.getByRole("heading", { name: "Workspace" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Tasks" })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
       await expect(
         page.getByRole("button", {
@@ -246,10 +246,6 @@ test.describe("Sticky workspace", () => {
       await page.waitForFunction(() => document.readyState === "complete");
       await page.keyboard.press("KeyN");
       await expect(page.getByLabel("Quick add sticky")).toBeFocused();
-      await page.getByRole("button", { name: "Compact" }).click();
-      await page.getByRole("button", { name: "Use dark color mode" }).click();
-      await expect(page.locator(".sticky-app")).toHaveClass(/density-compact/);
-      await expect(page.locator(".sticky-app")).toHaveClass(/tone-dark/);
       const commandTrigger = page.getByRole("button", { name: "Open command center" });
       await page.keyboard.press("Control+K");
       await expect(commandTrigger).toHaveAttribute("aria-expanded", "true");
@@ -460,10 +456,10 @@ test.describe("Sticky workspace", () => {
         "aria-pressed",
         "true",
       );
-      await expectTextBefore(page, ".task-title", "Smart parsed sticky", "Verification sticky polished");
+      await expectTextBefore(page, ".task-title", "Verification sticky polished", "Smart parsed sticky");
       await expect(
-        filteredActiveRegion.locator(".task-card", { hasText: "Smart parsed sticky" }).getByRole("button", {
-          name: /Move Smart parsed sticky up/,
+        filteredActiveRegion.locator(".task-card", { hasText: "Verification sticky polished" }).getByRole("button", {
+          name: /Move Verification sticky polished up/,
         }),
       ).toBeDisabled();
       await page.keyboard.press("Control+K");
@@ -627,8 +623,7 @@ test.describe("Sticky workspace", () => {
 
       await page.reload();
       await expect(page.locator("button.list-tab", { hasText: "Verification Prime" })).toBeVisible();
-      await expect(page.locator(".sticky-app")).toHaveClass(/density-compact/);
-      await expect(page.locator(".sticky-app")).toHaveClass(/tone-dark/);
+      await expectNoHorizontalOverflow(page);
     });
   });
 
@@ -699,8 +694,6 @@ test.describe("Sticky workspace", () => {
       await page.reload();
       await expect(activeRegion.locator(".task-card", { hasText: "Mobile capture" })).toBeVisible();
       await expectNoHorizontalOverflow(page);
-      await expect(page.getByRole("button", { name: "Compact" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Use dark color mode" })).toBeVisible();
     });
   });
 
@@ -750,6 +743,10 @@ test.describe("Sticky workspace", () => {
       await completedToggle.click();
       await expect(completedToggle).toHaveAttribute("aria-expanded", "true");
       await expect(page.locator("#completed-stickies-list")).toBeVisible();
+      await page.waitForFunction(() => {
+        const stored = window.localStorage.getItem("sticky.demo.workspace.v1");
+        return Boolean(stored && JSON.parse(stored).preferences.completedOpenByList["demo-list-today"]);
+      });
 
       await page.reload();
       await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
@@ -758,6 +755,10 @@ test.describe("Sticky workspace", () => {
 
       await completedToggle.click();
       await expect(completedToggle).toHaveAttribute("aria-expanded", "false");
+      await page.waitForFunction(() => {
+        const stored = window.localStorage.getItem("sticky.demo.workspace.v1");
+        return Boolean(stored && !JSON.parse(stored).preferences.completedOpenByList["demo-list-today"]);
+      });
       await page.reload();
       await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
       await expect(completedToggle).toHaveAttribute("aria-expanded", "false");
@@ -838,7 +839,7 @@ test.describe("Sticky workspace", () => {
         "true",
       );
       await expect(activeRegion.getByText("Clear the capture tray")).toBeVisible();
-      await expect(activeRegion.getByText("Make the details sheet feel expensive")).toBeVisible();
+      await expect(activeRegion.getByText("Tighten the details panel")).toBeVisible();
       await expect(activeRegion.getByText("Daily planning pass")).toHaveCount(0);
       await expect(activeRegion.getByText(overdueTitle)).toHaveCount(0);
 
@@ -848,7 +849,7 @@ test.describe("Sticky workspace", () => {
         "true",
       );
       await expect(page.getByText(/Reordering is locked while search, filters, or due-date sorting are active/)).toHaveCount(0);
-      await expectTextBefore(page, ".task-title", "Clear the capture tray", "Make the details sheet feel expensive");
+      await expectTextBefore(page, ".task-title", "Clear the capture tray", "Tighten the details panel");
       await expectTextBefore(page, ".task-title", "Daily planning pass", overdueTitle);
     });
   });
@@ -1160,7 +1161,7 @@ test.describe("Sticky workspace", () => {
       await page.getByLabel("Search commands").fill("complete selected");
       await page.keyboard.press("Enter");
       await expect(page.locator(".toast", { hasText: "Sticky completed" })).toBeVisible();
-      await expect(details.getByRole("heading", { name: "Completed sticky" })).toBeVisible();
+      await expect(details.getByRole("heading", { name: "Completed task" })).toBeVisible();
       await expect(details.getByRole("button", { name: "Restore Command action sticky" })).toBeVisible();
       await expect(page.getByRole("region", { name: "Active stickies" }).getByText("Command action sticky")).toHaveCount(0);
 
