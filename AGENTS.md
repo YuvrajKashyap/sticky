@@ -9,13 +9,21 @@ Repo path: `C:\Users\ykyuv\dev\stickynotes`
 
 This file is the operating manual for all agents working in this repo. Read it before making architectural, product, database, auth, deployment, or UI decisions.
 
-The existing static prototype is only a visual sketch. The real target is a production-grade app named **Sticky**. Inside the app, individual notes/tasks may be called **stickies**.
+The existing static prototype is only a visual sketch. The real target is a production-grade app named **Sticky**. The app name is Sticky; the objects inside are **tasks**.
 
 ## 1. Product Identity
 
-Sticky is a premium personal task and sticky-note app. It should feel like Google Tasks in workflow depth, but with a vibrant, game-studio-quality visual system.
+Sticky is a private **Google Tasks × Trello-style task app**. The UX should intentionally borrow Google Tasks' calm spacing, fast task capture, simple hierarchy, and completion model, while using Trello-inspired list/card organization where helpful. Sticky should not feel like an experimental sticky-note toy; it should feel like a familiar production-grade task manager with a custom premium visual identity.
 
-The goal is not a small static note board. The goal is a serious, polished product:
+Locked direction:
+
+```text
+Clone the interaction model and spacing language of Google Tasks.
+Borrow Trello's list/card clarity where it helps.
+Customize the theme, colors, and brand polish to feel uniquely Sticky.
+```
+
+The goal is a serious, polished personal task manager:
 
 - fast task capture
 - multiple lists
@@ -28,9 +36,9 @@ The goal is not a small static note board. The goal is a serious, polished produ
 - durable Supabase-backed data
 - auth-protected personal workspace
 - deployable to Vercel
-- premium visual and motion design
+- premium visual identity with restrained motion
 
-Think: the usefulness and clarity of Google Tasks, dressed with the level of tactile polish, color, and delight expected from a high-quality game company UI. The Fruit Ninja reference is about polish, vibrancy, and premium feel, not about fruit or game mechanics.
+The app should feel calm, familiar, fast, private, clean, slightly tactile, and premium-but-not-flashy. It must **not** feel like a toy sticky-note app, a generic Kanban clone, a dashboard template, a SaaS landing page, a colorful experimental productivity app, or a dark cinematic portfolio UI.
 
 ## 2. Naming Decisions
 
@@ -39,11 +47,13 @@ Use these names consistently:
 - Product name: `Sticky`
 - App schema: `sticky`
 - Production domain: `sticky.yuvrajkashyap.com`
-- User-facing individual task/note object: `sticky` singular, `stickies` plural
+- User-facing individual object: **`task`** singular, **`tasks`** plural
 - Generic implementation entity name: `task`
 - List entity name: `list`
 
-Avoid drifting into alternate names such as `stickies` for the schema, `tasks` for the product, or `notes` for the domain. The domain and schema should stay `sticky`.
+The app name is Sticky; the objects are tasks. Use generic task-manager language in the UI: **Tasks, Task, Completed task, List, Workspace, Due, Repeat, Subtasks**. Avoid overusing **Sticky / Stickies / Notes / Sticky note** in user-facing copy. Legacy aria-labels and persistence labels containing "sticky/stickies" may remain for selector stability; new copy should prefer task language.
+
+Avoid drifting into alternate names such as `notes` for the domain. The domain and schema should stay `sticky`.
 
 ## 3. Required Technical Direction
 
@@ -324,19 +334,20 @@ Sticky must look premium. Do not ship generic SaaS UI.
 
 Design language:
 
-- vibrant
-- tactile
-- playful
-- polished
-- confident
-- readable
+- calm
+- familiar
+- fast
+- clean
+- slightly tactile
+- premium but restrained
 - productivity-first
+- easy to scan
 
 Inspiration:
 
-- Google Tasks for interaction model
-- premium mobile game UI for color, surfaces, and polish
-- sticky notes as the product metaphor
+- **Google Tasks** for the primary interaction model: clean rows, soft dividers, simple completion circles, title-first hierarchy, collapsible completed pile, quick-add at the top.
+- **Trello** for list/card organization where it helps: clear lists, movable cards/tasks, drag-and-drop affordances.
+- **Custom Sticky theme** for premium visual identity: warm-neutral background, clean off-white task surfaces, one confident brand accent, refined typography, restrained shadows.
 
 Do not make:
 
@@ -345,21 +356,24 @@ Do not make:
 - a generic shadcn clone
 - a purple-gradient AI-looking page
 - a childish toy UI that gets in the way of daily work
+- a playful sticky-note board (the old direction)
+- a colorful experimental productivity app
 
 The first real screen after auth should be the app workspace, not a landing page.
 
 Visual expectations:
 
-- custom color system
-- crisp typography
-- satisfying task completion animation
-- tactile drag feedback
+- custom color system rooted in a warm neutral canvas and one confident brand accent
+- crisp typography with calm vertical rhythm
+- satisfying but quiet task completion (no confetti)
+- subtle drag feedback (lift + soft shadow, not bounce)
 - polished panels and controls
 - high-quality mobile layout
 - no text overlap
 - no broken responsive widths
 - no inaccessible tiny controls
 - no cards inside cards unless there is a real reason
+- avoid making everything yellow; sticky-note metaphors belong only in subtle accent moments
 
 Use icons in controls where helpful. Prefer proven icon libraries such as lucide when available. Use text labels where clarity matters, especially for primary actions.
 

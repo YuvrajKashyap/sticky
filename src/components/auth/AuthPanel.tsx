@@ -108,7 +108,7 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
 
         <div className="auth-feature-row" aria-label="Sticky capabilities">
           <span><Sparkles size={16} /> Tactile planning</span>
-          <span><CheckCircle2 size={16} /> Calm completed piles</span>
+          <span><CheckCircle2 size={16} /> Calm completed lane</span>
           <span><LockKeyhole size={16} /> Private by default</span>
         </div>
       </section>
@@ -160,7 +160,7 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
         ) : null}
 
         <p className="auth-footnote">
-          Only approved accounts can open this workspace. Your stickies stay private to
+          Only approved accounts can open this workspace. Your tasks stay private to
           your signed-in account.
         </p>
       </section>

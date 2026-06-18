@@ -3228,7 +3228,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
               <EmptyState
                 title={
                   searchQuery
-                    ? "No matching stickies"
+                    ? "No matching tasks"
                     : taskViewFiltered
                       ? `No ${TASK_VIEW_LABELS[taskViewFilter].toLowerCase()} tasks`
                       : "No tasks yet"
