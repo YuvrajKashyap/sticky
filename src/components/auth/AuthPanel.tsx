@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowRight, CheckCircle2, KeyRound, LockKeyhole, Sparkles } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  KeyRound,
+  LockKeyhole,
+  Sparkles,
+} from "lucide-react";
 import { userFacingStickyMessage } from "@/lib/sticky/messages";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getAuthCallbackUrl } from "@/lib/supabase/redirect";
@@ -99,23 +105,28 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
           <span />
           <span />
         </div>
-        <p className="eyebrow">Sticky</p>
-        <h1>Capture the day before it slips.</h1>
-        <p className="auth-copy">
-          Fast capture, ordered lists, subtasks, schedules, and repeating routines in a
-          tactile workspace built to feel calm under pressure.
-        </p>
+
+        <div>
+          <p className="eyebrow">Sticky</p>
+          <h1>
+            A calm home for <em>everything</em> you keep meaning to do.
+          </h1>
+          <p className="auth-copy">
+            Fast capture, ordered lists, subtasks, schedules, and repeating routines —
+            laid out on warm paper, signed in to you alone.
+          </p>
+        </div>
 
         <div className="auth-feature-row" aria-label="Sticky capabilities">
-          <span><Sparkles size={16} /> Tactile planning</span>
-          <span><CheckCircle2 size={16} /> Calm completed lane</span>
-          <span><LockKeyhole size={16} /> Private by default</span>
+          <span><Sparkles size={16} aria-hidden="true" /> Tactile planning</span>
+          <span><CheckCircle2 size={16} aria-hidden="true" /> Calm completed lane</span>
+          <span><LockKeyhole size={16} aria-hidden="true" /> Private by default</span>
         </div>
       </section>
 
       <section className="auth-card" aria-label="Sign in form">
         <div className="auth-card-header">
-          <div className="auth-card-icon">
+          <div className="auth-card-icon" aria-hidden="true">
             <KeyRound size={22} />
           </div>
           <div>
@@ -145,7 +156,7 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
           </label>
           <button className="primary-action" type="submit" disabled={status === "sending"}>
             {status === "sending" ? "Sending link" : "Email me a sign-in link"}
-            <ArrowRight size={18} />
+            <ArrowRight size={18} aria-hidden="true" />
           </button>
         </form>
 
