@@ -217,10 +217,10 @@ test.describe("Sticky workspace", () => {
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
       await expect(page.getByRole("heading", { name: "Tasks" })).toBeVisible();
-      await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
       await expect(
         page.getByRole("button", {
-          name: "Open list Today, 3 active tasks, 1 completed task, current list",
+          name: "Open list reminders, 3 active tasks, 1 completed task, current list",
         }),
       ).toBeVisible();
       await expect(page.getByRole("button", { name: "Current task view: All, 3 tasks" })).toBeVisible();
@@ -629,7 +629,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
-      await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
       await expectMobileZoomAllowed(page);
       await expectSingleLine(page.locator(".workspace-title h2"));
       await expectNoHorizontalOverflow(page);
@@ -639,11 +639,11 @@ test.describe("Sticky workspace", () => {
           page.locator(".list-stack").evaluate((node) => node.scrollWidth >= node.clientWidth),
         )
         .toBe(true);
-      const launchTab = page.locator(".list-tab-wrap", { hasText: "Launch polish" });
+      const launchTab = page.locator(".list-tab-wrap", { hasText: "Next 3" });
       await launchTab.scrollIntoViewIfNeeded();
       await expectNoInlineClip(launchTab.locator(".list-tab-name"));
       await expect(
-        launchTab.getByRole("button", { name: /Open list Launch polish/ }),
+        launchTab.getByRole("button", { name: /Open list Next 3/ }),
       ).toBeVisible();
       await expectNoHorizontalOverflow(page);
       await page.getByRole("button", { name: "Open command center" }).click();
@@ -652,7 +652,7 @@ test.describe("Sticky workspace", () => {
       await page.keyboard.press("Enter");
       await expect(page.getByLabel("Quick add task")).toBeFocused();
       await page.getByLabel("Quick add task").fill("Mobile capture");
-      await quickAddButton(page, "Today").click();
+      await quickAddButton(page, "reminders").click();
       await expect(page.getByText("Mobile capture")).toBeVisible();
       for (const label of ["Scheduled", "Repeating", "Subtasks"]) {
         await expectNoInlineClip(page.locator(".task-filter-bar button", { hasText: label }).locator("span"));
@@ -699,7 +699,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
-      await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
       const taskViews = page.locator(".task-filter-bar");
 
       await runCommand(page, "show today tasks");
@@ -715,7 +715,7 @@ test.describe("Sticky workspace", () => {
       await expect(page.getByText(/Reordering is locked while search, filters, or due-date sorting are active/)).toBeVisible();
 
       await page.reload();
-      await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
       await expect(taskViews.getByRole("button", { name: "Current task view: Today, 2 tasks" })).toHaveAttribute(
         "aria-pressed",
         "true",
@@ -733,7 +733,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
-      await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
 
       const completedToggle = page.locator('button[aria-controls="completed-stickies-list"]');
       await expect(completedToggle).toHaveAttribute("aria-expanded", "false");
@@ -741,23 +741,23 @@ test.describe("Sticky workspace", () => {
       await expect(completedToggle).toHaveAttribute("aria-expanded", "true");
       await expect(page.locator("#completed-stickies-list")).toBeVisible();
       await page.waitForFunction(() => {
-        const stored = window.localStorage.getItem("sticky.demo.workspace.v1");
+        const stored = window.localStorage.getItem("sticky.demo.workspace.v2");
         return Boolean(stored && JSON.parse(stored).preferences.completedOpenByList["demo-list-today"]);
       });
 
       await page.reload();
-      await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
       await expect(completedToggle).toHaveAttribute("aria-expanded", "true");
       await expect(page.locator("#completed-stickies-list")).toBeVisible();
 
       await completedToggle.click();
       await expect(completedToggle).toHaveAttribute("aria-expanded", "false");
       await page.waitForFunction(() => {
-        const stored = window.localStorage.getItem("sticky.demo.workspace.v1");
+        const stored = window.localStorage.getItem("sticky.demo.workspace.v2");
         return Boolean(stored && !JSON.parse(stored).preferences.completedOpenByList["demo-list-today"]);
       });
       await page.reload();
-      await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
       await expect(completedToggle).toHaveAttribute("aria-expanded", "false");
       await expect(page.locator("#completed-stickies-list")).toHaveCount(0);
     });
@@ -768,8 +768,8 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
-      await page.locator("button.list-tab", { hasText: "Launch polish" }).click();
-      await expect(page.getByRole("heading", { name: "Launch polish", exact: true })).toBeVisible();
+      await page.locator("button.list-tab", { hasText: "Next 3" }).click();
+      await expect(page.getByRole("heading", { name: "Next 3", exact: true })).toBeVisible();
 
       const searchInput = page.getByLabel("Search current list");
       await searchInput.fill("domain");
@@ -777,10 +777,10 @@ test.describe("Sticky workspace", () => {
       await expect(activeRegion.getByText("Prepare Vercel domain checklist")).toBeVisible();
 
       await page.reload();
-      await expect(page.getByRole("heading", { name: "Launch polish", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Next 3", exact: true })).toBeVisible();
       await expect(searchInput).toHaveValue("domain");
       await expect(activeRegion.getByText("Prepare Vercel domain checklist")).toBeVisible();
-      await expect(page.locator("button.list-tab", { hasText: "Launch polish" })).toHaveAccessibleName(
+      await expect(page.locator("button.list-tab", { hasText: "Next 3" })).toHaveAccessibleName(
         /current list/,
       );
     });
@@ -791,7 +791,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
-      await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
 
       const taskViews = page.locator(".task-filter-bar");
       const activeRegion = page.getByRole("region", { name: "Active tasks" });
@@ -799,7 +799,7 @@ test.describe("Sticky workspace", () => {
       const overdueDate = localDateKey(-1);
 
       await page.getByLabel("Quick add task").fill(overdueTitle);
-      await quickAddButton(page, "Today").click();
+      await quickAddButton(page, "reminders").click();
       await activeRegion.getByText(overdueTitle).click();
 
       const details = page.getByLabel("Task details");
@@ -862,8 +862,8 @@ test.describe("Sticky workspace", () => {
       await page.getByRole("button", { name: "Save list" }).click();
       await expect(page.getByRole("heading", { name: "Capture Target" })).toBeVisible();
 
-      await page.locator("button.list-tab", { hasText: "Today" }).click();
-      await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
+      await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
       await page.getByLabel("Search current list").fill("nothing matches this");
       await page.getByLabel("Quick add task").fill("Route me #capture-target tomorrow 9am");
       await expect(page.locator(".quick-schedule-preview")).toContainText("Capture Target");
@@ -891,7 +891,7 @@ test.describe("Sticky workspace", () => {
       await page.getByLabel("Quick add task").fill("Plan review Friday noon");
       await expect(page.locator(".quick-schedule-preview")).toContainText("Friday");
       await expect(page.locator(".quick-schedule-preview")).toContainText("12:00 PM");
-      await quickAddButton(page, "Today").click();
+      await quickAddButton(page, "reminders").click();
 
       const capturedCard = page.locator(".task-card", { hasText: "Plan review" });
       await expect(capturedCard).toBeVisible();
@@ -922,7 +922,7 @@ test.describe("Sticky workspace", () => {
       const nextWeek = localDateKey(7);
 
       await page.getByLabel("Quick add task").fill("Chip schedule proof");
-      await quickAddButton(page, "Today").click();
+      await quickAddButton(page, "reminders").click();
       const card = activeRegion.locator(".task-card", { hasText: "Chip schedule proof" });
       await expect(card).toBeVisible();
       await card.click();
@@ -977,7 +977,7 @@ test.describe("Sticky workspace", () => {
       await page.goto("/");
       const tomorrow = localDateKey(1);
       await page.getByLabel("Quick add task").fill("Reusable setup tomorrow 9am");
-      await quickAddButton(page, "Today").click();
+      await quickAddButton(page, "reminders").click();
 
       const details = page.getByLabel("Task details");
       await details.getByRole("textbox", { name: "Details" }).fill("Keep the checklist and schedule.");
@@ -1018,7 +1018,7 @@ test.describe("Sticky workspace", () => {
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
       await page.getByLabel("Quick add task").fill("Weekly template");
-      await quickAddButton(page, "Today").click();
+      await quickAddButton(page, "reminders").click();
 
       const details = page.getByLabel("Task details");
       await details.getByLabel("Not repeating").check();
@@ -1061,7 +1061,7 @@ test.describe("Sticky workspace", () => {
       const activeRegion = page.getByRole("region", { name: "Active tasks" });
 
       await page.getByLabel("Quick add task").fill("Monthly closeout");
-      await quickAddButton(page, "Today").click();
+      await quickAddButton(page, "reminders").click();
       await details.locator('input[aria-label="Due date"]').fill("2026-08-31");
       await details.getByLabel("Not repeating").check();
       await details.getByLabel("Frequency").selectOption("monthly");
@@ -1077,7 +1077,7 @@ test.describe("Sticky workspace", () => {
       await expect(details.locator('input[aria-label="Due date"]')).toHaveValue("2026-09-30");
 
       await page.getByLabel("Quick add task").fill("Leap review");
-      await quickAddButton(page, "Today").click();
+      await quickAddButton(page, "reminders").click();
       const leapCard = activeRegion.locator(".task-card", { hasText: "Leap review" });
       await expect(leapCard).toBeVisible();
       await leapCard.click();
@@ -1110,7 +1110,7 @@ test.describe("Sticky workspace", () => {
       const activeRegion = page.getByRole("region", { name: "Active tasks" });
 
       await page.getByLabel("Quick add task").fill("Two-shot repeat");
-      await quickAddButton(page, "Today").click();
+      await quickAddButton(page, "reminders").click();
       await details.locator('input[aria-label="Due date"]').fill(startDate);
       await details.getByLabel("Not repeating").check();
       await details.getByLabel("Ends").selectOption("after_count");
@@ -1137,7 +1137,7 @@ test.describe("Sticky workspace", () => {
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
       await page.getByLabel("Quick add task").fill("Command action sticky");
-      await quickAddButton(page, "Today").click();
+      await quickAddButton(page, "reminders").click();
 
       const details = page.getByLabel("Task details");
       const activeRegion = page.getByRole("region", { name: "Active tasks" });
@@ -1360,22 +1360,22 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/?intent=capture");
-      await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
       await expect(page.getByLabel("Quick add task")).toBeFocused();
 
       await page.goto("/?intent=search");
-      await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
       await expect(page.getByLabel("Search current list")).toBeFocused();
 
       await page.goto("/?view=today");
-      await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
       await expect(page.getByRole("button", { name: "Current task view: Today, 2 tasks" })).toHaveAttribute(
         "aria-pressed",
         "true",
       );
 
       await page.goto("/?view=scheduled");
-      await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
       await expect(page.getByRole("button", { name: "Current task view: Scheduled, 2 tasks" })).toHaveAttribute(
         "aria-pressed",
         "true",

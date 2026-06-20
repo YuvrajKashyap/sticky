@@ -217,11 +217,11 @@ function WideScreenshot() {
               <span style={{ color: colors.muted, fontSize: 16, fontWeight: 900 }}>Command center</span>
             </div>
           </div>
-          <RailItem active color={colors.sun} title="Today" count="3 active / 1 done" />
+          <RailItem active color={colors.sun} title="reminders" count="3 active / 1 done" />
           <div style={{ height: 12 }} />
-          <RailItem color={colors.sky} title="Launch polish" count="5 active / 0 done" />
+          <RailItem color={colors.sky} title="Next 3" count="4 active / 0 done" />
           <div style={{ height: 12 }} />
-          <RailItem color={colors.mint} title="Home" count="2 active / 2 done" />
+          <RailItem color={colors.mint} title="bring" count="2 active / 0 done" />
           <div style={{ flex: 1 }} />
           <div
             style={{
@@ -244,7 +244,7 @@ function WideScreenshot() {
               <span style={{ color: "#1787d4", fontSize: 18, fontWeight: 950, textTransform: "uppercase" }}>
                 Current list
               </span>
-              <span style={{ fontSize: 52, fontWeight: 950, lineHeight: 0.95 }}>Today</span>
+              <span style={{ fontSize: 52, fontWeight: 950, lineHeight: 0.95 }}>reminders</span>
               <span style={{ color: colors.muted, fontSize: 19, fontWeight: 850, marginTop: 12 }}>
                 3 active / 1 completed / 4 open subtasks
               </span>
@@ -287,7 +287,7 @@ function WideScreenshot() {
               marginTop: 20,
             }}
           >
-            <span style={{ color: colors.muted, fontSize: 26, fontWeight: 850 }}>Add a sticky to Today</span>
+            <span style={{ color: colors.muted, fontSize: 26, fontWeight: 850 }}>Add a task to reminders</span>
             <span
               style={{
                 marginLeft: "auto",
@@ -412,7 +412,7 @@ function NarrowScreenshot() {
           <BrandMark size={66} />
           <div style={{ display: "flex", flexDirection: "column", marginLeft: 12 }}>
             <span style={{ color: colors.ink, fontSize: 32, fontWeight: 950 }}>Sticky</span>
-            <span style={{ color: colors.muted, fontSize: 15, fontWeight: 900 }}>Today workspace</span>
+            <span style={{ color: colors.muted, fontSize: 15, fontWeight: 900 }}>reminders workspace</span>
           </div>
         </div>
 
@@ -420,7 +420,7 @@ function NarrowScreenshot() {
           <span style={{ color: "#1787d4", fontSize: 14, fontWeight: 950, textTransform: "uppercase" }}>
             Current list
           </span>
-          <span style={{ color: colors.ink, fontSize: 44, fontWeight: 950, lineHeight: 0.95 }}>Today</span>
+          <span style={{ color: colors.ink, fontSize: 44, fontWeight: 950, lineHeight: 0.95 }}>reminders</span>
           <span style={{ color: colors.muted, fontSize: 15, fontWeight: 850, marginTop: 9 }}>
             3 active / 1 completed / 4 subtasks
           </span>
@@ -439,7 +439,7 @@ function NarrowScreenshot() {
             marginTop: 18,
           }}
         >
-          <span style={{ color: colors.muted, fontSize: 18, fontWeight: 850 }}>Add a sticky to Today</span>
+          <span style={{ color: colors.muted, fontSize: 18, fontWeight: 850 }}>Add a task to reminders</span>
           <span
             style={{
               marginLeft: "auto",

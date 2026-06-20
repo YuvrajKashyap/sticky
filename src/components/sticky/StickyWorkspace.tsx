@@ -164,7 +164,7 @@ type QuickCaptureIntent = {
   listName: string | null;
 };
 
-const DEMO_STORAGE_KEY = "sticky.demo.workspace.v1";
+const DEMO_STORAGE_KEY = "sticky.demo.workspace.v2";
 const COLORS: StickyColor[] = ["sun", "coral", "mint", "sky", "violet", "ink"];
 const QUICK_DUE_OPTIONS = [
   { label: "Today", offsetDays: 0 },
@@ -879,8 +879,14 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       return;
     }
 
-    target.scrollIntoView({ block: "center", inline: "nearest" });
-    target.focus({ preventScroll: true });
+    const focusTarget = () => {
+      target.scrollIntoView({ block: "center", inline: "nearest" });
+      target.focus({ preventScroll: true });
+    };
+
+    focusTarget();
+    window.setTimeout(focusTarget, 0);
+    window.setTimeout(focusTarget, 80);
   }
 
   useEffect(() => {
@@ -3496,7 +3502,10 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
             query={commandQuery}
             selectedIndex={selectedCommandIndex}
             inputRef={commandInputRef}
-            onQueryChange={setCommandQuery}
+            onQueryChange={(nextQuery) => {
+              setCommandQuery(nextQuery);
+              setCommandIndex(0);
+            }}
             onSelectIndex={setCommandIndex}
             onRun={runCommand}
             onClose={() => closeCommandCenter(true)}
@@ -3880,6 +3889,7 @@ function SortableTaskCard({
       initial={{ opacity: 0, y: 14, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, x: -20, scale: 0.98 }}
+      transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.75 }}
       style={style}
       data-task-id={task.id}
       className={`task-card color-${task.color}${active ? " selected" : ""}${sortable.isDragging ? " dragging" : ""}`}
