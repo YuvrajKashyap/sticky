@@ -24,7 +24,6 @@ import { CSS } from "@dnd-kit/utilities";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Archive,
-  Bell,
   CalendarDays,
   Check,
   ChevronDown,
@@ -36,7 +35,6 @@ import {
   Layers3,
   ListChecks,
   LogOut,
-  Menu,
   Monitor,
   Moon,
   Rows3,
@@ -145,14 +143,6 @@ type CommandItem = {
 };
 
 type CommandFocusTarget = "capture" | "search";
-
-type BoardColumn = {
-  list: StickyList;
-  activeTasks: StickyTask[];
-  visibleTasks: StickyTask[];
-  completedTasks: StickyTask[];
-  completedOpen: boolean;
-};
 
 type QuickCaptureIntent = {
   title: string;
@@ -736,7 +726,6 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   const dialogReturnFocusRef = useRef<HTMLElement | null>(null);
   const commandFocusTargetRef = useRef<CommandFocusTarget | null>(null);
   const quickInputRef = useRef<HTMLInputElement>(null);
-  const quickCaptureClosedDetailsRef = useRef(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const commandInputRef = useRef<HTMLInputElement>(null);
   const commandTriggerRef = useRef<HTMLButtonElement>(null);
@@ -983,8 +972,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     return workspace.lists[0]?.id ?? null;
   }, [workspace.lists, workspace.userState.selectedListId]);
 
-  const sortedLists = useMemo(() => workspace.lists.slice().sort(bySortOrder), [workspace.lists]);
-  const activeList = sortedLists.find((list) => list.id === activeListId) ?? null;
+  const activeList = workspace.lists.find((list) => list.id === activeListId) ?? null;
   const searchQuery = workspace.userState.searchQuery.trim().toLowerCase();
 
   const subtasksByTask = useMemo(() => {
@@ -1018,11 +1006,6 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     });
     return stats;
   }, [workspace.lists, workspace.tasks]);
-  const totalActiveTasks = useMemo(
-    () => workspace.tasks.filter((task) => !task.isCompleted).length,
-    [workspace.tasks],
-  );
-  const totalCompletedTasks = workspace.tasks.length - totalActiveTasks;
 
   const activeListTasks = useMemo(() => {
     return workspace.tasks
@@ -1092,88 +1075,6 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
     return filteredTasks;
   }, [activeListTasks, recurrenceByTask, searchQuery, subtasksByTask, taskSortMode, taskViewFilter]);
-
-  const boardColumns = useMemo<BoardColumn[]>(() => {
-    const todayKey = localDateKey();
-
-    function visibleTasksForList(tasks: StickyTask[]) {
-      const filteredTasks = tasks
-        .filter((task) => {
-          if (taskViewFilter === "due") {
-            return Boolean(task.dueDate);
-          }
-
-          if (taskViewFilter === "today") {
-            return task.dueDate === todayKey;
-          }
-
-          if (taskViewFilter === "overdue") {
-            return Boolean(task.dueDate && task.dueDate < todayKey);
-          }
-
-          if (taskViewFilter === "recurring") {
-            return recurrenceByTask.has(task.id);
-          }
-
-          if (taskViewFilter === "subtasks") {
-            return (subtasksByTask.get(task.id) ?? []).some((subtask) => !subtask.isCompleted);
-          }
-
-          return true;
-        })
-        .filter((task) => {
-          if (!searchQuery) {
-            return true;
-          }
-
-          const subtaskText = (subtasksByTask.get(task.id) ?? [])
-            .map((subtask) => subtask.title)
-            .join(" ");
-
-          return `${task.title} ${task.details} ${subtaskText}`.toLowerCase().includes(searchQuery);
-        });
-
-      if (taskSortMode === "due") {
-        return filteredTasks.slice().sort((a, b) => {
-          const aDue = `${a.dueDate ?? "9999-12-31"}T${a.dueTime ?? "23:59"}`;
-          const bDue = `${b.dueDate ?? "9999-12-31"}T${b.dueTime ?? "23:59"}`;
-          return aDue.localeCompare(bDue) || bySortOrder(a, b);
-        });
-      }
-
-      return filteredTasks;
-    }
-
-    return sortedLists.map((list) => {
-      const listActiveTasks = workspace.tasks
-        .filter((task) => task.listId === list.id && !task.isCompleted)
-        .sort(bySortOrder);
-      const listCompletedTasks = workspace.tasks
-        .filter((task) => task.listId === list.id && task.isCompleted)
-        .sort((a, b) => {
-          const aOrder = a.completedSortOrder ?? 0;
-          const bOrder = b.completedSortOrder ?? 0;
-          return aOrder - bOrder || (b.completedAt ?? "").localeCompare(a.completedAt ?? "");
-        });
-
-      return {
-        list,
-        activeTasks: listActiveTasks,
-        visibleTasks: visibleTasksForList(listActiveTasks),
-        completedTasks: listCompletedTasks,
-        completedOpen: workspace.preferences.completedOpenByList[list.id] ?? false,
-      };
-    });
-  }, [
-    recurrenceByTask,
-    searchQuery,
-    sortedLists,
-    subtasksByTask,
-    taskSortMode,
-    taskViewFilter,
-    workspace.preferences.completedOpenByList,
-    workspace.tasks,
-  ]);
   const taskViewFiltered = taskViewFilter !== "all";
   const taskSorted = taskSortMode !== "custom";
   const reorderLocked = Boolean(searchQuery || taskViewFiltered || taskSorted);
@@ -1471,7 +1372,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       keywords: "appearance board style wood board",
       run: () => setBoardStyle("wood"),
     },
-    ...sortedLists.map((list) => {
+    ...workspace.lists.slice().sort(bySortOrder).map((list) => {
       const stats = listStats.get(list.id) ?? { active: 0, completed: 0 };
 
       return {
@@ -1671,8 +1572,6 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     if (!task) {
       return;
     }
-
-    quickCaptureClosedDetailsRef.current = false;
 
     if (task.listId !== activeListId || workspace.userState.searchQuery) {
       updateUserState({ selectedListId: task.listId, searchQuery: "" });
@@ -1979,15 +1878,13 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
     setQuickTitle("");
     setTaskViewFilter("all");
-    const shouldSelectCreatedTask = !quickCaptureClosedDetailsRef.current;
-    quickCaptureClosedDetailsRef.current = false;
     setWorkspace({
       ...workspace,
       tasks: [...workspace.tasks, task],
       preferences: nextPreferences,
       userState: nextUserState,
     });
-    setSelectedTaskId(shouldSelectCreatedTask ? task.id : null);
+    setSelectedTaskId(task.id);
     void persist(
       "Sticky",
       async () => {
@@ -2084,8 +1981,8 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     );
   }
 
-  function saveTaskOrder(ordered: StickyTask[], before: StickyWorkspaceData, listId = activeListId) {
-    if (!listId) {
+  function saveTaskOrder(ordered: StickyTask[], before: StickyWorkspaceData) {
+    if (!activeListId) {
       return;
     }
 
@@ -2103,7 +2000,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       "Sticky order",
       () =>
         supabase!.rpc("reorder_tasks", {
-          p_list_id: listId,
+          p_list_id: activeListId,
           p_task_ids: moved.map((task) => task.id),
         }),
       before,
@@ -2119,19 +2016,17 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       return;
     }
 
-    const task = workspace.tasks.find((item) => item.id === taskId);
-    const listId = task?.listId ?? activeListId;
     const ordered = workspace.tasks
-      .filter((item) => item.listId === listId && !item.isCompleted)
+      .filter((task) => task.listId === activeListId && !task.isCompleted)
       .sort(bySortOrder);
-    const oldIndex = ordered.findIndex((item) => item.id === taskId);
+    const oldIndex = ordered.findIndex((task) => task.id === taskId);
     const newIndex = oldIndex + direction;
 
     if (oldIndex < 0 || newIndex < 0 || newIndex >= ordered.length) {
       return;
     }
 
-    saveTaskOrder(arrayMove(ordered, oldIndex, newIndex), workspace, listId);
+    saveTaskOrder(arrayMove(ordered, oldIndex, newIndex), workspace);
   }
 
   function completeTask(task: StickyTask) {
@@ -2859,15 +2754,15 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     );
   }
 
-  function toggleCompletedPile(listId = activeListId) {
-    if (!listId) {
+  function toggleCompletedPile() {
+    if (!activeListId) {
       return;
     }
 
     updatePreferences({
       completedOpenByList: {
         ...workspace.preferences.completedOpenByList,
-        [listId]: !(workspace.preferences.completedOpenByList[listId] ?? false),
+        [activeListId]: !completedOpen,
       },
     });
   }
@@ -2988,22 +2883,15 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
         return;
       }
 
-      const activeTask = workspace.tasks.find((task) => task.id === active.id);
-      const overTask = workspace.tasks.find((task) => task.id === over.id);
-
-      if (!activeTask || !overTask || activeTask.listId !== overTask.listId) {
-        return;
-      }
-
       const ordered = workspace.tasks
-        .filter((task) => task.listId === activeTask.listId && !task.isCompleted)
+        .filter((task) => task.listId === activeListId && !task.isCompleted)
         .sort(bySortOrder);
       const oldIndex = ordered.findIndex((task) => task.id === active.id);
       const newIndex = ordered.findIndex((task) => task.id === over.id);
-      if (oldIndex < 0 || newIndex < 0) {
+      if (!activeListId || oldIndex < 0 || newIndex < 0) {
         return;
       }
-      saveTaskOrder(arrayMove(ordered, oldIndex, newIndex), workspace, activeTask.listId);
+      saveTaskOrder(arrayMove(ordered, oldIndex, newIndex), workspace);
     }
 
     if (type === "subtask" && selectedTask) {
@@ -3028,11 +2916,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   }
 
   return (
-    <main
-      className={`sticky-app density-${density} tone-${colorMode} board-${boardStyle}${
-        selectedTask ? " details-open" : ""
-      }`}
-    >
+    <main className={`sticky-app density-${density} tone-${colorMode} board-${boardStyle}`}>
       <DndContext
         id="sticky-workspace-dnd"
         sensors={sensors}
@@ -3041,77 +2925,38 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       >
         <aside className="list-rail" aria-label="Sticky lists">
           <div className="brand-block">
-            <button className="rail-menu-button" type="button" aria-label="Open workspace menu">
-              <Menu size={21} />
-            </button>
             <div className="brand-symbol" aria-hidden="true">
               <span />
               <span />
               <span />
             </div>
-            <h1>Sticky</h1>
+            <div>
+              <p className="eyebrow">Sticky</p>
+              <h1>Tasks</h1>
+            </div>
           </div>
 
-          <button
-            className="new-list-button"
-            type="button"
-            onClick={() => openListEditor("new")}
-            aria-label="New list"
-          >
-            <Plus size={22} />
-            Create
+          <button className="new-list-button" type="button" onClick={() => openListEditor("new")}>
+            <Plus size={18} />
+            New list
           </button>
 
-          <nav className="rail-primary-nav" aria-label="Task shortcuts">
-            <button
-              type="button"
-              className={taskViewFilter === "all" && !searchQuery ? "active" : ""}
-              onClick={() => {
-                setTaskViewFilter("all");
-                setSearchQuery("");
-              }}
-              aria-label={`Show all tasks, ${totalActiveTasks} active tasks`}
-            >
-              <Check size={16} />
-              <span>All tasks</span>
-              <strong>{totalActiveTasks}</strong>
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                pushToast({
-                  title: "Starred tasks are not enabled yet",
-                  body: "Use search or lists to find priority tasks for now.",
-                })
-              }
-              aria-label="Show starred tasks"
-            >
-              <Sparkles size={16} />
-              <span>Starred</span>
-            </button>
-          </nav>
-
-          <div className="rail-section-heading">
-            <span>Lists</span>
-            <button type="button" onClick={() => openListEditor("new")} aria-label="Add list">
-              <Plus size={17} />
-            </button>
-          </div>
-
           <SortableContext
-            items={sortedLists.map((list) => list.id)}
+            items={workspace.lists.slice().sort(bySortOrder).map((list) => list.id)}
             strategy={horizontalListSortingStrategy}
           >
             <nav className="list-stack">
-              {sortedLists
-                .map((list, index, orderedLists) => (
+              {workspace.lists
+                .slice()
+                .sort(bySortOrder)
+                .map((list, index, sortedLists) => (
                   <SortableListItem
                     key={list.id}
                     list={list}
                     active={list.id === activeListId}
                     stats={listStats.get(list.id) ?? { active: 0, completed: 0 }}
                     canMoveUp={index > 0}
-                    canMoveDown={index < orderedLists.length - 1}
+                    canMoveDown={index < sortedLists.length - 1}
                     onSelect={() => switchList(list.id)}
                     onRename={() => openListEditor(list)}
                     onMoveUp={() => moveListInOrder(list.id, -1)}
@@ -3173,11 +3018,11 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
           <header className="workspace-topbar">
             <div className="workspace-title">
-              <p className="eyebrow">Workspace</p>
-              <h2>Tasks</h2>
+              <p className="eyebrow">Current list</p>
+              <h2>{activeList?.name ?? "No list"}</h2>
               <div className="metric-strip">
-                <span>{totalActiveTasks} active</span>
-                <span>{totalCompletedTasks} completed</span>
+                <span>{activeListTasks.length} active</span>
+                <span>{completedTasks.length} completed</span>
                 <span>{workspace.subtasks.filter((subtask) => !subtask.isCompleted).length} open subtasks</span>
               </div>
             </div>
@@ -3288,33 +3133,12 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
               <button
                 className="tool-button"
                 type="button"
-                aria-label="Open calendar view"
-                onClick={() =>
-                  pushToast({
-                    title: "Calendar view is coming later",
-                    body: "Due dates still show on each task.",
-                  })
-                }
+                onClick={() => activeList && openListEditor(activeList)}
+                aria-label={`Rename current list ${activeList?.name ?? ""}`.trim()}
               >
-                <CalendarDays size={17} />
+                <Pencil size={16} />
+                Rename
               </button>
-              <button
-                className="tool-button"
-                type="button"
-                aria-label="Open notifications"
-                onClick={() =>
-                  pushToast({
-                    title: "Notifications are quiet",
-                    body: saveState.error ?? currentSaveStatus.label,
-                  })
-                }
-              >
-                <Bell size={17} />
-              </button>
-              <div className="profile-chip" aria-label={`Signed in as ${workspace.user.displayName || workspace.user.email}`}>
-                <span>{(workspace.user.displayName || workspace.user.email || "AR").slice(0, 2).toUpperCase()}</span>
-                <i aria-hidden="true" />
-              </div>
             </div>
           </header>
 
@@ -3371,6 +3195,38 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
             <span>{taskSortMode === "due" ? "Earliest scheduled tasks first" : "My order"}</span>
           </div>
 
+          <form className="quick-capture" onSubmit={createTask}>
+            <div className="capture-icon">
+              <Plus size={20} />
+            </div>
+            <input
+              ref={quickInputRef}
+              value={quickTitle}
+              onChange={(event) => setQuickTitle(event.target.value)}
+              placeholder="Add a task"
+              aria-label="Quick add task"
+            />
+            <button
+              type="submit"
+              disabled={!quickCaptureIntent.title.trim() || !activeListId}
+              aria-label={`Add task to ${quickCaptureIntent.listName ?? activeList?.name ?? "current list"}`}
+            >
+              Add
+            </button>
+            {quickCaptureIntent.dueDate || quickCaptureIntent.dueTime || quickCaptureIntent.listName ? (
+              <div className="quick-schedule-preview" aria-live="polite">
+                {quickCaptureIntent.dueDate || quickCaptureIntent.dueTime ? (
+                  <CalendarDays size={14} />
+                ) : (
+                  <Layers3 size={14} />
+                )}
+                {quickCaptureIntent.listName ? <span>{quickCaptureIntent.listName}</span> : null}
+                {quickCaptureIntent.dateLabel ? <span>{quickCaptureIntent.dateLabel}</span> : null}
+                {quickCaptureIntent.timeLabel ? <span>{quickCaptureIntent.timeLabel}</span> : null}
+              </div>
+            ) : null}
+          </form>
+
           {reorderLocked ? (
             <div className="filter-banner">
               <Search size={15} />
@@ -3393,55 +3249,105 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
             </div>
           ) : null}
 
-          <section className="board-scroll" aria-label="Active tasks">
-            {boardColumns.map((column) => (
-              <StickyBoardColumn
-                key={column.list.id}
-                column={column}
-                active={column.list.id === activeListId}
-                quickTitle={quickTitle}
-                quickCaptureIntent={quickCaptureIntent}
-                quickInputRef={quickInputRef}
-                searchQuery={searchQuery}
-                taskViewFiltered={taskViewFiltered}
-                taskViewFilter={taskViewFilter}
-                reorderLocked={reorderLocked}
-                selectedTaskId={selectedTaskId}
-                subtasksByTask={subtasksByTask}
-                recurrenceByTask={recurrenceByTask}
-                onActivate={() => switchList(column.list.id)}
-                onActivateQuickAdd={() => {
-                  if (selectedTaskId) {
-                    quickCaptureClosedDetailsRef.current = true;
-                  }
-                  switchList(column.list.id);
-                  window.setTimeout(() => quickInputRef.current?.focus(), 0);
-                }}
-                onPrepareQuickAdd={() => {
-                  if (selectedTaskId) {
-                    quickCaptureClosedDetailsRef.current = true;
-                  }
-                  setSelectedTaskId(null);
-                }}
-                onQuickTitleChange={setQuickTitle}
-                onSubmitQuickTask={createTask}
-                onRenameList={() => openListEditor(column.list)}
-                onDeleteList={() => requestDeleteList(column.list)}
-                onOpenTask={(task) => openTaskInContext(task.id)}
-                onCompleteTask={completeTask}
-                onDeleteTask={requestDeleteTask}
-                onMoveTask={moveTaskInOrder}
-                onToggleCompleted={() => toggleCompletedPile(column.list.id)}
-                onRestoreTask={restoreTask}
-                onClearCompleted={requestClearCompleted}
+          <section className="task-lane" aria-label="Active tasks">
+            {activeTasks.length ? (
+              <SortableContext
+                items={activeTasks.map((task) => task.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <AnimatePresence initial={false}>
+                  {activeTasks.map((task) => {
+                    const orderIndex = activeListTasks.findIndex((item) => item.id === task.id);
+
+                    return (
+                      <SortableTaskCard
+                        key={task.id}
+                        task={task}
+                        active={task.id === selectedTaskId}
+                        subtasks={subtasksByTask.get(task.id) ?? []}
+                        recurrenceRule={recurrenceByTask.get(task.id) ?? null}
+                        dueLabel={humanDue(task)}
+                        reorderDisabled={reorderLocked}
+                        canMoveUp={!reorderLocked && orderIndex > 0}
+                        canMoveDown={!reorderLocked && orderIndex >= 0 && orderIndex < activeListTasks.length - 1}
+                        onOpen={() => setSelectedTaskId(task.id)}
+                        onComplete={() => completeTask(task)}
+                        onDelete={() => requestDeleteTask(task)}
+                        onMoveUp={() => moveTaskInOrder(task.id, -1)}
+                        onMoveDown={() => moveTaskInOrder(task.id, 1)}
+                      />
+                    );
+                  })}
+                </AnimatePresence>
+              </SortableContext>
+            ) : (
+              <EmptyState
+                title={
+                  searchQuery
+                    ? "No matching tasks"
+                    : taskViewFiltered
+                      ? `No ${TASK_VIEW_LABELS[taskViewFilter].toLowerCase()} tasks`
+                      : "No tasks yet"
+                }
+                body={
+                  searchQuery
+                    ? "Try a different phrase or clear search to see the full order."
+                    : taskViewFiltered
+                      ? "Switch back to All to see the full custom order."
+                    : "Add a task to start this list."
+                }
               />
-            ))}
+            )}
+          </section>
+
+          <section className="completed-pile" aria-label="Completed tasks">
+            <button
+              className="completed-toggle"
+              type="button"
+              onClick={toggleCompletedPile}
+              aria-expanded={completedOpen}
+              aria-controls="completed-stickies-list"
+            >
+              {completedOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+              <span>Completed</span>
+              <strong>{completedTasks.length}</strong>
+            </button>
+
+            <AnimatePresence initial={false}>
+              {completedOpen ? (
+                <motion.div
+                  id="completed-stickies-list"
+                  className="completed-list"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                >
+                  {completedTasks.map((task) => (
+                    <CompletedTaskRow
+                      key={task.id}
+                      task={task}
+                      onRestore={() => restoreTask(task.id)}
+                      onOpen={() => setSelectedTaskId(task.id)}
+                      onDelete={() => requestDeleteTask(task)}
+                    />
+                  ))}
+                  {completedTasks.length ? (
+                    <button className="clear-completed" type="button" onClick={requestClearCompleted}>
+                      <Archive size={15} />
+                      Clear completed
+                    </button>
+                  ) : (
+                    <p className="completed-empty">Completed tasks land here.</p>
+                  )}
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
           </section>
         </section>
 
         <TaskDetailsPanel
           task={selectedTask}
-          lists={sortedLists}
+          lists={workspace.lists.slice().sort(bySortOrder)}
           subtasks={selectedTaskSubtasks}
           recurrenceRule={selectedTaskRecurrence}
           catchUpTarget={selectedTaskCatchUp}
@@ -3506,244 +3412,6 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
         <ToastStack toasts={toasts} onDismiss={(id) => setToasts((items) => items.filter((item) => item.id !== id))} />
       </DndContext>
     </main>
-  );
-}
-
-function StickyBoardColumn({
-  column,
-  active,
-  quickTitle,
-  quickCaptureIntent,
-  quickInputRef,
-  searchQuery,
-  taskViewFiltered,
-  taskViewFilter,
-  reorderLocked,
-  selectedTaskId,
-  subtasksByTask,
-  recurrenceByTask,
-  onActivate,
-  onActivateQuickAdd,
-  onPrepareQuickAdd,
-  onQuickTitleChange,
-  onSubmitQuickTask,
-  onRenameList,
-  onDeleteList,
-  onOpenTask,
-  onCompleteTask,
-  onDeleteTask,
-  onMoveTask,
-  onToggleCompleted,
-  onRestoreTask,
-  onClearCompleted,
-}: {
-  column: BoardColumn;
-  active: boolean;
-  quickTitle: string;
-  quickCaptureIntent: QuickCaptureIntent;
-  quickInputRef: React.RefObject<HTMLInputElement | null>;
-  searchQuery: string;
-  taskViewFiltered: boolean;
-  taskViewFilter: StickyTaskViewFilter;
-  reorderLocked: boolean;
-  selectedTaskId: string | null;
-  subtasksByTask: Map<string, StickySubtask[]>;
-  recurrenceByTask: Map<string, StickyRecurrenceRule>;
-  onActivate: () => void;
-  onActivateQuickAdd: () => void;
-  onPrepareQuickAdd: () => void;
-  onQuickTitleChange: (title: string) => void;
-  onSubmitQuickTask: (event: React.FormEvent<HTMLFormElement>) => void;
-  onRenameList: () => void;
-  onDeleteList: () => void;
-  onOpenTask: (task: StickyTask) => void;
-  onCompleteTask: (task: StickyTask) => void;
-  onDeleteTask: (task: StickyTask) => void;
-  onMoveTask: (taskId: string, direction: -1 | 1) => void;
-  onToggleCompleted: () => void;
-  onRestoreTask: (taskId: string) => void;
-  onClearCompleted: () => void;
-}) {
-  const { list, activeTasks, visibleTasks, completedTasks, completedOpen } = column;
-  const completedListId = active ? "completed-stickies-list" : `completed-tasks-${list.id}`;
-  const emptyTitle = searchQuery
-    ? "No matching tasks"
-    : taskViewFiltered
-      ? `No ${TASK_VIEW_LABELS[taskViewFilter].toLowerCase()} tasks`
-      : "No tasks yet";
-  const emptyBody = searchQuery
-    ? "Try a different phrase or clear search to see this list."
-    : taskViewFiltered
-      ? "Switch back to All to see this saved order."
-      : "Add a task to start this list.";
-
-  return (
-    <section
-      className={`board-column color-${list.color}${active ? " active" : ""}`}
-      aria-label={`List ${list.name}`}
-      data-list-id={list.id}
-    >
-      <span className="column-paper-stack" aria-hidden="true" />
-      <span className="column-pin" aria-hidden="true" />
-      {list.color === "violet" ? <span className="column-paperclip" aria-hidden="true" /> : null}
-
-      <header className="column-header">
-        <button className="column-title-button" type="button" onClick={onActivate}>
-          <h2>{list.name}</h2>
-          <span>
-            {activeTasks.length} active / {completedTasks.length} done
-          </span>
-        </button>
-        <div className="column-header-actions">
-          <button
-            className="column-menu"
-            type="button"
-            onClick={onRenameList}
-            aria-label={active ? `Rename current list ${list.name}` : `Rename list ${list.name}`}
-          >
-            <span className="column-menu-dots" aria-hidden="true">
-              <span />
-              <span />
-              <span />
-            </span>
-          </button>
-          <button
-            className="sr-only"
-            type="button"
-            onClick={onDeleteList}
-            aria-label={`Delete ${list.name}`}
-          >
-            Delete list
-          </button>
-        </div>
-      </header>
-
-      {active ? (
-        <form className="quick-capture board-quick-capture" onSubmit={onSubmitQuickTask}>
-          <div className="capture-icon">
-            <Plus size={18} />
-          </div>
-          <input
-            ref={quickInputRef}
-            value={quickTitle}
-            onChange={(event) => onQuickTitleChange(event.target.value)}
-            onFocus={onPrepareQuickAdd}
-            placeholder="Add a task"
-            aria-label="Quick add task"
-          />
-          <button
-            type="submit"
-            disabled={!quickCaptureIntent.title.trim()}
-            aria-label={`Add task to ${quickCaptureIntent.listName ?? list.name}`}
-          >
-            Add
-          </button>
-          {quickCaptureIntent.dueDate || quickCaptureIntent.dueTime || quickCaptureIntent.listName ? (
-            <div className="quick-schedule-preview" aria-live="polite">
-              {quickCaptureIntent.dueDate || quickCaptureIntent.dueTime ? (
-                <CalendarDays size={14} />
-              ) : (
-                <Layers3 size={14} />
-              )}
-              {quickCaptureIntent.listName ? <span>{quickCaptureIntent.listName}</span> : null}
-              {quickCaptureIntent.dateLabel ? <span>{quickCaptureIntent.dateLabel}</span> : null}
-              {quickCaptureIntent.timeLabel ? <span>{quickCaptureIntent.timeLabel}</span> : null}
-            </div>
-          ) : null}
-        </form>
-      ) : (
-        <button className="board-add-task" type="button" onClick={onActivateQuickAdd}>
-          <span>
-            <Plus size={18} />
-          </span>
-          Add a task
-        </button>
-      )}
-
-      <div className="task-lane">
-        {visibleTasks.length ? (
-          <SortableContext
-            items={visibleTasks.map((task) => task.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <AnimatePresence initial={false}>
-              {visibleTasks.map((task) => {
-                const orderIndex = activeTasks.findIndex((item) => item.id === task.id);
-
-                return (
-                  <SortableTaskCard
-                    key={task.id}
-                    task={task}
-                    active={task.id === selectedTaskId}
-                    subtasks={subtasksByTask.get(task.id) ?? []}
-                    recurrenceRule={recurrenceByTask.get(task.id) ?? null}
-                    dueLabel={humanDue(task)}
-                    reorderDisabled={reorderLocked}
-                    canMoveUp={!reorderLocked && orderIndex > 0}
-                    canMoveDown={!reorderLocked && orderIndex >= 0 && orderIndex < activeTasks.length - 1}
-                    onOpen={() => onOpenTask(task)}
-                    onComplete={() => onCompleteTask(task)}
-                    onDelete={() => onDeleteTask(task)}
-                    onMoveUp={() => onMoveTask(task.id, -1)}
-                    onMoveDown={() => onMoveTask(task.id, 1)}
-                  />
-                );
-              })}
-            </AnimatePresence>
-          </SortableContext>
-        ) : active ? (
-          <EmptyState title={emptyTitle} body={emptyBody} />
-        ) : null}
-      </div>
-
-      <section
-        className="completed-pile"
-        aria-label={active ? "Completed tasks" : `${list.name} completed tasks`}
-      >
-        <button
-          className="completed-toggle"
-          type="button"
-          onClick={onToggleCompleted}
-          aria-expanded={completedOpen}
-          aria-controls={completedListId}
-        >
-          {completedOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-          <span>Completed</span>
-          <strong>{completedTasks.length}</strong>
-        </button>
-
-        <AnimatePresence initial={false}>
-          {completedOpen ? (
-            <motion.div
-              id={completedListId}
-              className="completed-list"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-            >
-              {completedTasks.map((task) => (
-                <CompletedTaskRow
-                  key={task.id}
-                  task={task}
-                  onRestore={() => onRestoreTask(task.id)}
-                  onOpen={() => onOpenTask(task)}
-                  onDelete={() => onDeleteTask(task)}
-                />
-              ))}
-              {active && completedTasks.length ? (
-                <button className="clear-completed" type="button" onClick={onClearCompleted}>
-                  <Archive size={15} />
-                  Clear completed
-                </button>
-              ) : null}
-              {!completedTasks.length ? (
-                <p className="completed-empty">Completed tasks land here.</p>
-              ) : null}
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
-      </section>
-    </section>
   );
 }
 

@@ -137,7 +137,7 @@ export async function loadWorkspace(): Promise<WorkspaceLoadResult> {
       supabase.from("user_state").select("selected_list_id, search_query").maybeSingle<DbUserState>(),
       supabase
         .from("user_preferences")
-        .select("completed_open_by_list, density, color_mode, task_view_filter, task_sort_mode")
+        .select("completed_open_by_list, density, color_mode, board_style, task_view_filter, task_sort_mode")
         .maybeSingle<DbUserPreferences>(),
     ]);
 

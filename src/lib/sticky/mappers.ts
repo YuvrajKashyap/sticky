@@ -94,7 +94,8 @@ export function mapPreferences(row: DbUserPreferences | null): StickyPreferences
   return {
     completedOpenByList: row?.completed_open_by_list ?? {},
     density: row?.density ?? "comfortable",
-    colorMode: row?.color_mode ?? "system",
+    colorMode: row?.color_mode === "dark" ? "dark" : "light",
+    boardStyle: row?.board_style ?? "pad",
     taskViewFilter: row?.task_view_filter ?? "all",
     taskSortMode: row?.task_sort_mode ?? "custom",
   };

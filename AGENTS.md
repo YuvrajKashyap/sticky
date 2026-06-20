@@ -349,6 +349,16 @@ Inspiration:
 - **Trello** for list/card organization where it helps: clear lists, movable cards/tasks, drag-and-drop affordances.
 - **Custom Sticky theme** for premium visual identity: warm-neutral background, clean off-white task surfaces, one confident brand accent, refined typography, restrained shadows.
 
+Locked frontend direction:
+
+- Sticky is a private Google Tasks x Trello-style task app. The UX should intentionally borrow Google Tasks' task-manager structure, fast task capture, simple hierarchy, completion model, and list behavior, while using Trello-inspired multi-list organization where helpful.
+- Sticky should not feel like a generic flat task dashboard or an experimental sticky-note toy. It should feel like a familiar production-grade task manager with custom premium visual skins.
+- The app supports independent appearance axes:
+  - Theme mode: Light / Dark
+  - Board style: Sticky pads / Wood board
+- The UX and behavior must stay constant across all themes/styles. The style picker changes presentation only, not app logic.
+- The four mockup images in the assets folder are the visual source of truth for the frontend direction. Implementation should recreate those mockups as closely as possible while preserving dynamic app behavior.
+
 Do not make:
 
 - a bland gray dashboard

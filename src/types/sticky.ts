@@ -10,6 +10,10 @@ export type StickyTaskViewFilter = "all" | "today" | "due" | "overdue" | "recurr
 
 export type StickyTaskSortMode = "custom" | "due";
 
+export type StickyThemeMode = "light" | "dark";
+
+export type StickyBoardStyle = "pad" | "wood";
+
 export type StickyLaunchIntent = "capture" | "search" | "today" | "scheduled";
 
 export type StickyUser = {
@@ -80,7 +84,8 @@ export type StickyRecurrenceRule = {
 export type StickyPreferences = {
   completedOpenByList: Record<string, boolean>;
   density: "compact" | "comfortable";
-  colorMode: "system" | "light" | "dark";
+  colorMode: StickyThemeMode;
+  boardStyle: StickyBoardStyle;
   taskViewFilter: StickyTaskViewFilter;
   taskSortMode: StickyTaskSortMode;
 };
@@ -174,6 +179,7 @@ export type DbUserPreferences = {
   completed_open_by_list: Record<string, boolean> | null;
   density: "compact" | "comfortable";
   color_mode: "system" | "light" | "dark";
+  board_style: StickyBoardStyle | null;
   task_view_filter: StickyTaskViewFilter | null;
   task_sort_mode: StickyTaskSortMode | null;
 };
