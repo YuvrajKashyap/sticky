@@ -370,6 +370,16 @@ function listSlug(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
+function visualVariant(value: string, count: number) {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) | 0;
+  }
+
+  return (Math.abs(hash) % count) + 1;
+}
+
 function compactListSlug(value: string) {
   return listSlug(value).replace(/-/g, "");
 }
@@ -3461,10 +3471,11 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           ) : null}
 
           <section className="board-scroll" aria-label="Active tasks">
-            {boardColumns.map((column) => (
+            {boardColumns.map((column, index) => (
               <StickyBoardColumn
                 key={column.list.id}
                 column={column}
+                columnIndex={index}
                 active={column.list.id === activeListId}
                 quickTitle={quickTitle}
                 quickCaptureIntent={quickCaptureIntent}
@@ -3581,6 +3592,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
 function StickyBoardColumn({
   column,
+  columnIndex,
   active,
   quickTitle,
   quickCaptureIntent,
@@ -3608,6 +3620,7 @@ function StickyBoardColumn({
   onClearCompleted,
 }: {
   column: BoardColumn;
+  columnIndex: number;
   active: boolean;
   quickTitle: string;
   quickCaptureIntent: QuickCaptureIntent;
@@ -3638,6 +3651,7 @@ function StickyBoardColumn({
   const completedListId = active ? "completed-stickies-list" : `completed-tasks-${list.id}`;
   const plateGroups = list.name.toLowerCase() === "plate" ? getPlateTaskGroups(visibleTasks) : [];
   const shouldShowPlateGroups = plateGroups.length > 0 && !searchQuery && !taskViewFiltered;
+  const paperDepth = (columnIndex % 3) + 1;
   const emptyTitle = searchQuery
     ? "No matching tasks"
     : taskViewFiltered
@@ -3651,9 +3665,11 @@ function StickyBoardColumn({
 
   return (
     <section
-      className={`board-column color-${list.color}${active ? " active" : ""}`}
+      className={`board-column color-${list.color} paper-depth-${paperDepth}${active ? " active" : ""}`}
       aria-label={`List ${list.name}`}
       data-list-id={list.id}
+      data-list-slug={listSlug(list.name)}
+      data-paper-depth={paperDepth}
     >
       <span className="column-paper-stack" aria-hidden="true" />
       <span className="column-pin" aria-hidden="true" />
@@ -3848,6 +3864,7 @@ function PlateTaskGroups({
           <section
             key={group.name}
             className={`plate-group color-${group.color}${collapsed ? " collapsed" : ""}`}
+            data-paper-variant={visualVariant(group.name, 3)}
             role="listitem"
           >
             <header className="plate-group-title">
@@ -3861,6 +3878,7 @@ function PlateTaskGroups({
                     key={task.id}
                     className={`plate-task-row color-${task.color}${task.id === selectedTaskId ? " selected" : ""}`}
                     data-task-id={task.id}
+                    data-paper-variant={visualVariant(task.id, 3)}
                   >
                     <button
                       className="task-check"
@@ -4020,6 +4038,8 @@ function SortableTaskCard({
       transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.75 }}
       style={style}
       data-task-id={task.id}
+      data-paper-variant={visualVariant(task.id, 3)}
+      data-tape-variant={visualVariant(`${task.id}:tape`, 3)}
       className={`task-card color-${task.color}${active ? " selected" : ""}${sortable.isDragging ? " dragging" : ""}`}
       onClick={(event) => {
         if ((event.target as HTMLElement).closest("button")) {

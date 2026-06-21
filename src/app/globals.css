@@ -5629,3 +5629,519 @@ a {
     min-height: 320px;
   }
 }
+
+/* ==========================================================================
+   MOCKUP-REAL MATERIAL REBUILD
+   --------------------------------------------------------------------------
+   This layer makes the generated bitmap materials the visible surfaces:
+   paper, wood, pins, tape, folded piles, and note cards.
+   ========================================================================= */
+
+:root {
+  --real-canvas-light: url("/sticky-materials/mockup-real/canvas-light.webp");
+  --real-canvas-dark: url("/sticky-materials/mockup-real/canvas-dark.webp");
+  --real-wood-light: url("/sticky-materials/mockup-real/wood-panel-light.webp");
+  --real-wood-dark: url("/sticky-materials/mockup-real/wood-panel-dark.webp");
+  --real-quick-light: url("/sticky-materials/mockup-real/quick-note-light.webp");
+  --real-quick-dark: url("/sticky-materials/mockup-real/quick-note-dark.webp");
+  --real-tape-light-1: url("/sticky-materials/mockup-real/tape-light-1.png");
+  --real-tape-light-2: url("/sticky-materials/mockup-real/tape-light-2.png");
+  --real-tape-light-3: url("/sticky-materials/mockup-real/tape-light-3.png");
+  --real-tape-dark-1: url("/sticky-materials/mockup-real/tape-dark-1.png");
+  --real-tape-dark-2: url("/sticky-materials/mockup-real/tape-dark-2.png");
+  --real-tape-dark-3: url("/sticky-materials/mockup-real/tape-dark-3.png");
+  --real-paperclip-violet: url("/sticky-materials/mockup-real/paperclip-violet.png");
+}
+
+.color-sun {
+  --real-pin: url("/sticky-materials/mockup-real/pin-sun.png");
+  --real-pad-body-light: url("/sticky-materials/mockup-real/pad-body-sun-light.webp");
+  --real-pad-body-dark: url("/sticky-materials/mockup-real/pad-body-sun-dark.webp");
+  --real-pad-header-light: url("/sticky-materials/mockup-real/pad-header-sun-light.webp");
+  --real-pad-header-dark: url("/sticky-materials/mockup-real/pad-header-sun-dark.webp");
+  --real-fold-light: url("/sticky-materials/mockup-real/fold-sun-light.webp");
+  --real-fold-dark: url("/sticky-materials/mockup-real/fold-sun-dark.webp");
+  --real-note-light-1: url("/sticky-materials/mockup-real/note-sun-light-1.webp");
+  --real-note-light-2: url("/sticky-materials/mockup-real/note-sun-light-2.webp");
+  --real-note-light-3: url("/sticky-materials/mockup-real/note-sun-light-3.webp");
+  --real-note-dark-1: url("/sticky-materials/mockup-real/note-sun-dark-1.webp");
+  --real-note-dark-2: url("/sticky-materials/mockup-real/note-sun-dark-2.webp");
+  --real-note-dark-3: url("/sticky-materials/mockup-real/note-sun-dark-3.webp");
+}
+
+.color-sky {
+  --real-pin: url("/sticky-materials/mockup-real/pin-sky.png");
+  --real-pad-body-light: url("/sticky-materials/mockup-real/pad-body-sky-light.webp");
+  --real-pad-body-dark: url("/sticky-materials/mockup-real/pad-body-sky-dark.webp");
+  --real-pad-header-light: url("/sticky-materials/mockup-real/pad-header-sky-light.webp");
+  --real-pad-header-dark: url("/sticky-materials/mockup-real/pad-header-sky-dark.webp");
+  --real-fold-light: url("/sticky-materials/mockup-real/fold-sky-light.webp");
+  --real-fold-dark: url("/sticky-materials/mockup-real/fold-sky-dark.webp");
+  --real-note-light-1: url("/sticky-materials/mockup-real/note-sky-light-1.webp");
+  --real-note-light-2: url("/sticky-materials/mockup-real/note-sky-light-2.webp");
+  --real-note-light-3: url("/sticky-materials/mockup-real/note-sky-light-3.webp");
+  --real-note-dark-1: url("/sticky-materials/mockup-real/note-sky-dark-1.webp");
+  --real-note-dark-2: url("/sticky-materials/mockup-real/note-sky-dark-2.webp");
+  --real-note-dark-3: url("/sticky-materials/mockup-real/note-sky-dark-3.webp");
+}
+
+.color-mint {
+  --real-pin: url("/sticky-materials/mockup-real/pin-mint.png");
+  --real-pad-body-light: url("/sticky-materials/mockup-real/pad-body-mint-light.webp");
+  --real-pad-body-dark: url("/sticky-materials/mockup-real/pad-body-mint-dark.webp");
+  --real-pad-header-light: url("/sticky-materials/mockup-real/pad-header-mint-light.webp");
+  --real-pad-header-dark: url("/sticky-materials/mockup-real/pad-header-mint-dark.webp");
+  --real-fold-light: url("/sticky-materials/mockup-real/fold-mint-light.webp");
+  --real-fold-dark: url("/sticky-materials/mockup-real/fold-mint-dark.webp");
+  --real-note-light-1: url("/sticky-materials/mockup-real/note-mint-light-1.webp");
+  --real-note-light-2: url("/sticky-materials/mockup-real/note-mint-light-2.webp");
+  --real-note-light-3: url("/sticky-materials/mockup-real/note-mint-light-3.webp");
+  --real-note-dark-1: url("/sticky-materials/mockup-real/note-mint-dark-1.webp");
+  --real-note-dark-2: url("/sticky-materials/mockup-real/note-mint-dark-2.webp");
+  --real-note-dark-3: url("/sticky-materials/mockup-real/note-mint-dark-3.webp");
+}
+
+.color-coral {
+  --real-pin: url("/sticky-materials/mockup-real/pin-coral.png");
+  --real-pad-body-light: url("/sticky-materials/mockup-real/pad-body-coral-light.webp");
+  --real-pad-body-dark: url("/sticky-materials/mockup-real/pad-body-coral-dark.webp");
+  --real-pad-header-light: url("/sticky-materials/mockup-real/pad-header-coral-light.webp");
+  --real-pad-header-dark: url("/sticky-materials/mockup-real/pad-header-coral-dark.webp");
+  --real-fold-light: url("/sticky-materials/mockup-real/fold-coral-light.webp");
+  --real-fold-dark: url("/sticky-materials/mockup-real/fold-coral-dark.webp");
+  --real-note-light-1: url("/sticky-materials/mockup-real/note-coral-light-1.webp");
+  --real-note-light-2: url("/sticky-materials/mockup-real/note-coral-light-2.webp");
+  --real-note-light-3: url("/sticky-materials/mockup-real/note-coral-light-3.webp");
+  --real-note-dark-1: url("/sticky-materials/mockup-real/note-coral-dark-1.webp");
+  --real-note-dark-2: url("/sticky-materials/mockup-real/note-coral-dark-2.webp");
+  --real-note-dark-3: url("/sticky-materials/mockup-real/note-coral-dark-3.webp");
+}
+
+.color-violet {
+  --real-pin: url("/sticky-materials/mockup-real/pin-violet.png");
+  --real-pad-body-light: url("/sticky-materials/mockup-real/pad-body-violet-light.webp");
+  --real-pad-body-dark: url("/sticky-materials/mockup-real/pad-body-violet-dark.webp");
+  --real-pad-header-light: url("/sticky-materials/mockup-real/pad-header-violet-light.webp");
+  --real-pad-header-dark: url("/sticky-materials/mockup-real/pad-header-violet-dark.webp");
+  --real-fold-light: url("/sticky-materials/mockup-real/fold-violet-light.webp");
+  --real-fold-dark: url("/sticky-materials/mockup-real/fold-violet-dark.webp");
+  --real-note-light-1: url("/sticky-materials/mockup-real/note-violet-light-1.webp");
+  --real-note-light-2: url("/sticky-materials/mockup-real/note-violet-light-2.webp");
+  --real-note-light-3: url("/sticky-materials/mockup-real/note-violet-light-3.webp");
+  --real-note-dark-1: url("/sticky-materials/mockup-real/note-violet-dark-1.webp");
+  --real-note-dark-2: url("/sticky-materials/mockup-real/note-violet-dark-2.webp");
+  --real-note-dark-3: url("/sticky-materials/mockup-real/note-violet-dark-3.webp");
+}
+
+.color-ink {
+  --real-pin: url("/sticky-materials/mockup-real/pin-ink.png");
+  --real-pad-body-light: url("/sticky-materials/mockup-real/pad-body-ink-light.webp");
+  --real-pad-body-dark: url("/sticky-materials/mockup-real/pad-body-ink-dark.webp");
+  --real-pad-header-light: url("/sticky-materials/mockup-real/pad-header-ink-light.webp");
+  --real-pad-header-dark: url("/sticky-materials/mockup-real/pad-header-ink-dark.webp");
+  --real-fold-light: url("/sticky-materials/mockup-real/fold-ink-light.webp");
+  --real-fold-dark: url("/sticky-materials/mockup-real/fold-ink-dark.webp");
+  --real-note-light-1: url("/sticky-materials/mockup-real/note-ink-light-1.webp");
+  --real-note-light-2: url("/sticky-materials/mockup-real/note-ink-light-2.webp");
+  --real-note-light-3: url("/sticky-materials/mockup-real/note-ink-light-3.webp");
+  --real-note-dark-1: url("/sticky-materials/mockup-real/note-ink-dark-1.webp");
+  --real-note-dark-2: url("/sticky-materials/mockup-real/note-ink-dark-2.webp");
+  --real-note-dark-3: url("/sticky-materials/mockup-real/note-ink-dark-3.webp");
+}
+
+.sticky-app {
+  background-color: #fff2df;
+  background-image:
+    radial-gradient(circle at 22% 12%, rgba(255, 211, 133, 0.25), transparent 32%),
+    var(--real-canvas-light);
+  background-size: cover, cover;
+  background-position: center;
+}
+
+.sticky-app.tone-dark {
+  background-color: #03080c;
+  background-image:
+    radial-gradient(circle at 14% 0%, rgba(91, 133, 158, 0.16), transparent 36%),
+    var(--real-canvas-dark);
+  background-size: cover, cover;
+}
+
+.sticky-app::before {
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.17), transparent 22%, transparent 78%, rgba(88, 50, 18, 0.08)),
+    var(--real-canvas-light) center / cover no-repeat;
+  opacity: 0.48;
+  mix-blend-mode: multiply;
+}
+
+.sticky-app.tone-dark::before {
+  background:
+    radial-gradient(circle at 50% 12%, rgba(108, 153, 181, 0.12), transparent 38%),
+    var(--real-canvas-dark) center / cover no-repeat;
+  opacity: 0.72;
+  mix-blend-mode: screen;
+}
+
+.board-pad .board-column {
+  --real-pad-body: var(--real-pad-body-light);
+  --real-pad-header: var(--real-pad-header-light);
+  --real-fold: var(--real-fold-light);
+  background: var(--real-pad-body) center / 100% 100% no-repeat;
+  border: 0;
+  box-shadow: none;
+  filter: drop-shadow(0 18px 16px rgba(83, 53, 21, 0.22)) drop-shadow(0 4px 2px rgba(83, 53, 21, 0.12));
+  overflow: visible;
+}
+
+.tone-dark.board-pad .board-column {
+  --real-pad-body: var(--real-pad-body-dark);
+  --real-pad-header: var(--real-pad-header-dark);
+  --real-fold: var(--real-fold-dark);
+  filter: drop-shadow(0 20px 18px rgba(0, 0, 0, 0.62)) drop-shadow(0 2px 0 color-mix(in srgb, var(--list-accent) 30%, transparent));
+}
+
+.board-pad .board-column::before,
+.board-pad .board-column::after {
+  display: none;
+}
+
+.board-pad .column-paper-stack {
+  inset: 7px 7px -20px;
+  overflow: visible;
+  z-index: -1;
+}
+
+.board-pad .column-paper-stack::before,
+.board-pad .column-paper-stack::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 5px;
+  background: var(--real-pad-body) center / 100% 100% no-repeat;
+  opacity: 0.5;
+  transform: translate(-6px, 10px) rotate(-1.5deg);
+  filter: saturate(0.9) brightness(0.98);
+}
+
+.board-pad .column-paper-stack::after {
+  opacity: 0.32;
+  transform: translate(7px, 17px) rotate(1.25deg);
+}
+
+.board-pad .paper-depth-2 .column-paper-stack::before {
+  transform: translate(-8px, 12px) rotate(1.2deg);
+}
+
+.board-pad .paper-depth-3 .column-paper-stack::before {
+  transform: translate(6px, 11px) rotate(-0.8deg);
+}
+
+.board-pad .column-header {
+  margin: 1px 3px 0;
+  border: 0;
+  border-radius: 4px 4px 0 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(0, 0, 0, 0.03)),
+    var(--real-pad-header) center / 100% 100% no-repeat;
+  box-shadow:
+    inset 0 -1px 0 color-mix(in srgb, var(--list-accent) 28%, transparent),
+    0 3px 5px rgba(79, 48, 18, 0.12);
+}
+
+.tone-dark.board-pad .column-header {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.18)),
+    var(--real-pad-header) center / 100% 100% no-repeat;
+}
+
+.column-pin {
+  width: 52px;
+  height: 52px;
+  background-image: var(--real-pin);
+  filter: drop-shadow(0 10px 8px rgba(0, 0, 0, 0.22));
+}
+
+.board-pad .column-pin {
+  top: -30px;
+}
+
+.board-wood .column-pin {
+  top: -25px;
+  width: 46px;
+  height: 46px;
+}
+
+.column-paperclip {
+  top: -25px;
+  right: 24px;
+  width: 26px;
+  height: 72px;
+  border: 0;
+  border-radius: 0;
+  background: var(--real-paperclip-violet) center / contain no-repeat;
+  box-shadow: none;
+  opacity: 1;
+  transform: rotate(16deg);
+  filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.26));
+}
+
+.column-paperclip::after {
+  display: none;
+}
+
+.board-pad .board-quick-capture,
+.board-pad .board-add-task {
+  margin: -1px 5px 0;
+  border: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(0, 0, 0, 0.025)),
+    var(--real-quick-light) center / 100% 100% no-repeat;
+  filter: drop-shadow(0 2px 2px rgba(69, 42, 18, 0.08));
+}
+
+.tone-dark.board-pad .board-quick-capture,
+.tone-dark.board-pad .board-add-task {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(0, 0, 0, 0.18)),
+    var(--real-quick-dark) center / 100% 100% no-repeat;
+}
+
+.board-pad .task-lane {
+  padding-inline: 13px;
+}
+
+.board-pad .task-card {
+  isolation: isolate;
+  margin-inline: 3px;
+  background: transparent;
+}
+
+.board-pad .task-card::before {
+  content: "";
+  position: absolute;
+  inset: 3px -2px 3px -3px;
+  z-index: -1;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--list-accent) 12%, transparent), transparent);
+  opacity: 0;
+  transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out);
+}
+
+.board-pad .task-card:hover::before,
+.board-pad .task-card.selected::before,
+.board-pad .task-card.dragging::before {
+  opacity: 0.72;
+}
+
+.board-pad .task-card.dragging {
+  filter: drop-shadow(0 14px 15px rgba(48, 30, 13, 0.22));
+}
+
+.board-column .completed-toggle {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(0, 0, 0, 0.05)),
+    var(--real-fold) center / 100% 100% no-repeat;
+  border: 0;
+  box-shadow: none;
+  filter: drop-shadow(0 8px 8px rgba(56, 34, 14, 0.18));
+  clip-path: none;
+}
+
+.tone-dark .board-column .completed-toggle {
+  filter: drop-shadow(0 10px 10px rgba(0, 0, 0, 0.42));
+}
+
+.board-wood .board-column {
+  --real-wood-panel: var(--real-wood-light);
+  background:
+    linear-gradient(180deg, rgba(255, 240, 184, 0.11), rgba(75, 36, 10, 0.17)),
+    var(--real-wood-panel) center / 100% 100% no-repeat;
+  border: 0;
+  box-shadow: none;
+  filter: drop-shadow(0 20px 17px rgba(42, 25, 12, 0.36));
+  overflow: visible;
+}
+
+.tone-dark.board-wood .board-column {
+  --real-wood-panel: var(--real-wood-dark);
+  background:
+    linear-gradient(180deg, rgba(181, 128, 72, 0.09), rgba(0, 0, 0, 0.22)),
+    var(--real-wood-panel) center / 100% 100% no-repeat;
+  filter: drop-shadow(0 23px 20px rgba(0, 0, 0, 0.62));
+}
+
+.board-wood .column-header {
+  border: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.13), rgba(0, 0, 0, 0.12)),
+    var(--real-pad-header-light) center / 100% 100% no-repeat;
+  box-shadow: 0 7px 9px rgba(34, 20, 8, 0.22);
+}
+
+.tone-dark.board-wood .column-header {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(0, 0, 0, 0.23)),
+    var(--real-pad-header-dark) center / 100% 100% no-repeat;
+}
+
+.board-wood .board-quick-capture,
+.board-wood .board-add-task {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(0, 0, 0, 0.05)),
+    var(--real-quick-light) center / 100% 100% no-repeat;
+  border: 0;
+  box-shadow: none;
+  filter: drop-shadow(0 9px 7px rgba(35, 20, 8, 0.25));
+}
+
+.tone-dark.board-wood .board-quick-capture,
+.tone-dark.board-wood .board-add-task {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.22)),
+    var(--real-quick-dark) center / 100% 100% no-repeat;
+}
+
+.board-wood .board-quick-capture::before,
+.board-wood .board-add-task::before,
+.board-wood .task-card::before {
+  background-image: var(--real-tape-sprite, var(--real-tape-light-1));
+  background-size: 100% 100%;
+  border-radius: 0;
+  opacity: 0.96;
+}
+
+.tone-dark.board-wood .board-quick-capture::before,
+.tone-dark.board-wood .board-add-task::before,
+.tone-dark.board-wood .task-card::before {
+  background-image: var(--real-tape-sprite, var(--real-tape-dark-1));
+}
+
+.board-wood .task-card,
+.board-wood .plate-group {
+  --real-note-sprite: var(--real-note-light-1);
+  border: 0;
+  border-radius: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.04)),
+    var(--real-note-sprite) center / 100% 100% no-repeat;
+  box-shadow: none;
+  filter: drop-shadow(0 9px 8px rgba(25, 14, 5, 0.27));
+}
+
+.board-wood .task-card[data-paper-variant="2"],
+.board-wood .plate-group[data-paper-variant="2"] {
+  --real-note-sprite: var(--real-note-light-2);
+}
+
+.board-wood .task-card[data-paper-variant="3"],
+.board-wood .plate-group[data-paper-variant="3"] {
+  --real-note-sprite: var(--real-note-light-3);
+}
+
+.tone-dark.board-wood .task-card,
+.tone-dark.board-wood .plate-group {
+  --real-note-sprite: var(--real-note-dark-1);
+  filter: drop-shadow(0 10px 9px rgba(0, 0, 0, 0.48));
+}
+
+.tone-dark.board-wood .task-card[data-paper-variant="2"],
+.tone-dark.board-wood .plate-group[data-paper-variant="2"] {
+  --real-note-sprite: var(--real-note-dark-2);
+}
+
+.tone-dark.board-wood .task-card[data-paper-variant="3"],
+.tone-dark.board-wood .plate-group[data-paper-variant="3"] {
+  --real-note-sprite: var(--real-note-dark-3);
+}
+
+.board-wood .task-card[data-tape-variant="2"] {
+  --real-tape-sprite: var(--real-tape-light-2);
+}
+
+.board-wood .task-card[data-tape-variant="3"] {
+  --real-tape-sprite: var(--real-tape-light-3);
+}
+
+.tone-dark.board-wood .task-card[data-tape-variant="1"] {
+  --real-tape-sprite: var(--real-tape-dark-1);
+}
+
+.tone-dark.board-wood .task-card[data-tape-variant="2"] {
+  --real-tape-sprite: var(--real-tape-dark-2);
+}
+
+.tone-dark.board-wood .task-card[data-tape-variant="3"] {
+  --real-tape-sprite: var(--real-tape-dark-3);
+}
+
+.board-wood .task-card::after {
+  background-image: var(--real-pin);
+  opacity: 0.9;
+  filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.24));
+}
+
+.board-wood .task-card:hover,
+.board-wood .task-card.selected {
+  filter: drop-shadow(0 13px 12px rgba(25, 14, 5, 0.32));
+}
+
+.board-wood .task-card.dragging {
+  filter: drop-shadow(0 24px 18px rgba(20, 12, 5, 0.38)) saturate(1.08);
+}
+
+.board-wood .completed-toggle {
+  --real-note-sprite: var(--real-note-light-1);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(0, 0, 0, 0.09)),
+    var(--real-note-sprite) center / 100% 100% no-repeat;
+  border: 0;
+}
+
+.tone-dark.board-wood .completed-toggle {
+  --real-note-sprite: var(--real-note-dark-1);
+}
+
+.plate-group {
+  --real-note-sprite: var(--real-note-light-1);
+}
+
+.plate-group[data-paper-variant="2"] {
+  --real-note-sprite: var(--real-note-light-2);
+}
+
+.plate-group[data-paper-variant="3"] {
+  --real-note-sprite: var(--real-note-light-3);
+}
+
+.tone-dark .plate-group {
+  --real-note-sprite: var(--real-note-dark-1);
+}
+
+.tone-dark .plate-group[data-paper-variant="2"] {
+  --real-note-sprite: var(--real-note-dark-2);
+}
+
+.tone-dark .plate-group[data-paper-variant="3"] {
+  --real-note-sprite: var(--real-note-dark-3);
+}
+
+.board-wood .plate-group {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.04)),
+    var(--real-note-sprite) center / 100% 100% no-repeat;
+}
+
+.board-wood .plate-group::before {
+  background-image: var(--real-pin);
+}
+
+@media (max-width: 900px) {
+  .board-pad .board-column,
+  .board-wood .board-column {
+    filter: drop-shadow(0 14px 13px rgba(42, 24, 11, 0.22));
+  }
+
+  .tone-dark.board-pad .board-column,
+  .tone-dark.board-wood .board-column {
+    filter: drop-shadow(0 18px 17px rgba(0, 0, 0, 0.5));
+  }
+}
