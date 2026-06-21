@@ -6145,3 +6145,600 @@ a {
     filter: drop-shadow(0 18px 17px rgba(0, 0, 0, 0.5));
   }
 }
+
+/* ==========================================================================
+   MOCKUP-SLICED MATERIAL REBUILD
+   --------------------------------------------------------------------------
+   Final visual layer. These assets are cut from the four reference mockups and
+   override the procedural/generated paper skin above.
+   ========================================================================= */
+
+:root {
+  --sliced-pad-light-canvas: url("/sticky-materials/mockup-sliced/pad-light/canvas.webp");
+  --sliced-pad-dark-canvas: url("/sticky-materials/mockup-sliced/pad-dark/canvas.webp");
+  --sliced-board-light-canvas: url("/sticky-materials/mockup-sliced/board-light/canvas.webp");
+  --sliced-board-dark-canvas: url("/sticky-materials/mockup-sliced/board-dark/canvas.webp");
+  --sliced-pad-light-rail: url("/sticky-materials/mockup-sliced/pad-light/rail.webp");
+  --sliced-pad-dark-rail: url("/sticky-materials/mockup-sliced/pad-dark/rail.webp");
+  --sliced-board-light-rail: url("/sticky-materials/mockup-sliced/board-light/rail.webp");
+  --sliced-board-dark-rail: url("/sticky-materials/mockup-sliced/board-dark/rail.webp");
+  --sliced-pad-light-topbar: url("/sticky-materials/mockup-sliced/pad-light/topbar.webp");
+  --sliced-pad-dark-topbar: url("/sticky-materials/mockup-sliced/pad-dark/topbar.webp");
+  --sliced-board-light-topbar: url("/sticky-materials/mockup-sliced/board-light/topbar.webp");
+  --sliced-board-dark-topbar: url("/sticky-materials/mockup-sliced/board-dark/topbar.webp");
+  --sliced-board-light-wood: url("/sticky-materials/mockup-sliced/board-light/wood-column.webp");
+  --sliced-board-dark-wood: url("/sticky-materials/mockup-sliced/board-dark/wood-column.webp");
+}
+
+.color-sun {
+  --sliced-pin-light: url("/sticky-materials/mockup-sliced/board-light/pin-sun.png");
+  --sliced-pin-dark: url("/sticky-materials/mockup-sliced/board-dark/pin-sun.png");
+  --sliced-header-light: url("/sticky-materials/mockup-sliced/board-light/header-sun.webp");
+  --sliced-header-dark: url("/sticky-materials/mockup-sliced/board-dark/header-sun.webp");
+  --sliced-quick-light: url("/sticky-materials/mockup-sliced/board-light/quick-sun.webp");
+  --sliced-quick-dark: url("/sticky-materials/mockup-sliced/board-dark/quick-sun.webp");
+  --sliced-note-light-1: url("/sticky-materials/mockup-sliced/board-light/note-sun-1.webp");
+  --sliced-note-light-2: url("/sticky-materials/mockup-sliced/board-light/note-sun-2.webp");
+  --sliced-note-light-3: url("/sticky-materials/mockup-sliced/board-light/note-sun-3.webp");
+  --sliced-note-dark-1: url("/sticky-materials/mockup-sliced/board-dark/note-sun-1.webp");
+  --sliced-note-dark-2: url("/sticky-materials/mockup-sliced/board-dark/note-sun-2.webp");
+  --sliced-note-dark-3: url("/sticky-materials/mockup-sliced/board-dark/note-sun-3.webp");
+  --sliced-completed-light: url("/sticky-materials/mockup-sliced/board-light/completed-sun.webp");
+  --sliced-completed-dark: url("/sticky-materials/mockup-sliced/board-dark/completed-sun.webp");
+}
+
+.color-sky {
+  --sliced-pin-light: url("/sticky-materials/mockup-sliced/board-light/pin-sky.png");
+  --sliced-pin-dark: url("/sticky-materials/mockup-sliced/board-dark/pin-sky.png");
+  --sliced-header-light: url("/sticky-materials/mockup-sliced/board-light/header-sky.webp");
+  --sliced-header-dark: url("/sticky-materials/mockup-sliced/board-dark/header-sky.webp");
+  --sliced-quick-light: url("/sticky-materials/mockup-sliced/board-light/quick-sky.webp");
+  --sliced-quick-dark: url("/sticky-materials/mockup-sliced/board-dark/quick-sky.webp");
+  --sliced-note-light-1: url("/sticky-materials/mockup-sliced/board-light/note-sky-1.webp");
+  --sliced-note-light-2: url("/sticky-materials/mockup-sliced/board-light/note-sky-2.webp");
+  --sliced-note-light-3: url("/sticky-materials/mockup-sliced/board-light/note-sky-3.webp");
+  --sliced-note-dark-1: url("/sticky-materials/mockup-sliced/board-dark/note-sky-1.webp");
+  --sliced-note-dark-2: url("/sticky-materials/mockup-sliced/board-dark/note-sky-2.webp");
+  --sliced-note-dark-3: url("/sticky-materials/mockup-sliced/board-dark/note-sky-3.webp");
+  --sliced-completed-light: url("/sticky-materials/mockup-sliced/board-light/completed-sky.webp");
+  --sliced-completed-dark: url("/sticky-materials/mockup-sliced/board-dark/completed-sky.webp");
+}
+
+.color-mint {
+  --sliced-pin-light: url("/sticky-materials/mockup-sliced/board-light/pin-mint.png");
+  --sliced-pin-dark: url("/sticky-materials/mockup-sliced/board-dark/pin-mint.png");
+  --sliced-header-light: url("/sticky-materials/mockup-sliced/board-light/header-mint.webp");
+  --sliced-header-dark: url("/sticky-materials/mockup-sliced/board-dark/header-mint.webp");
+  --sliced-quick-light: url("/sticky-materials/mockup-sliced/board-light/quick-mint.webp");
+  --sliced-quick-dark: url("/sticky-materials/mockup-sliced/board-dark/quick-mint.webp");
+  --sliced-note-light-1: url("/sticky-materials/mockup-sliced/board-light/note-mint-1.webp");
+  --sliced-note-light-2: url("/sticky-materials/mockup-sliced/board-light/note-mint-2.webp");
+  --sliced-note-light-3: url("/sticky-materials/mockup-sliced/board-light/note-mint-3.webp");
+  --sliced-note-dark-1: url("/sticky-materials/mockup-sliced/board-dark/note-mint-1.webp");
+  --sliced-note-dark-2: url("/sticky-materials/mockup-sliced/board-dark/note-mint-2.webp");
+  --sliced-note-dark-3: url("/sticky-materials/mockup-sliced/board-dark/note-mint-3.webp");
+  --sliced-completed-light: url("/sticky-materials/mockup-sliced/board-light/completed-mint.webp");
+  --sliced-completed-dark: url("/sticky-materials/mockup-sliced/board-dark/completed-mint.webp");
+}
+
+.color-coral {
+  --sliced-pin-light: url("/sticky-materials/mockup-sliced/board-light/pin-coral.png");
+  --sliced-pin-dark: url("/sticky-materials/mockup-sliced/board-dark/pin-coral.png");
+  --sliced-header-light: url("/sticky-materials/mockup-sliced/board-light/header-coral.webp");
+  --sliced-header-dark: url("/sticky-materials/mockup-sliced/board-dark/header-coral.webp");
+  --sliced-quick-light: url("/sticky-materials/mockup-sliced/board-light/quick-coral.webp");
+  --sliced-quick-dark: url("/sticky-materials/mockup-sliced/board-dark/quick-coral.webp");
+  --sliced-note-light-1: url("/sticky-materials/mockup-sliced/board-light/note-coral-1.webp");
+  --sliced-note-light-2: url("/sticky-materials/mockup-sliced/board-light/note-coral-2.webp");
+  --sliced-note-light-3: url("/sticky-materials/mockup-sliced/board-light/note-coral-3.webp");
+  --sliced-note-dark-1: url("/sticky-materials/mockup-sliced/board-dark/note-coral-1.webp");
+  --sliced-note-dark-2: url("/sticky-materials/mockup-sliced/board-dark/note-coral-2.webp");
+  --sliced-note-dark-3: url("/sticky-materials/mockup-sliced/board-dark/note-coral-3.webp");
+  --sliced-completed-light: url("/sticky-materials/mockup-sliced/board-light/completed-coral.webp");
+  --sliced-completed-dark: url("/sticky-materials/mockup-sliced/board-dark/completed-coral.webp");
+}
+
+.color-violet {
+  --sliced-pin-light: url("/sticky-materials/mockup-sliced/board-light/pin-violet.png");
+  --sliced-pin-dark: url("/sticky-materials/mockup-sliced/board-dark/pin-violet.png");
+  --sliced-header-light: url("/sticky-materials/mockup-sliced/board-light/header-violet.webp");
+  --sliced-header-dark: url("/sticky-materials/mockup-sliced/board-dark/header-violet.webp");
+  --sliced-quick-light: url("/sticky-materials/mockup-sliced/board-light/quick-violet.webp");
+  --sliced-quick-dark: url("/sticky-materials/mockup-sliced/board-dark/quick-violet.webp");
+  --sliced-note-light-1: url("/sticky-materials/mockup-sliced/board-light/note-violet-1.webp");
+  --sliced-note-light-2: url("/sticky-materials/mockup-sliced/board-light/note-violet-2.webp");
+  --sliced-note-light-3: url("/sticky-materials/mockup-sliced/board-light/note-violet-3.webp");
+  --sliced-note-dark-1: url("/sticky-materials/mockup-sliced/board-dark/note-violet-1.webp");
+  --sliced-note-dark-2: url("/sticky-materials/mockup-sliced/board-dark/note-violet-2.webp");
+  --sliced-note-dark-3: url("/sticky-materials/mockup-sliced/board-dark/note-violet-3.webp");
+  --sliced-completed-light: url("/sticky-materials/mockup-sliced/board-light/completed-violet.webp");
+  --sliced-completed-dark: url("/sticky-materials/mockup-sliced/board-dark/completed-violet.webp");
+}
+
+.color-ink {
+  --sliced-pin-light: url("/sticky-materials/mockup-sliced/board-light/pin-sun.png");
+  --sliced-pin-dark: url("/sticky-materials/mockup-sliced/board-dark/pin-sun.png");
+  --sliced-header-light: url("/sticky-materials/mockup-sliced/board-light/header-ink.webp");
+  --sliced-header-dark: url("/sticky-materials/mockup-sliced/board-dark/header-ink.webp");
+  --sliced-quick-light: url("/sticky-materials/mockup-sliced/board-light/quick-ink.webp");
+  --sliced-quick-dark: url("/sticky-materials/mockup-sliced/board-dark/quick-ink.webp");
+  --sliced-note-light-1: url("/sticky-materials/mockup-sliced/board-light/note-ink-1.webp");
+  --sliced-note-light-2: url("/sticky-materials/mockup-sliced/board-light/note-ink-2.webp");
+  --sliced-note-light-3: url("/sticky-materials/mockup-sliced/board-light/note-ink-3.webp");
+  --sliced-note-dark-1: url("/sticky-materials/mockup-sliced/board-dark/note-ink-1.webp");
+  --sliced-note-dark-2: url("/sticky-materials/mockup-sliced/board-dark/note-ink-2.webp");
+  --sliced-note-dark-3: url("/sticky-materials/mockup-sliced/board-dark/note-ink-3.webp");
+  --sliced-completed-light: url("/sticky-materials/mockup-sliced/board-light/completed-ink.webp");
+  --sliced-completed-dark: url("/sticky-materials/mockup-sliced/board-dark/completed-ink.webp");
+}
+
+.sticky-app {
+  --sliced-active-canvas: var(--sliced-pad-light-canvas);
+  --sliced-active-rail: var(--sliced-pad-light-rail);
+  --sliced-active-topbar: var(--sliced-pad-light-topbar);
+  background-color: #fff4e7;
+  background-image: var(--sliced-active-canvas);
+  background-size: cover;
+  background-position: center;
+}
+
+.sticky-app.tone-dark {
+  --sliced-active-canvas: var(--sliced-pad-dark-canvas);
+  --sliced-active-rail: var(--sliced-pad-dark-rail);
+  --sliced-active-topbar: var(--sliced-pad-dark-topbar);
+  background-color: #050a0f;
+}
+
+.sticky-app.board-wood {
+  --sliced-active-canvas: var(--sliced-board-light-canvas);
+  --sliced-active-rail: var(--sliced-board-light-rail);
+  --sliced-active-topbar: var(--sliced-board-light-topbar);
+}
+
+.sticky-app.tone-dark.board-wood {
+  --sliced-active-canvas: var(--sliced-board-dark-canvas);
+  --sliced-active-rail: var(--sliced-board-dark-rail);
+  --sliced-active-topbar: var(--sliced-board-dark-topbar);
+}
+
+.sticky-app::before {
+  background: var(--sliced-active-canvas) center / cover no-repeat;
+  opacity: 0.34;
+  mix-blend-mode: multiply;
+}
+
+.sticky-app.tone-dark::before {
+  opacity: 0.2;
+  mix-blend-mode: screen;
+}
+
+.list-rail {
+  background: var(--sliced-active-rail) center / 100% 100% no-repeat;
+  border: 0;
+  box-shadow: none;
+}
+
+.list-rail::before {
+  display: none;
+}
+
+.workspace-tools {
+  width: 242px;
+  min-height: 56px;
+  padding: 7px 8px;
+  gap: 9px;
+  border: 0;
+  border-radius: 25px;
+  background: var(--sliced-active-topbar) center / 100% 100% no-repeat;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.search-control,
+.tool-button,
+.profile-appearance-trigger,
+.profile-chip {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.search-control:hover,
+.search-control:focus-within {
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+}
+
+.profile-appearance-trigger,
+.profile-chip {
+  background: linear-gradient(180deg, #8151ff 0%, #6233e7 100%);
+  box-shadow: 0 7px 15px rgba(74, 32, 180, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.sticky-app.board-wood .workspace-tools {
+  width: 218px;
+  min-height: 50px;
+  height: 50px;
+  padding: 5px 7px;
+}
+
+@media (min-width: 901px) {
+  .sticky-app {
+    grid-template-columns: 240px minmax(0, 1fr);
+    --stage-pad-x: 20px;
+    --stage-pad-top: 30px;
+    --column-gap: 8px;
+  }
+
+  .sticky-app.board-wood {
+    --stage-pad-top: 46px;
+    --column-gap: 19px;
+  }
+
+  .list-rail {
+    width: 240px;
+    padding: 19px 9px 12px;
+  }
+
+  .workspace-topbar {
+    top: 8px;
+    right: 12px;
+    left: var(--stage-pad-x);
+  }
+
+  .board-scroll {
+    padding: 18px var(--stage-pad-x) 44px;
+  }
+
+  .board-pad .board-column:nth-child(1) {
+    --column-width: 266px;
+    height: 467px;
+  }
+
+  .board-pad .board-column:nth-child(2) {
+    --column-width: 298px;
+    height: 845px;
+  }
+
+  .board-pad .board-column:nth-child(3) {
+    --column-width: 257px;
+    height: 302px;
+  }
+
+  .board-pad .board-column:nth-child(4) {
+    --column-width: 271px;
+    height: 840px;
+    margin-top: 7px;
+  }
+
+  .board-pad .board-column:nth-child(5) {
+    --column-width: 282px;
+    height: 844px;
+    margin-top: 10px;
+  }
+
+  .board-wood .board-column:nth-child(1) {
+    --column-width: 255px;
+  }
+
+  .board-wood .board-column:nth-child(2) {
+    --column-width: 264px;
+  }
+
+  .board-wood .board-column:nth-child(3) {
+    --column-width: 232px;
+  }
+
+  .board-wood .board-column:nth-child(4) {
+    --column-width: 262px;
+  }
+
+  .board-wood .board-column:nth-child(5) {
+    --column-width: 290px;
+  }
+
+  .board-wood .board-column {
+    min-height: 830px;
+    height: 830px;
+  }
+}
+
+.board-pad .board-column:nth-child(1) {
+  --sliced-pad-column-light: url("/sticky-materials/mockup-sliced/pad-light/column-1.webp");
+  --sliced-pad-column-dark: url("/sticky-materials/mockup-sliced/pad-dark/column-1.webp");
+}
+
+.board-pad .board-column:nth-child(2) {
+  --sliced-pad-column-light: url("/sticky-materials/mockup-sliced/pad-light/column-2.webp");
+  --sliced-pad-column-dark: url("/sticky-materials/mockup-sliced/pad-dark/column-2.webp");
+}
+
+.board-pad .board-column:nth-child(3) {
+  --sliced-pad-column-light: url("/sticky-materials/mockup-sliced/pad-light/column-3.webp");
+  --sliced-pad-column-dark: url("/sticky-materials/mockup-sliced/pad-dark/column-3.webp");
+}
+
+.board-pad .board-column:nth-child(4) {
+  --sliced-pad-column-light: url("/sticky-materials/mockup-sliced/pad-light/column-4.webp");
+  --sliced-pad-column-dark: url("/sticky-materials/mockup-sliced/pad-dark/column-4.webp");
+}
+
+.board-pad .board-column:nth-child(5) {
+  --sliced-pad-column-light: url("/sticky-materials/mockup-sliced/pad-light/column-5.webp");
+  --sliced-pad-column-dark: url("/sticky-materials/mockup-sliced/pad-dark/column-5.webp");
+}
+
+.board-pad .board-column {
+  --sliced-pad-column: var(--sliced-pad-column-light);
+  border: 0;
+  border-radius: 7px;
+  background:
+    linear-gradient(90deg, transparent 0 43px, color-mix(in srgb, var(--list-accent) 16%, transparent) 43px 44px, transparent 44px),
+    repeating-linear-gradient(to bottom, transparent 0 calc(var(--row-height) - 1px), var(--pad-rule) calc(var(--row-height) - 1px) var(--row-height)),
+    var(--sliced-pad-column) center / 100% 100% no-repeat;
+  box-shadow: none;
+  filter: drop-shadow(0 16px 13px rgba(82, 49, 18, 0.2)) drop-shadow(0 3px 2px rgba(82, 49, 18, 0.09));
+  overflow: visible;
+}
+
+.tone-dark.board-pad .board-column {
+  --sliced-pad-column: var(--sliced-pad-column-dark);
+  filter: drop-shadow(0 20px 17px rgba(0, 0, 0, 0.58));
+}
+
+.board-pad .column-paper-stack {
+  display: none;
+}
+
+.board-pad .column-pin {
+  display: block;
+  top: -5px;
+  width: 38px;
+  height: 38px;
+  background-image: var(--sliced-pin-light);
+  filter: drop-shadow(0 7px 6px rgba(72, 39, 12, 0.28));
+}
+
+.tone-dark.board-pad .column-pin {
+  background-image: var(--sliced-pin-dark);
+  filter: drop-shadow(0 8px 7px rgba(0, 0, 0, 0.5));
+}
+
+.board-pad .column-paperclip {
+  display: block;
+  top: 8px;
+  right: 91px;
+  width: 28px;
+  height: 58px;
+  border: 0;
+  border-radius: 0;
+  background: url("/sticky-materials/mockup-sliced/board-light/paperclip.png") center / contain no-repeat;
+  box-shadow: none;
+  opacity: 1;
+  transform: rotate(17deg);
+  filter: drop-shadow(0 4px 4px rgba(65, 38, 15, 0.28));
+}
+
+.tone-dark.board-pad .column-paperclip {
+  background-image: url("/sticky-materials/mockup-sliced/board-dark/paperclip.png");
+  filter: drop-shadow(0 5px 5px rgba(0, 0, 0, 0.5));
+}
+
+.board-pad .column-paperclip::after {
+  display: none;
+}
+
+.board-pad .column-header,
+.board-pad .board-quick-capture,
+.board-pad .board-add-task,
+.board-pad .completed-toggle {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  filter: none;
+}
+
+.board-pad .column-header {
+  margin: 0;
+  padding: 13px 13px 9px 20px;
+}
+
+.board-pad .board-quick-capture,
+.board-pad .board-add-task {
+  min-height: 48px;
+  margin: 0 9px;
+  padding-inline: 20px;
+}
+
+.board-pad .task-lane {
+  padding-inline: 14px;
+}
+
+.board-pad .task-card {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  filter: none;
+}
+
+.board-pad .completed-pile {
+  padding-inline: 9px;
+}
+
+.board-pad .completed-toggle {
+  min-height: 48px;
+  padding: 9px 20px 11px;
+}
+
+.board-wood .board-column {
+  background: var(--sliced-board-light-wood) center / 100% 100% no-repeat;
+  border: 0;
+  border-radius: 8px;
+  box-shadow: none;
+  filter: drop-shadow(0 21px 16px rgba(35, 20, 8, 0.38));
+  overflow: visible;
+}
+
+.tone-dark.board-wood .board-column {
+  background: var(--sliced-board-dark-wood) center / 100% 100% no-repeat;
+  filter: drop-shadow(0 24px 20px rgba(0, 0, 0, 0.64));
+}
+
+.board-wood .column-paper-stack {
+  display: none;
+}
+
+.board-wood .column-pin {
+  width: 42px;
+  height: 42px;
+  background-image: var(--sliced-pin-light);
+  filter: drop-shadow(0 9px 7px rgba(0, 0, 0, 0.26));
+}
+
+.tone-dark.board-wood .column-pin {
+  background-image: var(--sliced-pin-dark);
+}
+
+.board-wood .column-paperclip {
+  background-image: url("/sticky-materials/mockup-sliced/board-light/paperclip.png");
+}
+
+.tone-dark.board-wood .column-paperclip {
+  background-image: url("/sticky-materials/mockup-sliced/board-dark/paperclip.png");
+}
+
+.board-wood .column-header {
+  top: 12px;
+  left: 15px;
+  right: 15px;
+  min-height: 49px;
+  padding: 7px 13px;
+  border: 0;
+  border-radius: 0;
+  background: var(--sliced-header-light) center / 100% 100% no-repeat;
+  box-shadow: none;
+  filter: drop-shadow(0 7px 6px rgba(36, 20, 7, 0.22));
+}
+
+.tone-dark.board-wood .column-header {
+  background: var(--sliced-header-dark) center / 100% 100% no-repeat;
+}
+
+.board-wood .column-header::before,
+.board-wood .column-header::after {
+  display: none;
+}
+
+.board-wood .board-quick-capture,
+.board-wood .board-add-task {
+  min-height: 56px;
+  margin: 13px 0 13px;
+  border: 0;
+  border-radius: 0;
+  background: var(--sliced-quick-light) center / 100% 100% no-repeat;
+  box-shadow: none;
+  filter: drop-shadow(0 10px 8px rgba(36, 20, 7, 0.26));
+}
+
+.tone-dark.board-wood .board-quick-capture,
+.tone-dark.board-wood .board-add-task {
+  background: var(--sliced-quick-dark) center / 100% 100% no-repeat;
+}
+
+.board-wood .board-quick-capture::before,
+.board-wood .board-add-task::before,
+.board-wood .task-card::before {
+  display: none;
+}
+
+.board-wood .task-card,
+.board-wood .plate-group {
+  --sliced-note-sprite: var(--sliced-note-light-1);
+  border: 0;
+  border-radius: 0;
+  background: var(--sliced-note-sprite) center / 100% 100% no-repeat;
+  box-shadow: none;
+  filter: drop-shadow(0 9px 7px rgba(28, 16, 6, 0.28));
+}
+
+.board-wood .task-card[data-paper-variant="2"],
+.board-wood .plate-group[data-paper-variant="2"] {
+  --sliced-note-sprite: var(--sliced-note-light-2);
+}
+
+.board-wood .task-card[data-paper-variant="3"],
+.board-wood .plate-group[data-paper-variant="3"] {
+  --sliced-note-sprite: var(--sliced-note-light-3);
+}
+
+.tone-dark.board-wood .task-card,
+.tone-dark.board-wood .plate-group {
+  --sliced-note-sprite: var(--sliced-note-dark-1);
+  filter: drop-shadow(0 10px 8px rgba(0, 0, 0, 0.5));
+}
+
+.tone-dark.board-wood .task-card[data-paper-variant="2"],
+.tone-dark.board-wood .plate-group[data-paper-variant="2"] {
+  --sliced-note-sprite: var(--sliced-note-dark-2);
+}
+
+.tone-dark.board-wood .task-card[data-paper-variant="3"],
+.tone-dark.board-wood .plate-group[data-paper-variant="3"] {
+  --sliced-note-sprite: var(--sliced-note-dark-3);
+}
+
+.board-wood .task-card::after {
+  display: none;
+}
+
+.board-wood .task-card:hover,
+.board-wood .task-card.selected {
+  filter: drop-shadow(0 14px 12px rgba(28, 16, 6, 0.34)) saturate(1.04);
+}
+
+.board-wood .task-card.dragging {
+  filter: drop-shadow(0 25px 20px rgba(20, 12, 5, 0.4)) saturate(1.08);
+}
+
+.board-wood .completed-toggle {
+  background: var(--sliced-completed-light) center / 100% 100% no-repeat;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  filter: drop-shadow(0 8px 7px rgba(28, 16, 6, 0.24));
+}
+
+.tone-dark.board-wood .completed-toggle {
+  background: var(--sliced-completed-dark) center / 100% 100% no-repeat;
+}
+
+.board-column .task-actions {
+  opacity: 0;
+  transition: opacity 140ms var(--ease-out);
+}
+
+.board-column .task-card:hover .task-actions,
+.board-column .task-card:focus-within .task-actions,
+.board-column .task-card.selected .task-actions {
+  opacity: 1;
+}
+
+.board-wood .plate-group::before {
+  background-image: var(--sliced-pin-light);
+}
+
+.tone-dark.board-wood .plate-group::before {
+  background-image: var(--sliced-pin-dark);
+}
+
+@media (max-width: 900px) {
+  .workspace-tools {
+    width: auto;
+    min-width: 244px;
+    max-width: calc(100vw - 28px);
+  }
+
+  .board-pad .board-column,
+  .board-wood .board-column {
+    filter: drop-shadow(0 14px 12px rgba(42, 24, 11, 0.24));
+  }
+}
