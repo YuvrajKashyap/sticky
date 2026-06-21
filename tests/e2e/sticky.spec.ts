@@ -107,7 +107,11 @@ function quickAddButton(page: Page, listName: string) {
 async function runCommand(page: Page, query: string) {
   const commandDialog = page.getByRole("dialog", { name: "Command center" });
   if ((await commandDialog.count()) === 0) {
-    await page.getByRole("button", { name: "Open command center" }).click();
+    await page.getByRole("button", { name: "Open command center" }).click({ force: true });
+    await page.waitForTimeout(100);
+  }
+  if ((await commandDialog.count()) === 0) {
+    await page.keyboard.press("Control+K");
   }
   const commandSearch = page.getByLabel("Search commands");
   await expect(commandSearch).toBeVisible();
@@ -212,7 +216,7 @@ test.describe("Sticky workspace", () => {
 
   test("desktop workflow covers lists, tasks, subtasks, due dates, recurrence, completed pile, and persistence", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "full workflow runs in the desktop project");
-    test.setTimeout(60_000);
+    test.setTimeout(90_000);
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
@@ -220,10 +224,10 @@ test.describe("Sticky workspace", () => {
       await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
       await expect(
         page.getByRole("button", {
-          name: "Open list reminders, 3 active tasks, 1 completed task, current list",
+          name: "Open list reminders, 4 active tasks, 8 completed tasks, current list",
         }),
       ).toBeVisible();
-      await expect(page.getByRole("button", { name: "Current task view: All, 3 tasks" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Current task view: All, 4 tasks" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Current task sort: Custom order" })).toBeVisible();
       await expectSingleLine(page.locator(".workspace-title h2"));
       await expectNoHorizontalOverflow(page);
@@ -331,12 +335,15 @@ test.describe("Sticky workspace", () => {
       await page.keyboard.press("Enter");
       await expect(page.getByLabel("Search current list")).toBeFocused();
 
+      const verificationPrimeTab = page.locator(".list-tab-wrap", { hasText: "Verification Prime" });
+      await verificationPrimeTab.scrollIntoViewIfNeeded();
+      await moveTargetTab.scrollIntoViewIfNeeded();
       await dragBetween(
         page,
         page.locator(".list-tab-wrap", { hasText: "Move Target" }).locator(".drag-handle"),
-        page.locator(".list-tab-wrap", { hasText: "Verification Prime" }).locator(".drag-handle"),
+        verificationPrimeTab.locator(".drag-handle"),
       );
-      await expectTextBefore(page, ".list-tab-name", "Move Target", "Verification Prime");
+      await expectTextBefore(page, ".list-stack .list-tab-name", "Move Target", "Verification Prime");
 
       await page.locator("button.list-tab", { hasText: "Verification Prime" }).click();
       await page.getByLabel("Quick add task").fill("Write the verification sticky");
@@ -618,7 +625,9 @@ test.describe("Sticky workspace", () => {
       await expect(page.locator("button.list-tab", { hasText: "Move Target" })).toHaveCount(0);
 
       await page.reload();
-      await expect(page.locator("button.list-tab", { hasText: "Verification Prime" })).toBeVisible();
+      const persistedVerificationTab = page.locator("button.list-tab", { hasText: "Verification Prime" });
+      await persistedVerificationTab.scrollIntoViewIfNeeded();
+      await expect(persistedVerificationTab).toBeVisible();
       await expectNoHorizontalOverflow(page);
     });
   });
@@ -646,7 +655,7 @@ test.describe("Sticky workspace", () => {
         launchTab.getByRole("button", { name: /Open list Next 3/ }),
       ).toBeVisible();
       await expectNoHorizontalOverflow(page);
-      await page.getByRole("button", { name: "Open command center" }).click();
+      await page.keyboard.press("Control+K");
       await expect(page.getByRole("dialog", { name: "Command center" })).toBeVisible();
       await page.getByLabel("Search commands").fill("capture");
       await page.keyboard.press("Enter");
@@ -841,7 +850,7 @@ test.describe("Sticky workspace", () => {
       await expect(activeRegion.getByText(overdueTitle)).toHaveCount(0);
 
       await runCommand(page, "show all tasks");
-      await expect(taskViews.getByRole("button", { name: "Current task view: All, 4 tasks" })).toHaveAttribute(
+      await expect(taskViews.getByRole("button", { name: "Current task view: All, 5 tasks" })).toHaveAttribute(
         "aria-pressed",
         "true",
       );

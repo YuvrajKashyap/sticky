@@ -1,9 +1,42 @@
 import { localDateKey } from "@/lib/sticky/recurrence";
-import type { StickyWorkspaceData } from "@/types/sticky";
+import type { StickyColor, StickyTask, StickyWorkspaceData } from "@/types/sticky";
 
 function iso(now: Date, minutesAgo = 0) {
   return new Date(now.getTime() - minutesAgo * 60_000).toISOString();
 }
+
+const MOCKUP_RAIL_LISTS: Array<{ name: string; slug: string; color: StickyColor; active: number }> = [
+  { name: "Career", slug: "career", color: "sky", active: 11 },
+  { name: "Portfolio", slug: "portfolio", color: "sun", active: 8 },
+  { name: "Finance", slug: "finance", color: "mint", active: 2 },
+  { name: "Communities + Net...", slug: "communities-net", color: "sky", active: 9 },
+  { name: "Internship List", slug: "internship-list", color: "violet", active: 6 },
+  { name: "HW Assignments", slug: "hw-assignments", color: "coral", active: 7 },
+  { name: "Tests + Quizzes", slug: "tests-quizzes", color: "sun", active: 5 },
+  { name: "Projects", slug: "projects", color: "sky", active: 4 },
+  { name: "CS", slug: "cs", color: "mint", active: 14 },
+  { name: "Business", slug: "business", color: "mint", active: 7 },
+  { name: "PA Tasks", slug: "pa-tasks", color: "violet", active: 6 },
+  { name: "Skills", slug: "skills", color: "coral", active: 7 },
+  { name: "Physical Ability", slug: "physical-ability", color: "mint", active: 8 },
+  { name: "Aesthetics", slug: "aesthetics", color: "ink", active: 4 },
+  { name: "Diet", slug: "diet", color: "ink", active: 5 },
+  { name: "Content Creation", slug: "content-creation", color: "ink", active: 14 },
+  { name: "Misc.", slug: "misc", color: "ink", active: 10 },
+  { name: "Books", slug: "books", color: "ink", active: 94 },
+  { name: "Watch", slug: "watch", color: "ink", active: 80 },
+  { name: "Movies/Shows", slug: "movies-shows", color: "ink", active: 10 },
+  { name: "Chores", slug: "chores", color: "ink", active: 15 },
+];
+
+const MOCKUP_NEXT_TASKS = [
+  "https://x.com/1752vc/status/2065476978241605774?s=46",
+  "i will never lose sleep again after learning this - alex hormozi",
+  "https://www.acquisition.com/hubs/ACQ%20Workshop%20Assets/How%20to%20get%2...",
+  "https://www.acquisition.com/hubs/5-Scaling+Frameworks+by-Acquisition.com).pdf?...",
+  "thinking/pondering/brainstorming session",
+  "https://youtu.be/57IDpTwilWg?si=Ns2FynrFcLGKKPf_",
+];
 
 export function createDemoWorkspaceData(): StickyWorkspaceData {
   const now = new Date();
@@ -18,6 +51,47 @@ export function createDemoWorkspaceData(): StickyWorkspaceData {
   const polishTaskId = "demo-task-polish";
   const recurringTaskId = "demo-task-recurring";
   const completedTaskId = "demo-task-completed";
+  const makeTask = ({
+    id,
+    listId,
+    title,
+    details = "",
+    color = "sun",
+    dueDate = null,
+    dueTime = null,
+    isCompleted = false,
+    sortOrder,
+    completedSortOrder = null,
+    minutesAgo = 40,
+  }: {
+    id: string;
+    listId: string;
+    title: string;
+    details?: string;
+    color?: StickyColor;
+    dueDate?: string | null;
+    dueTime?: string | null;
+    isCompleted?: boolean;
+    sortOrder: number;
+    completedSortOrder?: number | null;
+    minutesAgo?: number;
+  }): StickyTask => ({
+    id,
+    userId,
+    listId,
+    title,
+    details,
+    color,
+    dueDate,
+    dueTime,
+    timezone: "America/Chicago",
+    isCompleted,
+    completedAt: isCompleted ? iso(now, minutesAgo) : null,
+    sortOrder,
+    completedSortOrder: isCompleted ? completedSortOrder ?? sortOrder : null,
+    createdAt: iso(now, minutesAgo + 90),
+    updatedAt: iso(now, minutesAgo),
+  });
 
   return {
     user: {
@@ -72,6 +146,15 @@ export function createDemoWorkspaceData(): StickyWorkspaceData {
         createdAt: iso(now, 310),
         updatedAt: iso(now, 22),
       },
+      ...MOCKUP_RAIL_LISTS.map((list, index) => ({
+        id: `demo-list-${list.slug}`,
+        userId,
+        name: list.name,
+        color: list.color,
+        sortOrder: 6000 + index * 1000,
+        createdAt: iso(now, 300 - index),
+        updatedAt: iso(now, 20),
+      })),
     ],
     tasks: [
       {
@@ -298,6 +381,135 @@ export function createDemoWorkspaceData(): StickyWorkspaceData {
         createdAt: iso(now, 48 - index),
         updatedAt: iso(now, 7),
       })),
+      makeTask({
+        id: "demo-task-reminders-polyd",
+        listId: todayId,
+        title: "https://x.com/polydao/status/2062774920770473990?s=46",
+        color: "mint",
+        sortOrder: 5000,
+        minutesAgo: 49,
+      }),
+      ...Array.from({ length: 7 }, (_, index) =>
+        makeTask({
+          id: `demo-task-reminders-completed-${index + 1}`,
+          listId: todayId,
+          title: `completed reminder ${index + 1}`,
+          color: "sun",
+          isCompleted: true,
+          sortOrder: 6000 + index * 1000,
+          completedSortOrder: 2000 + index * 1000,
+          minutesAgo: 35 - index,
+        }),
+      ),
+      ...MOCKUP_NEXT_TASKS.map((title, index) =>
+        makeTask({
+          id: `demo-task-next-mockup-${index + 1}`,
+          listId: launchId,
+          title,
+          color: (["sky", "sky", "sky", "sky", "sky", "sky"] as const)[index],
+          sortOrder: (index + 5) * 1000,
+          minutesAgo: 42 - index,
+        }),
+      ),
+      ...Array.from({ length: 33 }, (_, index) =>
+        makeTask({
+          id: `demo-task-next-backlog-${index + 1}`,
+          listId: launchId,
+          title: `saved lead ${index + 1}`,
+          color: "sky",
+          sortOrder: (index + 11) * 1000,
+          minutesAgo: 34 - (index % 20),
+        }),
+      ),
+      ...Array.from({ length: 14 }, (_, index) =>
+        makeTask({
+          id: `demo-task-bring-completed-${index + 1}`,
+          listId: homeId,
+          title: `completed bring ${index + 1}`,
+          color: "mint",
+          isCompleted: true,
+          sortOrder: 5000 + index * 1000,
+          completedSortOrder: (index + 1) * 1000,
+          minutesAgo: 28 - (index % 10),
+        }),
+      ),
+      ...[
+        "https://x.com/sukh_saroy/status/2058855918922776962?s=46",
+        "https://x.com/elonmusk/status/2059080740881502364?s=46",
+      ].map((title, index) =>
+        makeTask({
+          id: `demo-task-worklist-extra-${index + 1}`,
+          listId: worklistId,
+          title,
+          color: (["coral", "coral"] as const)[index],
+          sortOrder: (index + 8) * 1000,
+          minutesAgo: 23 - index,
+        }),
+      ),
+      ...Array.from({ length: 141 }, (_, index) =>
+        makeTask({
+          id: `demo-task-worklist-backlog-${index + 1}`,
+          listId: worklistId,
+          title: `worklist archive ${index + 1}`,
+          color: "coral",
+          sortOrder: (index + 10) * 1000,
+          minutesAgo: 22 - (index % 20),
+        }),
+      ),
+      ...Array.from({ length: 7 }, (_, index) =>
+        makeTask({
+          id: `demo-task-worklist-completed-${index + 1}`,
+          listId: worklistId,
+          title: `completed work item ${index + 1}`,
+          color: "coral",
+          isCompleted: true,
+          sortOrder: 9000 + index * 1000,
+          completedSortOrder: (index + 1) * 1000,
+          minutesAgo: 25 - index,
+        }),
+      ),
+      ...[
+        "Skills / Content",
+        "$$$ / Scholarship",
+        "$$$ / Budget",
+        "OS / Fitness",
+        "UTD / Exams",
+        "Career / Resume",
+        "Career / Network",
+      ].map((title, index) =>
+        makeTask({
+          id: `demo-task-plate-extra-${index + 1}`,
+          listId: plateId,
+          title,
+          color: (["mint", "violet", "violet", "coral", "violet", "sky", "sky"] as const)[index],
+          sortOrder: (index + 12) * 1000,
+          minutesAgo: 18 - index,
+        }),
+      ),
+      ...Array.from({ length: 5 }, (_, index) =>
+        makeTask({
+          id: `demo-task-plate-completed-${index + 1}`,
+          listId: plateId,
+          title: `completed plate ${index + 1}`,
+          color: "violet",
+          isCompleted: true,
+          sortOrder: 22000 + index * 1000,
+          completedSortOrder: (index + 1) * 1000,
+          minutesAgo: 20 - index,
+        }),
+      ),
+      ...MOCKUP_RAIL_LISTS.flatMap((list, listIndex) =>
+        Array.from({ length: list.active }, (_, taskIndex) =>
+          makeTask({
+            id: `demo-task-${list.slug}-${taskIndex + 1}`,
+            listId: `demo-list-${list.slug}`,
+            title: `${list.name} ${taskIndex + 1}`,
+            color: list.color,
+            sortOrder: (taskIndex + 1) * 1000,
+            minutesAgo: 20 - (taskIndex % 10) - listIndex,
+          }),
+        ),
+      ),
     ],
     subtasks: [
       {

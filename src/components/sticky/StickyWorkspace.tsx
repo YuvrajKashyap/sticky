@@ -154,6 +154,12 @@ type BoardColumn = {
   completedOpen: boolean;
 };
 
+type PlateTaskGroup = {
+  name: string;
+  color: StickyColor;
+  tasks: StickyTask[];
+};
+
 type QuickCaptureIntent = {
   title: string;
   dueDate: string | null;
@@ -188,6 +194,15 @@ const TASK_VIEW_ORDER: StickyTaskViewFilter[] = ["all", "today", "due", "overdue
 const TASK_SORT_LABELS: Record<StickyTaskSortMode, string> = {
   custom: "Custom",
   due: "Due date",
+};
+
+const DEFAULT_PLATE_GROUP_ORDER = ["UTD", "Career", "Skills", "$$$", "OS"];
+const PLATE_VISIBLE_LIMITS: Record<string, number> = {
+  UTD: 3,
+  Career: 3,
+  Skills: 4,
+  "$$$": 0,
+  OS: 3,
 };
 const TASK_SORT_ACCESSIBLE_LABELS: Record<StickyTaskSortMode, string> = {
   custom: "Custom order",
@@ -282,6 +297,41 @@ function humanDue(task: StickyTask) {
 
   const date = new Date(`${task.dueDate}T${task.dueTime ?? "00:00"}`);
   return `${format(date, "MMM d")}${task.dueTime ? ` at ${task.dueTime}` : ""}`;
+}
+
+function getPlateTaskGroups(tasks: StickyTask[]): PlateTaskGroup[] {
+  const groups = new Map<string, PlateTaskGroup>();
+
+  for (const task of tasks) {
+    const [rawGroup, ...rawTitleParts] = task.title.split("/");
+    const groupName = rawTitleParts.length ? rawGroup.trim() : "Tasks";
+    const displayTitle = rawTitleParts.length ? rawTitleParts.join("/").trim() : task.title;
+    const normalizedGroup = groupName || "Tasks";
+    const taskForDisplay = displayTitle && displayTitle !== task.title ? { ...task, title: displayTitle } : task;
+    const existing = groups.get(normalizedGroup);
+
+    if (existing) {
+      existing.tasks.push(taskForDisplay);
+      continue;
+    }
+
+    groups.set(normalizedGroup, {
+      name: normalizedGroup,
+      color: task.color,
+      tasks: [taskForDisplay],
+    });
+  }
+
+  return Array.from(groups.values()).sort((a, b) => {
+    const orderA = DEFAULT_PLATE_GROUP_ORDER.indexOf(a.name);
+    const orderB = DEFAULT_PLATE_GROUP_ORDER.indexOf(b.name);
+
+    if (orderA !== -1 || orderB !== -1) {
+      return (orderA === -1 ? Number.MAX_SAFE_INTEGER : orderA) - (orderB === -1 ? Number.MAX_SAFE_INTEGER : orderB);
+    }
+
+    return a.name.localeCompare(b.name);
+  });
 }
 
 function humanDate(date: string) {
@@ -1150,7 +1200,14 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       return filteredTasks;
     }
 
-    return sortedLists.map((list) => {
+    const boardLists = sortedLists.slice(0, 5);
+    const selectedBoardList = sortedLists.find((list) => list.id === activeListId);
+
+    if (selectedBoardList && !boardLists.some((list) => list.id === selectedBoardList.id)) {
+      boardLists[Math.max(0, boardLists.length - 1)] = selectedBoardList;
+    }
+
+    return boardLists.map((list) => {
       const listActiveTasks = workspace.tasks
         .filter((task) => task.listId === list.id && !task.isCompleted)
         .sort(bySortOrder);
@@ -1171,6 +1228,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       };
     });
   }, [
+    activeListId,
     recurrenceByTask,
     searchQuery,
     sortedLists,
@@ -3128,6 +3186,11 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
             </nav>
           </SortableContext>
 
+          <button className="rail-add-list-button" type="button" onClick={() => openListEditor("new")} aria-label="Add list">
+            <Plus size={20} />
+            Add list
+          </button>
+
           <div className="rail-footer">
             <div>
               <p>{workspace.user.displayName || workspace.user.email}</p>
@@ -3200,11 +3263,52 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                   aria-label="Search current list"
                 />
               </label>
-              <details className="appearance-menu">
-                <summary className="appearance-trigger" aria-label="Open appearance settings">
-                  <Monitor size={16} />
-                  Appearance
-                  <ChevronDown size={14} aria-hidden="true" />
+              <button
+                ref={commandTriggerRef}
+                className="command-trigger command-trigger-hidden"
+                type="button"
+                onClick={() => setCommandOpen(true)}
+                aria-label="Open command center"
+                aria-haspopup="dialog"
+                aria-expanded={commandOpen}
+                aria-controls="sticky-command-dialog"
+              >
+                <CommandIcon size={16} />
+                Command
+              </button>
+              <button
+                className="tool-button"
+                type="button"
+                aria-label="Open calendar view"
+                onClick={() =>
+                  pushToast({
+                    title: "Calendar view is coming later",
+                    body: "Due dates still show on each task.",
+                  })
+                }
+              >
+                <CalendarDays size={17} />
+              </button>
+              <button
+                className="tool-button"
+                type="button"
+                aria-label="Open notifications"
+                onClick={() =>
+                  pushToast({
+                    title: "Notifications are quiet",
+                    body: saveState.error ?? currentSaveStatus.label,
+                  })
+                }
+              >
+                <Bell size={17} />
+              </button>
+              <details className="appearance-menu profile-appearance-menu">
+                <summary
+                  className="appearance-trigger profile-chip profile-appearance-trigger"
+                  aria-label="Open appearance settings"
+                >
+                  <span>{(workspace.user.displayName || workspace.user.email || "AR").slice(0, 2).toUpperCase()}</span>
+                  <i aria-hidden="true" />
                 </summary>
                 <div className="preference-controls" aria-label="Workspace appearance">
                   <div className="appearance-group">
@@ -3278,49 +3382,6 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                   </div>
                 </div>
               </details>
-              <button
-                ref={commandTriggerRef}
-                className="command-trigger"
-                type="button"
-                onClick={() => setCommandOpen(true)}
-                aria-label="Open command center"
-                aria-haspopup="dialog"
-                aria-expanded={commandOpen}
-                aria-controls="sticky-command-dialog"
-              >
-                <CommandIcon size={16} />
-                Command
-              </button>
-              <button
-                className="tool-button"
-                type="button"
-                aria-label="Open calendar view"
-                onClick={() =>
-                  pushToast({
-                    title: "Calendar view is coming later",
-                    body: "Due dates still show on each task.",
-                  })
-                }
-              >
-                <CalendarDays size={17} />
-              </button>
-              <button
-                className="tool-button"
-                type="button"
-                aria-label="Open notifications"
-                onClick={() =>
-                  pushToast({
-                    title: "Notifications are quiet",
-                    body: saveState.error ?? currentSaveStatus.label,
-                  })
-                }
-              >
-                <Bell size={17} />
-              </button>
-              <div className="profile-chip" aria-label={`Signed in as ${workspace.user.displayName || workspace.user.email}`}>
-                <span>{(workspace.user.displayName || workspace.user.email || "AR").slice(0, 2).toUpperCase()}</span>
-                <i aria-hidden="true" />
-              </div>
             </div>
           </header>
 
@@ -3575,6 +3636,8 @@ function StickyBoardColumn({
 }) {
   const { list, activeTasks, visibleTasks, completedTasks, completedOpen } = column;
   const completedListId = active ? "completed-stickies-list" : `completed-tasks-${list.id}`;
+  const plateGroups = list.name.toLowerCase() === "plate" ? getPlateTaskGroups(visibleTasks) : [];
+  const shouldShowPlateGroups = plateGroups.length > 0 && !searchQuery && !taskViewFiltered;
   const emptyTitle = searchQuery
     ? "No matching tasks"
     : taskViewFiltered
@@ -3670,7 +3733,14 @@ function StickyBoardColumn({
       )}
 
       <div className="task-lane">
-        {visibleTasks.length ? (
+        {shouldShowPlateGroups ? (
+          <PlateTaskGroups
+            groups={plateGroups}
+            selectedTaskId={selectedTaskId}
+            onOpenTask={onOpenTask}
+            onCompleteTask={onCompleteTask}
+          />
+        ) : visibleTasks.length ? (
           <SortableContext
             items={visibleTasks.map((task) => task.id)}
             strategy={verticalListSortingStrategy}
@@ -3753,6 +3823,64 @@ function StickyBoardColumn({
         </AnimatePresence>
       </section>
     </section>
+  );
+}
+
+function PlateTaskGroups({
+  groups,
+  selectedTaskId,
+  onOpenTask,
+  onCompleteTask,
+}: {
+  groups: PlateTaskGroup[];
+  selectedTaskId: string | null;
+  onOpenTask: (task: StickyTask) => void;
+  onCompleteTask: (task: StickyTask) => void;
+}) {
+  return (
+    <div className="plate-groups" role="list">
+      {groups.map((group) => {
+        const visibleLimit = PLATE_VISIBLE_LIMITS[group.name] ?? group.tasks.length;
+        const visibleTasks = group.tasks.slice(0, visibleLimit);
+        const collapsed = visibleLimit === 0;
+
+        return (
+          <section
+            key={group.name}
+            className={`plate-group color-${group.color}${collapsed ? " collapsed" : ""}`}
+            role="listitem"
+          >
+            <header className="plate-group-title">
+              {collapsed ? <ChevronRight size={17} aria-hidden="true" /> : <ChevronDown size={17} aria-hidden="true" />}
+              <span>{group.name}</span>
+            </header>
+            {visibleTasks.length ? (
+              <div className="plate-group-tasks">
+                {visibleTasks.map((task) => (
+                  <article
+                    key={task.id}
+                    className={`plate-task-row color-${task.color}${task.id === selectedTaskId ? " selected" : ""}`}
+                    data-task-id={task.id}
+                  >
+                    <button
+                      className="task-check"
+                      type="button"
+                      onClick={() => onCompleteTask(task)}
+                      aria-label={`Complete ${task.title}`}
+                    >
+                      <Check size={18} />
+                    </button>
+                    <button className="plate-task-title" type="button" onClick={() => onOpenTask(task)}>
+                      {task.title}
+                    </button>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+          </section>
+        );
+      })}
+    </div>
   );
 }
 
@@ -3893,6 +4021,12 @@ function SortableTaskCard({
       style={style}
       data-task-id={task.id}
       className={`task-card color-${task.color}${active ? " selected" : ""}${sortable.isDragging ? " dragging" : ""}`}
+      onClick={(event) => {
+        if ((event.target as HTMLElement).closest("button")) {
+          return;
+        }
+        onOpen();
+      }}
     >
       <button
         className="task-check"

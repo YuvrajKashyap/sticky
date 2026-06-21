@@ -286,6 +286,44 @@ def fold(path: str, dark: bool = False) -> None:
     img.save(OUT / path, optimize=True)
 
 
+def mockup_texture(source_name: str, box: tuple[int, int, int, int], output: str, size: tuple[int, int]) -> None:
+    source = ROOT / "assets" / "mockups" / source_name
+    if not source.exists():
+        return
+
+    img = Image.open(source).convert("RGB")
+    crop = img.crop(box).resize(size, Image.Resampling.LANCZOS)
+    crop = crop.filter(ImageFilter.UnsharpMask(radius=0.8, percent=70, threshold=4))
+    save_material(crop.convert("RGBA"), output, quality=84)
+
+
+def mockup_materials() -> None:
+    mockup_texture(
+        "board_light_mockup.png",
+        (840, 430, 1070, 900),
+        "mockup-wood-panel-light.webp",
+        (420, 720),
+    )
+    mockup_texture(
+        "board_dark_mockup.png",
+        (840, 430, 1070, 900),
+        "mockup-wood-panel-dark.webp",
+        (420, 720),
+    )
+    mockup_texture(
+        "pad_light_mockup.png",
+        (860, 360, 1040, 650),
+        "mockup-canvas-light.webp",
+        (480, 640),
+    )
+    mockup_texture(
+        "pad_dark_mockup.png",
+        (860, 360, 1040, 650),
+        "mockup-canvas-dark.webp",
+        (480, 640),
+    )
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     for existing in OUT.iterdir():
@@ -323,6 +361,7 @@ def main() -> None:
         note(f"note-{key}-dark.webp", key, dark=True)
     for key in PIN_COLORS:
         pin(f"pin-{key}.png", key)
+    mockup_materials()
 
 
 if __name__ == "__main__":
