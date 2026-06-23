@@ -11,6 +11,7 @@
     "test:e2e": "playwright test",
     "test:production-smoke": "node scripts/production-smoke.mjs",
     "visual:mockups": "node scripts/verify-mockup-sliced-visuals.mjs",
+    "materials:premium": "python scripts/generate-premium-materials.py",
     "security:check": "node scripts/security-check.mjs",
     "schema:check": "node scripts/schema-check.mjs",
     "audit:moderate": "npm audit --audit-level=moderate",

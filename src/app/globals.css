@@ -6742,3 +6742,873 @@ a {
     filter: drop-shadow(0 14px 12px rgba(42, 24, 11, 0.24));
   }
 }
+
+/* ==========================================================================
+   PREMIUM MATERIAL SYSTEM
+   --------------------------------------------------------------------------
+   Final production skin backed by generated component sprites in
+   /public/sticky-materials/premium. This supersedes the screenshot-sliced
+   pass above while keeping all app behavior and data flow intact.
+   ========================================================================= */
+
+:root {
+  --premium-canvas-light: url("/sticky-materials/premium/canvas-light.webp");
+  --premium-canvas-dark: url("/sticky-materials/premium/canvas-dark.webp");
+  --premium-rail-light: url("/sticky-materials/premium/rail-light.png");
+  --premium-rail-dark: url("/sticky-materials/premium/rail-dark.png");
+  --premium-topbar-light: url("/sticky-materials/premium/topbar-light.png");
+  --premium-topbar-dark: url("/sticky-materials/premium/topbar-dark.png");
+  --premium-wood-light: url("/sticky-materials/premium/wood-panel-light.webp");
+  --premium-wood-dark: url("/sticky-materials/premium/wood-panel-dark.webp");
+  --premium-paperclip-light: url("/sticky-materials/premium/paperclip-light.png");
+  --premium-paperclip-dark: url("/sticky-materials/premium/paperclip-light.png");
+  --premium-tape-light-1: url("/sticky-materials/premium/tape-light-1.png");
+  --premium-tape-light-2: url("/sticky-materials/premium/tape-light-2.png");
+  --premium-tape-light-3: url("/sticky-materials/premium/tape-light-3.png");
+  --premium-tape-light-4: url("/sticky-materials/premium/tape-light-4.png");
+  --premium-tape-dark-1: url("/sticky-materials/premium/tape-dark-1.png");
+  --premium-tape-dark-2: url("/sticky-materials/premium/tape-dark-2.png");
+  --premium-tape-dark-3: url("/sticky-materials/premium/tape-dark-3.png");
+  --premium-tape-dark-4: url("/sticky-materials/premium/tape-dark-4.png");
+}
+
+.color-sun {
+  --premium-pad-light: url("/sticky-materials/premium/pad-column-sun-light.png");
+  --premium-pad-dark: url("/sticky-materials/premium/pad-column-sun-dark.png");
+  --premium-header-light: url("/sticky-materials/premium/pad-header-sun-light.png");
+  --premium-header-dark: url("/sticky-materials/premium/pad-header-sun-dark.png");
+  --premium-fold-light: url("/sticky-materials/premium/fold-sun-light.png");
+  --premium-fold-dark: url("/sticky-materials/premium/fold-sun-dark.png");
+  --premium-quick-light: url("/sticky-materials/premium/quick-sun-light.png");
+  --premium-quick-dark: url("/sticky-materials/premium/quick-sun-dark.png");
+  --premium-note-light-1: url("/sticky-materials/premium/note-sun-light-1.png");
+  --premium-note-light-2: url("/sticky-materials/premium/note-sun-light-2.png");
+  --premium-note-light-3: url("/sticky-materials/premium/note-sun-light-3.png");
+  --premium-note-dark-1: url("/sticky-materials/premium/note-sun-dark-1.png");
+  --premium-note-dark-2: url("/sticky-materials/premium/note-sun-dark-2.png");
+  --premium-note-dark-3: url("/sticky-materials/premium/note-sun-dark-3.png");
+  --premium-pin-light: url("/sticky-materials/premium/pin-sun-light.png");
+  --premium-pin-dark: url("/sticky-materials/premium/pin-sun-dark.png");
+}
+
+.color-sky {
+  --premium-pad-light: url("/sticky-materials/premium/pad-column-sky-light.png");
+  --premium-pad-dark: url("/sticky-materials/premium/pad-column-sky-dark.png");
+  --premium-header-light: url("/sticky-materials/premium/pad-header-sky-light.png");
+  --premium-header-dark: url("/sticky-materials/premium/pad-header-sky-dark.png");
+  --premium-fold-light: url("/sticky-materials/premium/fold-sky-light.png");
+  --premium-fold-dark: url("/sticky-materials/premium/fold-sky-dark.png");
+  --premium-quick-light: url("/sticky-materials/premium/quick-sky-light.png");
+  --premium-quick-dark: url("/sticky-materials/premium/quick-sky-dark.png");
+  --premium-note-light-1: url("/sticky-materials/premium/note-sky-light-1.png");
+  --premium-note-light-2: url("/sticky-materials/premium/note-sky-light-2.png");
+  --premium-note-light-3: url("/sticky-materials/premium/note-sky-light-3.png");
+  --premium-note-dark-1: url("/sticky-materials/premium/note-sky-dark-1.png");
+  --premium-note-dark-2: url("/sticky-materials/premium/note-sky-dark-2.png");
+  --premium-note-dark-3: url("/sticky-materials/premium/note-sky-dark-3.png");
+  --premium-pin-light: url("/sticky-materials/premium/pin-sky-light.png");
+  --premium-pin-dark: url("/sticky-materials/premium/pin-sky-dark.png");
+}
+
+.color-mint {
+  --premium-pad-light: url("/sticky-materials/premium/pad-column-mint-light.png");
+  --premium-pad-dark: url("/sticky-materials/premium/pad-column-mint-dark.png");
+  --premium-header-light: url("/sticky-materials/premium/pad-header-mint-light.png");
+  --premium-header-dark: url("/sticky-materials/premium/pad-header-mint-dark.png");
+  --premium-fold-light: url("/sticky-materials/premium/fold-mint-light.png");
+  --premium-fold-dark: url("/sticky-materials/premium/fold-mint-dark.png");
+  --premium-quick-light: url("/sticky-materials/premium/quick-mint-light.png");
+  --premium-quick-dark: url("/sticky-materials/premium/quick-mint-dark.png");
+  --premium-note-light-1: url("/sticky-materials/premium/note-mint-light-1.png");
+  --premium-note-light-2: url("/sticky-materials/premium/note-mint-light-2.png");
+  --premium-note-light-3: url("/sticky-materials/premium/note-mint-light-3.png");
+  --premium-note-dark-1: url("/sticky-materials/premium/note-mint-dark-1.png");
+  --premium-note-dark-2: url("/sticky-materials/premium/note-mint-dark-2.png");
+  --premium-note-dark-3: url("/sticky-materials/premium/note-mint-dark-3.png");
+  --premium-pin-light: url("/sticky-materials/premium/pin-mint-light.png");
+  --premium-pin-dark: url("/sticky-materials/premium/pin-mint-dark.png");
+}
+
+.color-coral {
+  --premium-pad-light: url("/sticky-materials/premium/pad-column-coral-light.png");
+  --premium-pad-dark: url("/sticky-materials/premium/pad-column-coral-dark.png");
+  --premium-header-light: url("/sticky-materials/premium/pad-header-coral-light.png");
+  --premium-header-dark: url("/sticky-materials/premium/pad-header-coral-dark.png");
+  --premium-fold-light: url("/sticky-materials/premium/fold-coral-light.png");
+  --premium-fold-dark: url("/sticky-materials/premium/fold-coral-dark.png");
+  --premium-quick-light: url("/sticky-materials/premium/quick-coral-light.png");
+  --premium-quick-dark: url("/sticky-materials/premium/quick-coral-dark.png");
+  --premium-note-light-1: url("/sticky-materials/premium/note-coral-light-1.png");
+  --premium-note-light-2: url("/sticky-materials/premium/note-coral-light-2.png");
+  --premium-note-light-3: url("/sticky-materials/premium/note-coral-light-3.png");
+  --premium-note-dark-1: url("/sticky-materials/premium/note-coral-dark-1.png");
+  --premium-note-dark-2: url("/sticky-materials/premium/note-coral-dark-2.png");
+  --premium-note-dark-3: url("/sticky-materials/premium/note-coral-dark-3.png");
+  --premium-pin-light: url("/sticky-materials/premium/pin-coral-light.png");
+  --premium-pin-dark: url("/sticky-materials/premium/pin-coral-dark.png");
+}
+
+.color-violet {
+  --premium-pad-light: url("/sticky-materials/premium/pad-column-violet-light.png");
+  --premium-pad-dark: url("/sticky-materials/premium/pad-column-violet-dark.png");
+  --premium-header-light: url("/sticky-materials/premium/pad-header-violet-light.png");
+  --premium-header-dark: url("/sticky-materials/premium/pad-header-violet-dark.png");
+  --premium-fold-light: url("/sticky-materials/premium/fold-violet-light.png");
+  --premium-fold-dark: url("/sticky-materials/premium/fold-violet-dark.png");
+  --premium-quick-light: url("/sticky-materials/premium/quick-violet-light.png");
+  --premium-quick-dark: url("/sticky-materials/premium/quick-violet-dark.png");
+  --premium-note-light-1: url("/sticky-materials/premium/note-violet-light-1.png");
+  --premium-note-light-2: url("/sticky-materials/premium/note-violet-light-2.png");
+  --premium-note-light-3: url("/sticky-materials/premium/note-violet-light-3.png");
+  --premium-note-dark-1: url("/sticky-materials/premium/note-violet-dark-1.png");
+  --premium-note-dark-2: url("/sticky-materials/premium/note-violet-dark-2.png");
+  --premium-note-dark-3: url("/sticky-materials/premium/note-violet-dark-3.png");
+  --premium-pin-light: url("/sticky-materials/premium/pin-violet-light.png");
+  --premium-pin-dark: url("/sticky-materials/premium/pin-violet-dark.png");
+}
+
+.color-ink {
+  --premium-pad-light: url("/sticky-materials/premium/pad-column-ink-light.png");
+  --premium-pad-dark: url("/sticky-materials/premium/pad-column-ink-dark.png");
+  --premium-header-light: url("/sticky-materials/premium/pad-header-ink-light.png");
+  --premium-header-dark: url("/sticky-materials/premium/pad-header-ink-dark.png");
+  --premium-fold-light: url("/sticky-materials/premium/fold-ink-light.png");
+  --premium-fold-dark: url("/sticky-materials/premium/fold-ink-dark.png");
+  --premium-quick-light: url("/sticky-materials/premium/quick-ink-light.png");
+  --premium-quick-dark: url("/sticky-materials/premium/quick-ink-dark.png");
+  --premium-note-light-1: url("/sticky-materials/premium/note-ink-light-1.png");
+  --premium-note-light-2: url("/sticky-materials/premium/note-ink-light-2.png");
+  --premium-note-light-3: url("/sticky-materials/premium/note-ink-light-3.png");
+  --premium-note-dark-1: url("/sticky-materials/premium/note-ink-dark-1.png");
+  --premium-note-dark-2: url("/sticky-materials/premium/note-ink-dark-2.png");
+  --premium-note-dark-3: url("/sticky-materials/premium/note-ink-dark-3.png");
+  --premium-pin-light: url("/sticky-materials/premium/pin-ink-light.png");
+  --premium-pin-dark: url("/sticky-materials/premium/pin-ink-dark.png");
+}
+
+.sticky-app {
+  --premium-canvas: var(--premium-canvas-light);
+  --premium-rail: var(--premium-rail-light);
+  --premium-topbar: var(--premium-topbar-light);
+  --premium-wood: var(--premium-wood-light);
+  background-color: #fff1df;
+  background-image: var(--premium-canvas);
+  background-position: center;
+  background-size: cover;
+}
+
+.sticky-app.tone-dark {
+  --premium-canvas: var(--premium-canvas-dark);
+  --premium-rail: var(--premium-rail-dark);
+  --premium-topbar: var(--premium-topbar-dark);
+  --premium-wood: var(--premium-wood-dark);
+  background-color: #050a0e;
+}
+
+.sticky-app::before {
+  background:
+    radial-gradient(circle at 20% 8%, rgba(255, 203, 119, 0.14), transparent 28%),
+    radial-gradient(circle at 76% 92%, rgba(255, 141, 105, 0.09), transparent 34%),
+    var(--premium-canvas) center / cover no-repeat;
+  opacity: 0.76;
+  mix-blend-mode: normal;
+}
+
+.sticky-app.tone-dark::before {
+  background:
+    radial-gradient(circle at 22% 10%, rgba(69, 132, 168, 0.12), transparent 30%),
+    radial-gradient(circle at 83% 82%, rgba(119, 79, 218, 0.11), transparent 34%),
+    var(--premium-canvas) center / cover no-repeat;
+  opacity: 0.92;
+}
+
+.list-rail {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent 30%),
+    var(--premium-rail) center / 100% 100% no-repeat;
+  border: 0;
+  box-shadow: 10px 0 32px rgba(54, 32, 13, 0.08);
+}
+
+.tone-dark .list-rail {
+  box-shadow: 12px 0 34px rgba(0, 0, 0, 0.36);
+}
+
+.workspace-topbar {
+  z-index: 10;
+}
+
+.workspace-tools {
+  width: 242px;
+  min-height: 56px;
+  height: 56px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 30px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.02)),
+    var(--premium-topbar) center / 100% 100% no-repeat;
+  box-shadow: 0 18px 38px rgba(50, 30, 12, 0.12);
+  backdrop-filter: none;
+}
+
+.tone-dark .workspace-tools {
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.46);
+}
+
+.workspace-tools .tool-button,
+.workspace-tools .search-control,
+.workspace-tools .profile-chip,
+.workspace-tools .profile-appearance-trigger {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.workspace-tools .search-control input {
+  width: 1px;
+  min-width: 1px;
+  padding: 0;
+  opacity: 0.01;
+}
+
+.workspace-tools .search-control:focus-within input,
+.workspace-tools .search-control:hover input {
+  width: 118px;
+  opacity: 1;
+}
+
+.profile-appearance-trigger,
+.profile-chip {
+  background: linear-gradient(180deg, #8458ff 0%, #6232df 100%);
+  box-shadow:
+    0 8px 16px rgba(76, 37, 177, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+}
+
+.sticky-app .task-stage {
+  background: transparent;
+}
+
+.sticky-app .board-scroll {
+  align-items: flex-start;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+@media (min-width: 901px) {
+  .sticky-app {
+    grid-template-columns: 240px minmax(0, 1fr);
+    --stage-pad-x: 20px;
+    --stage-pad-top: 30px;
+    --column-gap: 6px;
+  }
+
+  .sticky-app.board-wood {
+    --stage-pad-top: 46px;
+    --column-gap: 14px;
+  }
+
+  .list-rail {
+    width: 240px;
+    padding: 18px 11px 12px;
+  }
+
+  .workspace-topbar {
+    top: 9px;
+    right: 12px;
+    left: var(--stage-pad-x);
+  }
+
+  .board-scroll {
+    gap: var(--column-gap);
+    padding: 18px var(--stage-pad-x) 46px;
+  }
+
+  .board-pad .board-column:nth-child(1) {
+    --column-width: 266px;
+    height: 467px;
+  }
+
+  .board-pad .board-column:nth-child(2) {
+    --column-width: 298px;
+    height: 845px;
+  }
+
+  .board-pad .board-column:nth-child(3) {
+    --column-width: 257px;
+    height: 302px;
+  }
+
+  .board-pad .board-column:nth-child(4) {
+    --column-width: 271px;
+    height: 840px;
+    margin-top: 7px;
+  }
+
+  .board-pad .board-column:nth-child(5) {
+    --column-width: 282px;
+    height: 844px;
+    margin-top: 10px;
+  }
+
+  .board-wood .board-column:nth-child(1) {
+    --column-width: 258px;
+  }
+
+  .board-wood .board-column:nth-child(2) {
+    --column-width: 266px;
+  }
+
+  .board-wood .board-column:nth-child(3) {
+    --column-width: 236px;
+  }
+
+  .board-wood .board-column:nth-child(4) {
+    --column-width: 266px;
+  }
+
+  .board-wood .board-column:nth-child(5) {
+    --column-width: 292px;
+  }
+
+  .board-wood .board-column {
+    height: 826px;
+    min-height: 826px;
+  }
+}
+
+.board-column {
+  animation: premium-paper-land 520ms cubic-bezier(0.2, 0.82, 0.22, 1) both;
+  animation-delay: calc(var(--paper-depth, 1) * 42ms);
+  transform-origin: top center;
+  transition:
+    translate 180ms var(--ease-out),
+    rotate 180ms var(--ease-out),
+    filter 180ms var(--ease-out);
+}
+
+.board-column:hover {
+  translate: 0 -3px;
+}
+
+.board-pad .board-column {
+  --premium-pad: var(--premium-pad-light);
+  width: var(--column-width, 272px);
+  border: 0;
+  border-radius: 0;
+  background:
+    linear-gradient(90deg, transparent 0 46px, color-mix(in srgb, var(--list-accent) 18%, transparent) 46px 47px, transparent 47px),
+    var(--premium-pad) center / 100% 100% no-repeat;
+  box-shadow: none;
+  filter:
+    drop-shadow(0 22px 18px rgba(82, 50, 20, 0.22))
+    drop-shadow(0 5px 3px rgba(82, 50, 20, 0.12));
+  overflow: visible;
+}
+
+.tone-dark.board-pad .board-column {
+  --premium-pad: var(--premium-pad-dark);
+  background:
+    linear-gradient(90deg, transparent 0 46px, color-mix(in srgb, var(--list-accent) 22%, transparent) 46px 47px, transparent 47px),
+    var(--premium-pad) center / 100% 100% no-repeat;
+  filter:
+    drop-shadow(0 24px 20px rgba(0, 0, 0, 0.64))
+    drop-shadow(0 4px 2px rgba(0, 0, 0, 0.35));
+}
+
+.board-pad .column-paper-stack {
+  display: none;
+}
+
+.board-pad .column-pin {
+  display: block;
+  top: -22px;
+  width: 50px;
+  height: 68px;
+  background-image: var(--premium-pin-light);
+  background-size: contain;
+  filter: drop-shadow(0 10px 8px rgba(72, 42, 15, 0.26));
+  z-index: 4;
+}
+
+.tone-dark.board-pad .column-pin {
+  display: none;
+}
+
+.board-pad .column-paperclip {
+  top: -1px;
+  right: 70px;
+  width: 44px;
+  height: 68px;
+  background: var(--premium-paperclip-light) center / contain no-repeat;
+  filter: drop-shadow(0 6px 5px rgba(65, 38, 15, 0.25));
+}
+
+.tone-dark.board-pad .column-paperclip {
+  background-image: var(--premium-paperclip-dark);
+  filter: drop-shadow(0 7px 6px rgba(0, 0, 0, 0.52));
+}
+
+.board-pad .column-header,
+.board-pad .board-quick-capture,
+.board-pad .board-add-task,
+.board-pad .task-card,
+.board-pad .completed-toggle {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  filter: none;
+}
+
+.board-pad .column-header {
+  position: relative;
+  z-index: 6;
+  min-height: 62px;
+  margin: 0;
+  padding: 15px 18px 8px 22px;
+}
+
+.board-pad .column-title-button {
+  font-family: "Kalam", "Nunito", system-ui, sans-serif;
+  font-size: clamp(1.12rem, 1vw + 0.62rem, 1.52rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  color: color-mix(in srgb, var(--list-accent) 88%, #22160d);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+
+.tone-dark.board-pad .column-title-button {
+  color: color-mix(in srgb, var(--list-accent) 82%, #f8fbff);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+}
+
+.board-pad .column-title-button h2 {
+  font-size: clamp(1.06rem, 0.82vw + 0.56rem, 1.34rem);
+}
+
+.board-pad .board-column.color-coral .column-title-button h2 {
+  font-size: clamp(0.96rem, 0.62vw + 0.52rem, 1.12rem);
+}
+
+.board-pad .column-header-actions {
+  opacity: 0.78;
+}
+
+.board-pad .board-quick-capture,
+.board-pad .board-add-task {
+  min-height: 47px;
+  margin: 0 10px;
+  padding-inline: 21px 16px;
+  color: color-mix(in srgb, var(--list-accent) 86%, #25160b);
+}
+
+.board-pad .board-quick-capture:active,
+.board-pad .board-add-task:active {
+  translate: 0 1px;
+}
+
+.board-pad .task-lane {
+  padding-inline: 18px 14px;
+}
+
+.board-pad .task-card {
+  min-height: 40px;
+  padding: 4px 6px 5px;
+  color: #211914;
+  transition:
+    translate 160ms var(--ease-out),
+    background-color 160ms var(--ease-out);
+}
+
+.tone-dark.board-pad .task-card {
+  color: #f4f0ea;
+}
+
+.board-pad .task-card:hover,
+.board-pad .task-card.selected {
+  background: color-mix(in srgb, var(--list-accent) 7%, transparent);
+  translate: 0 -1px;
+}
+
+.board-pad .task-card.dragging {
+  background: color-mix(in srgb, var(--list-accent) 10%, transparent);
+  filter: drop-shadow(0 18px 15px rgba(36, 22, 9, 0.2));
+}
+
+.board-pad .completed-pile {
+  padding-inline: 10px;
+}
+
+.board-pad .completed-toggle {
+  min-height: 52px;
+  padding: 10px 22px 11px;
+  background: var(--premium-fold-light) center / 100% 100% no-repeat;
+  filter: drop-shadow(0 9px 7px rgba(76, 45, 17, 0.16));
+}
+
+.tone-dark.board-pad .completed-toggle {
+  background-image: var(--premium-fold-dark);
+  filter: drop-shadow(0 10px 8px rgba(0, 0, 0, 0.46));
+}
+
+.board-wood .board-column {
+  width: var(--column-width, 266px);
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 239, 190, 0.12), rgba(55, 25, 8, 0.16)),
+    var(--premium-wood) center / 100% 100% no-repeat;
+  box-shadow: none;
+  filter:
+    drop-shadow(0 24px 18px rgba(40, 23, 9, 0.38))
+    drop-shadow(0 5px 3px rgba(40, 23, 9, 0.18));
+  overflow: visible;
+}
+
+.tone-dark.board-wood .board-column {
+  filter:
+    drop-shadow(0 28px 22px rgba(0, 0, 0, 0.66))
+    drop-shadow(0 5px 3px rgba(0, 0, 0, 0.38));
+}
+
+.board-wood .column-paper-stack {
+  display: none;
+}
+
+.board-wood .column-pin {
+  top: -29px;
+  width: 52px;
+  height: 72px;
+  background-image: var(--premium-pin-light);
+  background-size: contain;
+  filter: drop-shadow(0 10px 8px rgba(0, 0, 0, 0.28));
+}
+
+.tone-dark.board-wood .column-pin {
+  background-image: var(--premium-pin-dark);
+  filter: drop-shadow(0 11px 9px rgba(0, 0, 0, 0.55));
+}
+
+.board-wood .column-paperclip {
+  top: -8px;
+  right: 34px;
+  width: 42px;
+  height: 70px;
+  background-image: var(--premium-paperclip-light);
+  filter: drop-shadow(0 6px 5px rgba(35, 20, 7, 0.32));
+}
+
+.tone-dark.board-wood .column-paperclip {
+  background-image: var(--premium-paperclip-dark);
+}
+
+.board-wood .column-header {
+  min-height: 54px;
+  margin: 14px 15px 12px;
+  padding: 8px 15px 7px;
+  border: 0;
+  border-radius: 0;
+  background: var(--premium-header-light) center / 100% 100% no-repeat;
+  box-shadow: none;
+  filter: drop-shadow(0 9px 7px rgba(35, 20, 7, 0.25));
+}
+
+.tone-dark.board-wood .column-header {
+  background-image: var(--premium-header-dark);
+}
+
+.board-wood .column-header::before,
+.board-wood .column-header::after {
+  display: none;
+}
+
+.board-wood .column-title-button {
+  font-family: "Kalam", "Nunito", system-ui, sans-serif;
+  font-size: clamp(1.05rem, 0.88vw + 0.58rem, 1.45rem);
+  font-weight: 700;
+  letter-spacing: 0;
+  color: color-mix(in srgb, var(--list-accent) 68%, #120c08);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.36);
+}
+
+.tone-dark.board-wood .column-title-button {
+  color: color-mix(in srgb, var(--list-accent) 72%, #fff);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.55);
+}
+
+.board-wood .board-quick-capture,
+.board-wood .board-add-task {
+  min-height: 60px;
+  margin: 8px 10px 14px;
+  padding-inline: 23px 16px;
+  border: 0;
+  border-radius: 0;
+  background: var(--premium-quick-light) center / 100% 100% no-repeat;
+  box-shadow: none;
+  filter: drop-shadow(0 11px 9px rgba(35, 20, 7, 0.26));
+  color: color-mix(in srgb, var(--list-accent) 76%, #1b1009);
+}
+
+.tone-dark.board-wood .board-quick-capture,
+.tone-dark.board-wood .board-add-task {
+  background-image: var(--premium-quick-dark);
+  filter: drop-shadow(0 12px 10px rgba(0, 0, 0, 0.54));
+  color: color-mix(in srgb, var(--list-accent) 78%, #fff);
+}
+
+.board-wood .board-quick-capture::before,
+.board-wood .board-add-task::before {
+  display: block;
+  top: -10px;
+  left: 14px;
+  width: 46px;
+  height: 24px;
+  background: var(--premium-tape-light-1) center / 100% 100% no-repeat;
+  opacity: 0.8;
+}
+
+.tone-dark.board-wood .board-quick-capture::before,
+.tone-dark.board-wood .board-add-task::before {
+  background-image: var(--premium-tape-dark-1);
+  opacity: 0.68;
+}
+
+.board-wood .task-lane {
+  padding-inline: 13px;
+  gap: 9px;
+}
+
+.board-wood .task-card,
+.board-wood .plate-group {
+  --premium-note: var(--premium-note-light-1);
+  border: 0;
+  border-radius: 0;
+  background: var(--premium-note) center / 100% 100% no-repeat;
+  box-shadow: none;
+  filter: drop-shadow(0 10px 8px rgba(27, 15, 5, 0.3));
+  transition:
+    translate 170ms var(--ease-out),
+    rotate 170ms var(--ease-out),
+    scale 170ms var(--ease-out),
+    filter 170ms var(--ease-out);
+}
+
+.board-wood .task-card[data-paper-variant="2"],
+.board-wood .plate-group[data-paper-variant="2"] {
+  --premium-note: var(--premium-note-light-2);
+}
+
+.board-wood .task-card[data-paper-variant="3"],
+.board-wood .plate-group[data-paper-variant="3"] {
+  --premium-note: var(--premium-note-light-3);
+}
+
+.tone-dark.board-wood .task-card,
+.tone-dark.board-wood .plate-group {
+  --premium-note: var(--premium-note-dark-1);
+  color: #f7f3ee;
+  filter: drop-shadow(0 11px 9px rgba(0, 0, 0, 0.5));
+}
+
+.tone-dark.board-wood .task-card[data-paper-variant="2"],
+.tone-dark.board-wood .plate-group[data-paper-variant="2"] {
+  --premium-note: var(--premium-note-dark-2);
+}
+
+.tone-dark.board-wood .task-card[data-paper-variant="3"],
+.tone-dark.board-wood .plate-group[data-paper-variant="3"] {
+  --premium-note: var(--premium-note-dark-3);
+}
+
+.board-wood .task-card {
+  min-height: 68px;
+  padding: 13px 10px 11px 14px;
+}
+
+.board-wood .task-card::before {
+  display: block;
+  top: -10px;
+  right: 9px;
+  left: auto;
+  width: 48px;
+  height: 25px;
+  border-radius: 0;
+  background: var(--premium-tape-light-2) center / 100% 100% no-repeat;
+  opacity: 0.78;
+  transform: rotate(8deg);
+}
+
+.board-wood .task-card[data-tape-variant="2"]::before {
+  background-image: var(--premium-tape-light-3);
+  right: auto;
+  left: 13px;
+  transform: rotate(-7deg);
+}
+
+.board-wood .task-card[data-tape-variant="3"]::before {
+  background-image: var(--premium-tape-light-4);
+  transform: rotate(5deg);
+}
+
+.tone-dark.board-wood .task-card::before {
+  background-image: var(--premium-tape-dark-2);
+  opacity: 0.6;
+}
+
+.tone-dark.board-wood .task-card[data-tape-variant="2"]::before {
+  background-image: var(--premium-tape-dark-3);
+}
+
+.tone-dark.board-wood .task-card[data-tape-variant="3"]::before {
+  background-image: var(--premium-tape-dark-4);
+}
+
+.board-wood .task-card::after {
+  display: none;
+}
+
+.board-wood .task-card:hover,
+.board-wood .task-card.selected {
+  translate: 0 -3px;
+  rotate: -0.25deg;
+  filter: drop-shadow(0 16px 13px rgba(27, 15, 5, 0.36)) saturate(1.04);
+}
+
+.tone-dark.board-wood .task-card:hover,
+.tone-dark.board-wood .task-card.selected {
+  filter: drop-shadow(0 17px 14px rgba(0, 0, 0, 0.58)) saturate(1.04);
+}
+
+.board-wood .task-card.dragging {
+  translate: 0 -8px;
+  scale: 1.025;
+  rotate: -1deg;
+  filter: drop-shadow(0 28px 22px rgba(24, 13, 4, 0.46)) saturate(1.08);
+}
+
+.board-wood .completed-toggle {
+  min-height: 56px;
+  margin-top: 8px;
+  border: 0;
+  border-radius: 0;
+  background: var(--premium-note-light-1) center / 100% 100% no-repeat;
+  box-shadow: none;
+  filter: drop-shadow(0 10px 8px rgba(27, 15, 5, 0.28));
+}
+
+.tone-dark.board-wood .completed-toggle {
+  background-image: var(--premium-note-dark-1);
+  filter: drop-shadow(0 11px 9px rgba(0, 0, 0, 0.5));
+}
+
+.board-wood .plate-group {
+  padding: 12px 14px 14px;
+}
+
+.board-wood .plate-group::before {
+  background-image: var(--premium-pin-light);
+  width: 38px;
+  height: 54px;
+  top: -22px;
+  right: 26px;
+}
+
+.tone-dark.board-wood .plate-group::before {
+  background-image: var(--premium-pin-dark);
+}
+
+.board-column .task-actions {
+  opacity: 0;
+  transition: opacity 140ms var(--ease-out);
+}
+
+.board-column .task-card:hover .task-actions,
+.board-column .task-card:focus-within .task-actions,
+.board-column .task-card.selected .task-actions {
+  opacity: 1;
+}
+
+.task-check,
+.capture-icon,
+.completed-check,
+.plate-task-row .task-check {
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.task-title,
+.plate-task-title,
+.completed-title,
+.board-add-task,
+.board-quick-capture input {
+  font-family: "Kalam", "Nunito", system-ui, sans-serif;
+  letter-spacing: 0;
+}
+
+.board-quick-capture input::placeholder {
+  opacity: 0.82;
+}
+
+@keyframes premium-paper-land {
+  from {
+    opacity: 0;
+    translate: 0 20px;
+    rotate: -0.8deg;
+    scale: 0.985;
+  }
+
+  to {
+    opacity: 1;
+    translate: 0 0;
+    rotate: 0deg;
+    scale: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-column {
+    animation: none;
+  }
+
+  .board-column,
+  .task-card {
+    transition: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .sticky-app {
+    background-image: var(--premium-canvas);
+  }
+
+  .list-rail {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent),
+      color-mix(in srgb, var(--surface) 82%, transparent);
+  }
+
+  .workspace-tools {
+    width: auto;
+    min-width: 238px;
+    max-width: calc(100vw - 24px);
+  }
+
+  .board-pad .board-column,
+  .board-wood .board-column {
+    width: min(100%, 344px);
+    height: auto;
+    min-height: 470px;
+  }
+
+  .tone-dark.board-pad .column-pin {
+    display: none;
+  }
+
+  .board-wood .board-column {
+    min-height: 560px;
+  }
+}

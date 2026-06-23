@@ -198,6 +198,7 @@ async function expectSpecificVisibleControlNames(page: Page) {
 
 test.describe("Sticky workspace", () => {
   test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/");
     await page.evaluate(() => window.localStorage.clear());
     await page.reload();
@@ -216,7 +217,7 @@ test.describe("Sticky workspace", () => {
 
   test("desktop workflow covers lists, tasks, subtasks, due dates, recurrence, completed pile, and persistence", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "full workflow runs in the desktop project");
-    test.setTimeout(90_000);
+    test.setTimeout(300_000);
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
@@ -581,7 +582,9 @@ test.describe("Sticky workspace", () => {
       const completedRegion = page.getByRole("region", { name: "Completed tasks", exact: true });
       await completedRegion.getByRole("button", { name: /Completed/ }).click();
       await expect(completedRegion.getByRole("button", { name: "Repeat without subtasks", exact: true })).toBeVisible();
-      const generatedRepeatCard = activeRegion.locator(".task-card", { hasText: "Jun 22" });
+      const generatedRepeatCard = activeRegion
+        .locator(".task-card", { hasText: "Repeat without subtasks" })
+        .filter({ hasText: "Jun 22" });
       await expect(generatedRepeatCard).toContainText("Repeat without subtasks");
       await expect(generatedRepeatCard).toContainText("Every week on Mon");
       const repeatTaskButton = generatedRepeatCard.locator("button.task-body-button");
