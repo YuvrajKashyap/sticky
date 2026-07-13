@@ -78,6 +78,34 @@ async function expectNoHorizontalOverflow(page: Page) {
     .toBe(true);
 }
 
+async function expectDialogBackdropCoversViewport(page: Page) {
+  const backdrop = page.locator(".dialog-backdrop");
+  await expect(backdrop).toBeVisible();
+
+  const geometry = await backdrop.evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    const style = window.getComputedStyle(node);
+
+    return {
+      height: rect.height,
+      position: style.position,
+      width: rect.width,
+      x: rect.x,
+      y: rect.y,
+      zIndex: style.zIndex,
+      viewportHeight: window.innerHeight,
+      viewportWidth: window.innerWidth,
+    };
+  });
+
+  expect(geometry.position).toBe("fixed");
+  expect(geometry.zIndex).toBe("60");
+  expect(Math.round(geometry.x)).toBe(0);
+  expect(Math.round(geometry.y)).toBe(0);
+  expect(geometry.width).toBeGreaterThanOrEqual(geometry.viewportWidth - 1);
+  expect(geometry.height).toBeGreaterThanOrEqual(geometry.viewportHeight - 1);
+}
+
 async function expectMobileZoomAllowed(page: Page) {
   const viewport = page.locator('meta[name="viewport"]');
 
@@ -98,6 +126,84 @@ async function expectNoInlineClip(locator: Locator) {
   await expect
     .poll(() => locator.evaluate((node) => node.scrollWidth <= node.clientWidth + 1))
     .toBe(true);
+}
+
+async function expectLightText(locator: Locator, minimumLuminance = 0.62) {
+  const sample = await locator.first().evaluate((node) => {
+    const color = window.getComputedStyle(node).color;
+
+    function parseColor(value: string) {
+      const srgb = value.match(/color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/);
+      if (srgb) {
+        return srgb.slice(1, 4).map((channel) => Number(channel));
+      }
+
+      const rgb = value.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)/);
+      if (rgb) {
+        return rgb.slice(1, 4).map((channel) => Number(channel) / 255);
+      }
+
+      return [0, 0, 0];
+    }
+
+    function linear(channel: number) {
+      return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+    }
+
+    const [r, g, b] = parseColor(color);
+
+    return {
+      color,
+      luminance: 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b),
+    };
+  });
+
+  expect(sample.luminance, `${sample.color} should stay readable on dark materials`).toBeGreaterThanOrEqual(
+    minimumLuminance,
+  );
+}
+
+async function columnHeight(locator: Locator) {
+  return locator.evaluate((node) => Math.round(node.getBoundingClientRect().height));
+}
+
+async function expectProfileSettingsTriggerVisible(page: Page) {
+  const trigger = page.getByLabel("Open appearance settings");
+  await expect(trigger).toBeVisible();
+
+  const sample = await trigger.evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    const style = window.getComputedStyle(node);
+    const avatar = node.querySelector(".profile-avatar");
+    const icon = node.querySelector(".profile-settings-icon");
+    const avatarRect = avatar?.getBoundingClientRect();
+    const iconRect = icon?.getBoundingClientRect();
+
+    return {
+      avatarText: avatar?.textContent?.trim() ?? "",
+      avatarHeight: avatarRect?.height ?? 0,
+      avatarWidth: avatarRect?.width ?? 0,
+      backgroundImage: style.backgroundImage,
+      color: style.color,
+      height: rect.height,
+      iconColor: icon ? window.getComputedStyle(icon).color : "missing",
+      iconHeight: iconRect?.height ?? 0,
+      iconWidth: iconRect?.width ?? 0,
+      opacity: style.opacity,
+      width: rect.width,
+    };
+  });
+
+  expect(sample.width).toBeGreaterThanOrEqual(60);
+  expect(sample.height).toBeGreaterThanOrEqual(38);
+  expect(sample.backgroundImage).not.toBe("none");
+  expect(sample.opacity).toBe("1");
+  expect(sample.avatarText.length).toBeGreaterThan(0);
+  expect(sample.avatarWidth).toBeGreaterThanOrEqual(28);
+  expect(sample.avatarHeight).toBeGreaterThanOrEqual(28);
+  expect(sample.iconWidth).toBeGreaterThanOrEqual(14);
+  expect(sample.iconHeight).toBeGreaterThanOrEqual(14);
+  expect(sample.iconColor).toBe(sample.color);
 }
 
 function quickAddButton(page: Page, listName: string) {
@@ -215,17 +321,287 @@ test.describe("Sticky workspace", () => {
     });
   });
 
+  test("list editor overlays the full workspace while creating or renaming lists", async ({ page }) => {
+    await expectNoConsoleErrors(page, async () => {
+      await expect(page.locator(".sticky-app")).toBeVisible();
+
+      await page.getByRole("button", { name: "New list" }).click();
+      await expect(page.getByRole("dialog", { name: "New list" })).toBeVisible();
+      await expectDialogBackdropCoversViewport(page);
+      await page.getByRole("button", { name: "Close list editor" }).click();
+      await expect(page.getByRole("dialog", { name: "New list" })).toHaveCount(0);
+
+      await page.getByRole("button", { name: "Rename current list reminders" }).click();
+      await expect(page.getByRole("dialog", { name: "Rename list" })).toBeVisible();
+      await expectDialogBackdropCoversViewport(page);
+    });
+  });
+
+  test("pad list hover keeps a rounded paper silhouette", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "hover silhouette is a desktop pointer state");
+
+    await expectNoConsoleErrors(page, async () => {
+      await expect(page.locator(".sticky-app")).toHaveClass(/board-pad/);
+
+      const column = page.locator(".board-pad .board-column").first();
+      await expect(column).toBeVisible();
+
+      const baseShape = await column.evaluate((node) => {
+        const style = window.getComputedStyle(node);
+
+        return {
+          bottomLeftRadius: Number.parseFloat(style.borderBottomLeftRadius),
+          bottomRightRadius: Number.parseFloat(style.borderBottomRightRadius),
+          boxShadow: style.boxShadow,
+          filter: style.filter,
+          topLeftRadius: Number.parseFloat(style.borderTopLeftRadius),
+          topRightRadius: Number.parseFloat(style.borderTopRightRadius),
+        };
+      });
+
+      expect(baseShape.filter).toBe("none");
+      expect(baseShape.boxShadow).not.toBe("none");
+      expect(baseShape.topLeftRadius).toBeGreaterThanOrEqual(12);
+      expect(baseShape.topRightRadius).toBeGreaterThanOrEqual(12);
+      expect(baseShape.bottomLeftRadius).toBeGreaterThanOrEqual(9);
+      expect(baseShape.bottomRightRadius).toBeGreaterThanOrEqual(9);
+
+      await column.hover();
+
+      const hoverShape = await column.evaluate((node) => {
+        const style = window.getComputedStyle(node);
+
+        return {
+          boxShadow: style.boxShadow,
+          filter: style.filter,
+          topLeftRadius: Number.parseFloat(style.borderTopLeftRadius),
+          topRightRadius: Number.parseFloat(style.borderTopRightRadius),
+        };
+      });
+
+      expect(hoverShape.filter).toBe("none");
+      expect(hoverShape.boxShadow).not.toBe("none");
+      expect(hoverShape.topLeftRadius).toBeGreaterThanOrEqual(12);
+      expect(hoverShape.topRightRadius).toBeGreaterThanOrEqual(12);
+    });
+  });
+
+  test("premium list pins keep complete pin artwork", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "desktop visual pass samples all visible pins");
+
+    const samplePins = async (selector: string) =>
+      page.locator(selector).evaluateAll((nodes) =>
+        nodes.slice(0, 5).map((node) => {
+          const rect = node.getBoundingClientRect();
+          const style = window.getComputedStyle(node);
+
+          return {
+            backgroundPosition: style.backgroundPosition,
+            backgroundRepeat: style.backgroundRepeat,
+            backgroundSize: style.backgroundSize,
+            height: rect.height,
+            top: rect.top,
+            width: rect.width,
+          };
+        }),
+      );
+
+    const expectCompletePinArtwork = (samples: Awaited<ReturnType<typeof samplePins>>) => {
+      expect(samples.length).toBeGreaterThanOrEqual(3);
+
+      for (const sample of samples) {
+        expect(sample.top).toBeGreaterThanOrEqual(0);
+        expect(sample.width).toBeGreaterThanOrEqual(54);
+        expect(sample.height).toBeGreaterThanOrEqual(76);
+        expect(sample.backgroundRepeat).toBe("no-repeat");
+        expect(sample.backgroundPosition).toContain("100%");
+        expect(sample.backgroundSize).toMatch(/^auto /);
+      }
+    };
+
+    await expectNoConsoleErrors(page, async () => {
+      await expect(page.locator(".sticky-app")).toBeVisible();
+      await expect(page.locator(".sticky-app")).toHaveClass(/board-pad/);
+      await expect(page.locator(".board-pad .board-column .column-pin").first()).toBeVisible();
+      await expectCompletePinArtwork(await samplePins(".board-pad .board-column .column-pin"));
+
+      await page.getByLabel("Open appearance settings").click();
+      await expect(page.getByLabel("Workspace appearance")).toBeVisible();
+      await page.getByRole("button", { name: "Wood board" }).click();
+      await expect(page.locator(".sticky-app")).toHaveClass(/board-wood/);
+      await expect(page.locator(".board-wood .board-column .column-pin").first()).toBeVisible();
+      await expectCompletePinArtwork(await samplePins(".board-wood .board-column .column-pin"));
+    });
+  });
+
+  test("dark board styles keep task text readable", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "desktop visual pass samples the full board");
+
+    await expectNoConsoleErrors(page, async () => {
+      await page.getByLabel("Open appearance settings").click();
+      await expect(page.getByLabel("Workspace appearance")).toBeVisible();
+      await page.getByRole("button", { name: "Dark" }).click();
+      await expect(page.locator(".sticky-app")).toHaveClass(/tone-dark/);
+
+      const readableSelectors = [".board-add-task", ".task-title", ".completed-toggle"];
+
+      for (const selector of readableSelectors) {
+        await expectLightText(page.locator(`.tone-dark.board-pad ${selector}`));
+      }
+
+      await page.getByRole("button", { name: "Wood board" }).click();
+      await expect(page.locator(".sticky-app")).toHaveClass(/board-wood/);
+
+      for (const selector of readableSelectors) {
+        await expectLightText(page.locator(`.tone-dark.board-wood ${selector}`));
+      }
+    });
+  });
+
+  test("profile settings trigger stays visible in the top toolbar", async ({ page }) => {
+    await expectNoConsoleErrors(page, async () => {
+      await expectProfileSettingsTriggerVisible(page);
+
+      await page.getByLabel("Open appearance settings").click();
+      await expect(page.getByLabel("Workspace appearance")).toBeVisible();
+      await page.getByRole("button", { name: "Dark" }).click();
+      await expect(page.locator(".sticky-app")).toHaveClass(/tone-dark/);
+
+      await expectProfileSettingsTriggerVisible(page);
+    });
+  });
+
+  test("workspace finder expands and highlights matches across the page", async ({ page }) => {
+    await expectNoConsoleErrors(page, async () => {
+      const toolbar = page.locator(".workspace-tools");
+      const collapsedBox = await toolbar.boundingBox();
+      const finder = page.getByLabel("Find in workspace");
+
+      await finder.click();
+      await expect(toolbar).toHaveClass(/search-expanded/);
+      const expandedBox = await toolbar.boundingBox();
+      expect(expandedBox?.width ?? 0).toBeGreaterThan((collapsedBox?.width ?? 0) + 40);
+
+      await finder.fill("domain");
+      await expect(page.locator(".search-match-count")).toContainText(/match/);
+
+      const highlights = page.locator("mark.find-highlight");
+      await expect(highlights.first()).toBeVisible();
+      await expect(highlights.filter({ hasText: /domain/i }).first()).toBeVisible();
+      await expect(page.locator(".task-card", { hasText: /domain/i }).locator("mark.find-highlight").first()).toBeVisible();
+
+      await finder.fill("Next");
+      await expect(page.locator(".list-tab-name mark.find-highlight", { hasText: "Next" })).toBeVisible();
+      await expect(page.locator(".column-title-button mark.find-highlight", { hasText: "Next" })).toBeVisible();
+
+      await finder.press("Escape");
+      await expect(finder).toHaveValue("");
+      await expect(page.locator("mark.find-highlight")).toHaveCount(0);
+    });
+  });
+
+  test("list height starts equal for empty lists and grows with tasks", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "desktop visual pass samples the board columns");
+
+    await expectNoConsoleErrors(page, async () => {
+      const createList = async (name: string) => {
+        await page.getByRole("button", { name: "New list" }).click();
+        await page.getByRole("dialog", { name: "New list" }).getByRole("textbox", { name: "Name" }).fill(name);
+        await page.getByRole("button", { name: "Save list" }).click();
+        await expect(page.getByRole("dialog", { name: "New list" })).toHaveCount(0);
+        await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
+      };
+
+      await createList("Empty Length A");
+      const emptyAColumn = page.locator('.board-column[data-list-slug="empty-length-a"]');
+      await expect(emptyAColumn).toBeVisible();
+      const emptyAHeight = await columnHeight(emptyAColumn);
+
+      await createList("Empty Length B");
+      const emptyBColumn = page.locator('.board-column[data-list-slug="empty-length-b"]');
+      await expect(emptyBColumn).toBeVisible();
+      const emptyBHeight = await columnHeight(emptyBColumn);
+      expect(Math.abs(emptyAHeight - emptyBHeight)).toBeLessThanOrEqual(1);
+
+      await page.getByLabel("Quick add task").fill("First growth task");
+      await quickAddButton(page, "Empty Length B").click();
+      await expect(emptyBColumn.locator(".task-card", { hasText: "First growth task" })).toBeVisible();
+      const oneTaskHeight = await columnHeight(emptyBColumn);
+      expect(oneTaskHeight).toBeGreaterThan(emptyBHeight);
+
+      await page.getByLabel("Quick add task").fill("Second growth task");
+      await quickAddButton(page, "Empty Length B").click();
+      await expect(emptyBColumn.locator(".task-card", { hasText: "Second growth task" })).toBeVisible();
+      const twoTaskHeight = await columnHeight(emptyBColumn);
+      expect(twoTaskHeight).toBeGreaterThan(oneTaskHeight + 20);
+    });
+  });
+
+  test("all tasks is the default board and list checkboxes control visibility", async ({ page }) => {
+    await expectNoConsoleErrors(page, async () => {
+      await expect(page.getByRole("heading", { name: "All tasks" })).toBeVisible();
+      await expect(page.getByRole("button", { name: /Show all tasks/ })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Show starred tasks" })).toHaveCount(0);
+
+      await expect(page.locator(".board-column")).toHaveCount(26);
+      await expect(page.locator('.board-column[data-list-slug="career"]')).toBeVisible();
+
+      await page.getByRole("checkbox", { name: "Hide bring from All tasks" }).click();
+      await expect(page.locator('.board-column[data-list-slug="bring"]')).toHaveCount(0);
+      await expect(page.getByRole("checkbox", { name: "Show bring on All tasks" })).not.toBeChecked();
+
+      await page.getByRole("checkbox", { name: "Show bring on All tasks" }).click();
+      await expect(page.locator('.board-column[data-list-slug="bring"]')).toBeVisible();
+      await expect(page.getByRole("checkbox", { name: "Hide bring from All tasks" })).toBeChecked();
+    });
+  });
+
+  test("lists can be archived and restored from the sidebar", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "sidebar archive controls use desktop hover actions");
+
+    await expectNoConsoleErrors(page, async () => {
+      const financeColumn = page.locator('.board-column[data-list-slug="finance"]');
+      await expect(financeColumn).toBeVisible();
+
+      const financeRow = page.locator(".list-tab-wrap", { hasText: "Finance" });
+      await financeRow.hover();
+      await financeRow.getByRole("button", { name: "Archive Finance" }).click();
+
+      await expect(financeColumn).toHaveCount(0);
+      await expect(page.getByLabel("Archived lists").getByText("Finance")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Restore archived list Finance" })).toBeVisible();
+
+      await page.getByRole("button", { name: "Restore archived list Finance" }).click();
+      await expect(page.locator('.board-column[data-list-slug="finance"]')).toBeVisible();
+      await expect(page.getByLabel("Archived lists")).toHaveCount(0);
+    });
+  });
+
+  test("distant lists defer task controls until they approach the viewport", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "large-board rendering check runs in the desktop project");
+
+    await expectNoConsoleErrors(page, async () => {
+      const booksColumn = page.locator('.board-column[data-list-slug="books"]');
+
+      await expect(booksColumn.getByRole("button", { name: "Load 94 tasks in Books" })).toBeVisible();
+      await expect(booksColumn.locator(".task-card")).toHaveCount(0);
+
+      await booksColumn.scrollIntoViewIfNeeded();
+      await expect(booksColumn.locator(".task-card")).toHaveCount(94);
+    });
+  });
+
   test("desktop workflow covers lists, tasks, subtasks, due dates, recurrence, completed pile, and persistence", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "full workflow runs in the desktop project");
     test.setTimeout(300_000);
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
-      await expect(page.getByRole("heading", { name: "Tasks" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "All tasks" })).toBeVisible();
       await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
       await expect(
         page.getByRole("button", {
-          name: "Open list reminders, 4 active tasks, 8 completed tasks, current list",
+          name: "Open list reminders, 4 active tasks, 8 completed tasks, shown on All tasks, current list",
         }),
       ).toBeVisible();
       await expect(page.getByRole("button", { name: "Current task view: All, 4 tasks" })).toBeVisible();
@@ -294,7 +670,7 @@ test.describe("Sticky workspace", () => {
       await expect(page.getByRole("heading", { name: "Verification" })).toBeVisible();
       await expect(
         page.getByRole("button", {
-          name: "Open list Verification, 0 active tasks, 0 completed tasks, current list",
+          name: "Open list Verification, 0 active tasks, 0 completed tasks, shown on All tasks, current list",
         }),
       ).toBeVisible();
       await expect(newListButton).toBeFocused();
@@ -307,7 +683,7 @@ test.describe("Sticky workspace", () => {
       await expect(page.getByRole("heading", { name: "Verification Prime" })).toBeVisible();
       await expect(
         page.getByRole("button", {
-          name: "Open list Verification Prime, 0 active tasks, 0 completed tasks, current list",
+          name: "Open list Verification Prime, 0 active tasks, 0 completed tasks, shown on All tasks, current list",
         }),
       ).toBeVisible();
       await expect(page.getByRole("button", { name: "Rename current list Verification Prime" })).toBeFocused();
@@ -334,7 +710,7 @@ test.describe("Sticky workspace", () => {
       await page.keyboard.press("Control+K");
       await page.getByLabel("Search commands").fill("search");
       await page.keyboard.press("Enter");
-      await expect(page.getByLabel("Search current list")).toBeFocused();
+      await expect(page.getByLabel("Find in workspace")).toBeFocused();
 
       const verificationPrimeTab = page.locator(".list-tab-wrap", { hasText: "Verification Prime" });
       await verificationPrimeTab.scrollIntoViewIfNeeded();
@@ -439,7 +815,7 @@ test.describe("Sticky workspace", () => {
           name: /Move Verification sticky polished up/,
         }),
       ).toBeDisabled();
-      await expect(page.getByText(/Reordering is locked while search, filters, or due-date sorting are active/)).toBeVisible();
+      await expect(page.getByText(/Reordering is locked while filters or due-date sorting are active/)).toBeVisible();
       await runCommand(page, "show all tasks");
       await expect(taskViews.getByRole("button", { name: "Current task view: All, 3 tasks" })).toHaveAttribute(
         "aria-pressed",
@@ -724,7 +1100,7 @@ test.describe("Sticky workspace", () => {
         "aria-pressed",
         "true",
       );
-      await expect(page.getByText(/Reordering is locked while search, filters, or due-date sorting are active/)).toBeVisible();
+      await expect(page.getByText(/Reordering is locked while filters or due-date sorting are active/)).toBeVisible();
 
       await page.reload();
       await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
@@ -736,7 +1112,7 @@ test.describe("Sticky workspace", () => {
         "aria-pressed",
         "true",
       );
-      await expect(page.getByText(/Reordering is locked while search, filters, or due-date sorting are active/)).toBeVisible();
+      await expect(page.getByText(/Reordering is locked while filters or due-date sorting are active/)).toBeVisible();
     });
   });
 
@@ -783,7 +1159,7 @@ test.describe("Sticky workspace", () => {
       await page.locator("button.list-tab", { hasText: "Next 3" }).click();
       await expect(page.getByRole("heading", { name: "Next 3", exact: true })).toBeVisible();
 
-      const searchInput = page.getByLabel("Search current list");
+      const searchInput = page.getByLabel("Find in workspace");
       await searchInput.fill("domain");
       const activeRegion = page.getByRole("region", { name: "Active tasks" });
       await expect(activeRegion.getByText("Prepare Vercel domain checklist")).toBeVisible();
@@ -832,7 +1208,7 @@ test.describe("Sticky workspace", () => {
           name: /Move Overdue filter proof up/,
         }),
       ).toBeDisabled();
-      await expect(page.getByText(/Reordering is locked while search, filters, or due-date sorting are active/)).toBeVisible();
+      await expect(page.getByText(/Reordering is locked while filters or due-date sorting are active/)).toBeVisible();
 
       await runCommand(page, "show repeating tasks");
       await expect(taskViews.getByRole("button", { name: "Current task view: Repeating, 1 task" })).toHaveAttribute(
@@ -857,7 +1233,7 @@ test.describe("Sticky workspace", () => {
         "aria-pressed",
         "true",
       );
-      await expect(page.getByText(/Reordering is locked while search, filters, or due-date sorting are active/)).toHaveCount(0);
+      await expect(page.getByText(/Reordering is locked while filters or due-date sorting are active/)).toHaveCount(0);
       await expectTextBefore(page, ".task-title", "Clear the capture tray", "Tighten the details panel");
       await expectTextBefore(page, ".task-title", "Daily planning pass", overdueTitle);
     });
@@ -876,7 +1252,7 @@ test.describe("Sticky workspace", () => {
 
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
-      await page.getByLabel("Search current list").fill("nothing matches this");
+      await page.getByLabel("Find in workspace").fill("nothing matches this");
       await page.getByLabel("Quick add task").fill("Route me #capture-target tomorrow 9am");
       await expect(page.locator(".quick-schedule-preview")).toContainText("Capture Target");
       await expect(page.locator(".quick-schedule-preview")).toContainText("Tomorrow");
@@ -884,7 +1260,7 @@ test.describe("Sticky workspace", () => {
       await quickAddButton(page, "Capture Target").click();
 
       await expect(page.getByRole("heading", { name: "Capture Target" })).toBeVisible();
-      await expect(page.getByLabel("Search current list")).toHaveValue("");
+      await expect(page.getByLabel("Find in workspace")).toHaveValue("");
       const routedCard = page.locator(".task-card", { hasText: "Route me" });
       await expect(routedCard).toBeVisible();
       await expect(routedCard).not.toContainText("#capture-target");
@@ -1377,7 +1753,7 @@ test.describe("Sticky workspace", () => {
 
       await page.goto("/?intent=search");
       await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
-      await expect(page.getByLabel("Search current list")).toBeFocused();
+      await expect(page.getByLabel("Find in workspace")).toBeFocused();
 
       await page.goto("/?view=today");
       await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();

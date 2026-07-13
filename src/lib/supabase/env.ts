@@ -17,5 +17,8 @@ export function getSupabaseEnv(): SupabaseEnv | null {
 }
 
 export function isDemoModeEnabled() {
-  return process.env.NEXT_PUBLIC_STICKY_DEMO_MODE === "true";
+  return (
+    process.env.STICKY_DEMO_MODE === "true" ||
+    process.env.NEXT_PUBLIC_STICKY_DEMO_MODE === "true"
+  );
 }

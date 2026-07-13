@@ -60,19 +60,19 @@ DARK_NOTE_BOXES = {
 }
 
 LIGHT_PIN_BOXES = {
-    "sun": (28, 824, 126, 954),
-    "sky": (186, 824, 286, 954),
-    "mint": (318, 824, 417, 954),
-    "coral": (462, 824, 560, 954),
-    "violet": (550, 815, 690, 960),
+    "sun": (28, 792, 126, 954),
+    "sky": (186, 792, 286, 954),
+    "mint": (280, 792, 425, 954),
+    "coral": (420, 792, 545, 954),
+    "violet": (540, 792, 675, 960),
 }
 
 DARK_PIN_BOXES = {
-    "sun": (967, 637, 1031, 716),
-    "sky": (1041, 637, 1105, 716),
-    "mint": (1118, 637, 1183, 716),
-    "coral": (1192, 637, 1257, 716),
-    "violet": (1266, 637, 1332, 716),
+    "sun": (967, 612, 1031, 716),
+    "sky": (1041, 612, 1105, 716),
+    "mint": (1118, 612, 1183, 716),
+    "coral": (1192, 612, 1257, 716),
+    "violet": (1266, 612, 1332, 716),
 }
 
 LIGHT_TAPES = [
@@ -173,6 +173,46 @@ def transparent_colorful_hardware(
     for _ in range(grow):
         alpha = alpha.filter(ImageFilter.MaxFilter(3))
     alpha = alpha.filter(ImageFilter.GaussianBlur(0.7))
+    out = rgba.copy()
+    out.putalpha(alpha)
+    return out
+
+
+def transparent_dark_pin_hardware(img: Image.Image, target: RGB) -> Image.Image:
+    rgba = img.convert("RGBA")
+    pixels = rgba.load()
+    width, height = rgba.size
+    alpha = Image.new("L", rgba.size, 0)
+    alpha_pixels = alpha.load()
+    target_dominant = max(range(3), key=lambda index: target[index])
+
+    for y in range(height):
+        for x in range(width):
+            r, g, b, _ = pixels[x, y]
+            channels = (r, g, b)
+            maximum = max(channels)
+            minimum = min(channels)
+            saturation = maximum - minimum
+            luma = r * 0.2126 + g * 0.7152 + b * 0.0722
+            pixel_dominant = max(range(3), key=lambda index: channels[index])
+            color_distance = sum(abs(channels[index] - target[index]) for index in range(3))
+            matches_pin_color = (
+                color_distance < 225
+                and saturation > 22
+                and maximum > 45
+                and pixel_dominant == target_dominant
+            )
+            matches_pin_stem = (
+                saturation < 58
+                and 34 < luma < 190
+                and y > height * 0.38
+                and width * 0.22 < x < width * 0.78
+            )
+
+            if matches_pin_color or matches_pin_stem:
+                alpha_pixels[x, y] = 255
+
+    alpha = alpha.filter(ImageFilter.MaxFilter(3)).filter(ImageFilter.GaussianBlur(0.8))
     out = rgba.copy()
     out.putalpha(alpha)
     return out
@@ -368,12 +408,16 @@ def extract_hardware(src: Image.Image, tone: str) -> None:
     pin_boxes = LIGHT_PIN_BOXES if tone == "light" else DARK_PIN_BOXES
     for color in COLORS:
         source_color = "sun" if color == "ink" else color
-        pin = transparent_colorful_hardware(
-            crop(src, pin_boxes[source_color]),
-            bg_threshold=68 if tone == "light" else 34,
-            saturation_threshold=34 if tone == "light" else 22,
-            grow=1,
-        )
+        source_pin = crop(src, pin_boxes[source_color])
+        if tone == "dark":
+            pin = transparent_dark_pin_hardware(source_pin, INK_TARGETS[source_color])
+        else:
+            pin = transparent_colorful_hardware(
+                source_pin,
+                bg_threshold=68,
+                saturation_threshold=34,
+                grow=1,
+            )
         if color == "ink":
             pin = tint_sprite(pin, INK_TARGETS["ink"], strength=0.62)
         save(trim_transparent(pin, padding=6), f"pin-{color}-{tone}.png")

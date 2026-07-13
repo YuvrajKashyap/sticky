@@ -31,6 +31,8 @@ export function mapList(row: DbList): StickyList {
     name: row.name,
     color: row.color,
     sortOrder: row.sort_order,
+    isVisibleOnBoard: row.is_visible_on_board ?? true,
+    archivedAt: row.archived_at ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -113,6 +115,8 @@ export function listToDb(list: Partial<StickyList>) {
     name: list.name,
     color: list.color,
     sort_order: list.sortOrder,
+    is_visible_on_board: list.isVisibleOnBoard,
+    archived_at: list.archivedAt,
   };
 }
 

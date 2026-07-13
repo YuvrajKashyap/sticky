@@ -44,6 +44,7 @@ import {
   Plus,
   Repeat2,
   Search,
+  Settings2,
   Sparkles,
   Sun,
   Trash2,
@@ -51,7 +52,7 @@ import {
   Undo2,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import { format } from "date-fns";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { listToDb, recurrenceToDb, subtaskToDb, taskToDb } from "@/lib/sticky/mappers";
@@ -212,6 +213,11 @@ const TASK_SORT_ACCESSIBLE_LABELS: Record<StickyTaskSortMode, string> = {
 function normalizeWorkspacePreferences(data: StickyWorkspaceData): StickyWorkspaceData {
   return {
     ...data,
+    lists: data.lists.map((list) => ({
+      ...list,
+      isVisibleOnBoard: list.isVisibleOnBoard ?? true,
+      archivedAt: list.archivedAt ?? null,
+    })),
     preferences: {
       ...data.preferences,
       colorMode: data.preferences.colorMode === "dark" ? "dark" : "light",
@@ -368,6 +374,71 @@ function listSlug(value: string) {
     .replace(/&/g, " and ")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function countTextMatches(text: string | null | undefined, query: string) {
+  if (!text || !query) {
+    return 0;
+  }
+
+  const normalizedText = text.toLowerCase();
+  let count = 0;
+  let index = normalizedText.indexOf(query);
+
+  while (index !== -1) {
+    count += 1;
+    index = normalizedText.indexOf(query, index + query.length);
+  }
+
+  return count;
+}
+
+function taskFindText(task: StickyTask, subtasks: StickySubtask[], dueLabel: string | null) {
+  return [task.title, task.details, dueLabel, ...subtasks.map((subtask) => subtask.title)]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function HighlightText({ text, query }: { text: string; query: string }) {
+  if (!query) {
+    return <>{text}</>;
+  }
+
+  const normalizedText = text.toLowerCase();
+  const segments: Array<{ text: string; highlighted: boolean }> = [];
+  let cursor = 0;
+  let matchIndex = normalizedText.indexOf(query);
+
+  while (matchIndex !== -1) {
+    if (matchIndex > cursor) {
+      segments.push({ text: text.slice(cursor, matchIndex), highlighted: false });
+    }
+
+    segments.push({
+      text: text.slice(matchIndex, matchIndex + query.length),
+      highlighted: true,
+    });
+    cursor = matchIndex + query.length;
+    matchIndex = normalizedText.indexOf(query, cursor);
+  }
+
+  if (cursor < text.length) {
+    segments.push({ text: text.slice(cursor), highlighted: false });
+  }
+
+  return (
+    <>
+      {segments.map((segment, index) =>
+        segment.highlighted ? (
+          <mark className="find-highlight" key={`${segment.text}-${index}`}>
+            {segment.text}
+          </mark>
+        ) : (
+          <span key={`${segment.text}-${index}`}>{segment.text}</span>
+        ),
+      )}
+    </>
+  );
 }
 
 function visualVariant(value: string, count: number) {
@@ -782,6 +853,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   const [commandOpen, setCommandOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState("");
   const [commandIndex, setCommandIndex] = useState(0);
+  const [searchFocused, setSearchFocused] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
   const [listEditor, setListEditor] = useState<StickyList | "new" | null>(null);
@@ -1041,17 +1113,42 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     }),
   );
 
+  const sortedLists = useMemo(() => workspace.lists.slice().sort(bySortOrder), [workspace.lists]);
+  const unarchivedLists = useMemo(
+    () => sortedLists.filter((list) => !list.archivedAt),
+    [sortedLists],
+  );
+  const archivedLists = useMemo(
+    () =>
+      sortedLists
+        .filter((list) => Boolean(list.archivedAt))
+        .sort((a, b) => (b.archivedAt ?? "").localeCompare(a.archivedAt ?? "") || bySortOrder(a, b)),
+    [sortedLists],
+  );
+  const visibleBoardLists = useMemo(
+    () => unarchivedLists.filter((list) => list.isVisibleOnBoard),
+    [unarchivedLists],
+  );
+  const visibleBoardListIds = useMemo(
+    () => new Set(visibleBoardLists.map((list) => list.id)),
+    [visibleBoardLists],
+  );
+  const unarchivedListIds = useMemo(
+    () => new Set(unarchivedLists.map((list) => list.id)),
+    [unarchivedLists],
+  );
   const activeListId = useMemo(() => {
     const selected = workspace.userState.selectedListId;
-    if (selected && workspace.lists.some((list) => list.id === selected)) {
+    if (selected && unarchivedLists.some((list) => list.id === selected)) {
       return selected;
     }
-    return workspace.lists[0]?.id ?? null;
-  }, [workspace.lists, workspace.userState.selectedListId]);
+    return visibleBoardLists[0]?.id ?? unarchivedLists[0]?.id ?? null;
+  }, [unarchivedLists, visibleBoardLists, workspace.userState.selectedListId]);
 
-  const sortedLists = useMemo(() => workspace.lists.slice().sort(bySortOrder), [workspace.lists]);
-  const activeList = sortedLists.find((list) => list.id === activeListId) ?? null;
+  const listById = useMemo(() => new Map(workspace.lists.map((list) => [list.id, list])), [workspace.lists]);
+  const activeList = unarchivedLists.find((list) => list.id === activeListId) ?? null;
   const searchQuery = workspace.userState.searchQuery.trim().toLowerCase();
+  const searchExpanded = searchFocused || Boolean(searchQuery);
 
   const subtasksByTask = useMemo(() => {
     const map = new Map<string, StickySubtask[]>();
@@ -1085,10 +1182,33 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     return stats;
   }, [workspace.lists, workspace.tasks]);
   const totalActiveTasks = useMemo(
-    () => workspace.tasks.filter((task) => !task.isCompleted).length,
-    [workspace.tasks],
+    () =>
+      workspace.tasks.filter((task) => unarchivedListIds.has(task.listId) && !task.isCompleted)
+        .length,
+    [unarchivedListIds, workspace.tasks],
   );
-  const totalCompletedTasks = workspace.tasks.length - totalActiveTasks;
+  const totalCompletedTasks = useMemo(
+    () =>
+      workspace.tasks.filter((task) => unarchivedListIds.has(task.listId) && task.isCompleted)
+        .length,
+    [unarchivedListIds, workspace.tasks],
+  );
+  const unarchivedTaskIds = useMemo(
+    () =>
+      new Set(
+        workspace.tasks
+          .filter((task) => unarchivedListIds.has(task.listId))
+          .map((task) => task.id),
+      ),
+    [unarchivedListIds, workspace.tasks],
+  );
+  const totalOpenSubtasks = useMemo(
+    () =>
+      workspace.subtasks.filter(
+        (subtask) => unarchivedTaskIds.has(subtask.taskId) && !subtask.isCompleted,
+      ).length,
+    [unarchivedTaskIds, workspace.subtasks],
+  );
 
   const activeListTasks = useMemo(() => {
     return workspace.tasks
@@ -1114,8 +1234,82 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   const activeTasks = useMemo(() => {
     const todayKey = localDateKey();
 
-    const filteredTasks = activeListTasks
-      .filter((task) => {
+    const filteredTasks = activeListTasks.filter((task) => {
+      if (taskViewFilter === "due") {
+        return Boolean(task.dueDate);
+      }
+
+      if (taskViewFilter === "today") {
+        return task.dueDate === todayKey;
+      }
+
+      if (taskViewFilter === "overdue") {
+        return Boolean(task.dueDate && task.dueDate < todayKey);
+      }
+
+      if (taskViewFilter === "recurring") {
+        return recurrenceByTask.has(task.id);
+      }
+
+      if (taskViewFilter === "subtasks") {
+        return (subtasksByTask.get(task.id) ?? []).some((subtask) => !subtask.isCompleted);
+      }
+
+      return true;
+    });
+
+    if (taskSortMode === "due") {
+      return filteredTasks.slice().sort((a, b) => {
+        const aDue = `${a.dueDate ?? "9999-12-31"}T${a.dueTime ?? "23:59"}`;
+        const bDue = `${b.dueDate ?? "9999-12-31"}T${b.dueTime ?? "23:59"}`;
+        return aDue.localeCompare(bDue) || bySortOrder(a, b);
+      });
+    }
+
+    return filteredTasks;
+  }, [activeListTasks, recurrenceByTask, subtasksByTask, taskSortMode, taskViewFilter]);
+
+  const searchMatchCount = useMemo(() => {
+    if (!searchQuery) {
+      return 0;
+    }
+
+    let count = 0;
+
+    for (const list of sortedLists) {
+      count += countTextMatches(list.name, searchQuery);
+    }
+
+    for (const task of workspace.tasks) {
+      if (!visibleBoardListIds.has(task.listId)) {
+        continue;
+      }
+
+      const subtasks = subtasksByTask.get(task.id) ?? [];
+      const dueLabel = humanDue(task);
+
+      count += countTextMatches(task.title, searchQuery);
+      count += countTextMatches(task.details, searchQuery);
+      count += countTextMatches(dueLabel, searchQuery);
+
+      for (const subtask of subtasks) {
+        count += countTextMatches(subtask.title, searchQuery);
+      }
+    }
+
+    return count;
+  }, [searchQuery, sortedLists, subtasksByTask, visibleBoardListIds, workspace.tasks]);
+  const searchSummary = searchQuery
+    ? searchMatchCount
+      ? `${searchMatchCount} ${plural(searchMatchCount, "match", "matches")}`
+      : "No matches"
+    : "Find";
+
+  const boardColumns = useMemo<BoardColumn[]>(() => {
+    const todayKey = localDateKey();
+
+    function visibleTasksForList(tasks: StickyTask[]) {
+      const filteredTasks = tasks.filter((task) => {
         if (taskViewFilter === "due") {
           return Boolean(task.dueDate);
         }
@@ -1137,67 +1331,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
         }
 
         return true;
-      })
-      .filter((task) => {
-        if (!searchQuery) {
-          return true;
-        }
-        const subtaskText = (subtasksByTask.get(task.id) ?? [])
-          .map((subtask) => subtask.title)
-          .join(" ");
-        return `${task.title} ${task.details} ${subtaskText}`.toLowerCase().includes(searchQuery);
       });
-
-    if (taskSortMode === "due") {
-      return filteredTasks.slice().sort((a, b) => {
-        const aDue = `${a.dueDate ?? "9999-12-31"}T${a.dueTime ?? "23:59"}`;
-        const bDue = `${b.dueDate ?? "9999-12-31"}T${b.dueTime ?? "23:59"}`;
-        return aDue.localeCompare(bDue) || bySortOrder(a, b);
-      });
-    }
-
-    return filteredTasks;
-  }, [activeListTasks, recurrenceByTask, searchQuery, subtasksByTask, taskSortMode, taskViewFilter]);
-
-  const boardColumns = useMemo<BoardColumn[]>(() => {
-    const todayKey = localDateKey();
-
-    function visibleTasksForList(tasks: StickyTask[]) {
-      const filteredTasks = tasks
-        .filter((task) => {
-          if (taskViewFilter === "due") {
-            return Boolean(task.dueDate);
-          }
-
-          if (taskViewFilter === "today") {
-            return task.dueDate === todayKey;
-          }
-
-          if (taskViewFilter === "overdue") {
-            return Boolean(task.dueDate && task.dueDate < todayKey);
-          }
-
-          if (taskViewFilter === "recurring") {
-            return recurrenceByTask.has(task.id);
-          }
-
-          if (taskViewFilter === "subtasks") {
-            return (subtasksByTask.get(task.id) ?? []).some((subtask) => !subtask.isCompleted);
-          }
-
-          return true;
-        })
-        .filter((task) => {
-          if (!searchQuery) {
-            return true;
-          }
-
-          const subtaskText = (subtasksByTask.get(task.id) ?? [])
-            .map((subtask) => subtask.title)
-            .join(" ");
-
-          return `${task.title} ${task.details} ${subtaskText}`.toLowerCase().includes(searchQuery);
-        });
 
       if (taskSortMode === "due") {
         return filteredTasks.slice().sort((a, b) => {
@@ -1210,12 +1344,22 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       return filteredTasks;
     }
 
-    const boardLists = sortedLists.slice(0, 5);
-    const selectedBoardList = sortedLists.find((list) => list.id === activeListId);
+    const matchingLists = searchQuery
+      ? visibleBoardLists.filter((list) => {
+          const listTasks = workspace.tasks.filter((task) => task.listId === list.id);
 
-    if (selectedBoardList && !boardLists.some((list) => list.id === selectedBoardList.id)) {
-      boardLists[Math.max(0, boardLists.length - 1)] = selectedBoardList;
-    }
+          return (
+            countTextMatches(list.name, searchQuery) > 0 ||
+            listTasks.some((task) =>
+              taskFindText(task, subtasksByTask.get(task.id) ?? [], humanDue(task))
+                .toLowerCase()
+                .includes(searchQuery),
+            )
+          );
+        })
+      : [];
+    const searchHasMatches = Boolean(searchQuery && matchingLists.length);
+    const boardLists = searchHasMatches ? matchingLists : visibleBoardLists;
 
     return boardLists.map((list) => {
       const listActiveTasks = workspace.tasks
@@ -1238,19 +1382,18 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       };
     });
   }, [
-    activeListId,
     recurrenceByTask,
     searchQuery,
-    sortedLists,
     subtasksByTask,
     taskSortMode,
     taskViewFilter,
+    visibleBoardLists,
     workspace.preferences.completedOpenByList,
     workspace.tasks,
   ]);
   const taskViewFiltered = taskViewFilter !== "all";
   const taskSorted = taskSortMode !== "custom";
-  const reorderLocked = Boolean(searchQuery || taskViewFiltered || taskSorted);
+  const reorderLocked = Boolean(taskViewFiltered || taskSorted);
 
   useEffect(() => {
     if (!selectedTaskId) {
@@ -1322,22 +1465,26 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   const boardStyle = workspace.preferences.boardStyle;
   const currentSaveStatus = saveStatus(saveState, mode, demoReady);
   const quickCaptureIntent = useMemo(
-    () => parseQuickCaptureIntent(quickTitle, workspace.lists),
-    [quickTitle, workspace.lists],
+    () => parseQuickCaptureIntent(quickTitle, unarchivedLists),
+    [quickTitle, unarchivedLists],
   );
   const workspacePulse = useMemo<WorkspacePulse>(() => {
     const todayKey = format(new Date(), "yyyy-MM-dd");
-    const activeAll = workspace.tasks.filter((task) => !task.isCompleted);
-    const completedCount = workspace.tasks.length - activeAll.length;
-    const openSubtasks = workspace.subtasks.filter((subtask) => !subtask.isCompleted);
+    const workspaceTasks = workspace.tasks.filter((task) => unarchivedListIds.has(task.listId));
+    const activeAll = workspaceTasks.filter((task) => !task.isCompleted);
+    const completedCount = workspaceTasks.length - activeAll.length;
+    const workspaceTaskIds = new Set(workspaceTasks.map((task) => task.id));
+    const openSubtasks = workspace.subtasks.filter(
+      (subtask) => workspaceTaskIds.has(subtask.taskId) && !subtask.isCompleted,
+    );
     const listById = new Map(workspace.lists.map((list) => [list.id, list]));
-    const listActiveCounts = new Map(workspace.lists.map((list) => [list.id, 0]));
+    const listActiveCounts = new Map(unarchivedLists.map((list) => [list.id, 0]));
 
     activeAll.forEach((task) => {
       listActiveCounts.set(task.listId, (listActiveCounts.get(task.listId) ?? 0) + 1);
     });
 
-    const busiestList = workspace.lists
+    const busiestList = unarchivedLists
       .slice()
       .sort((a, b) => {
         const countDelta = (listActiveCounts.get(b.id) ?? 0) - (listActiveCounts.get(a.id) ?? 0);
@@ -1370,15 +1517,22 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       overdueCount: activeAll.filter((task) => task.dueDate && task.dueDate < todayKey).length,
       recurringCount: activeAll.filter((task) => recurrenceByTask.has(task.id)).length,
       openSubtasksCount: openSubtasks.length,
-      completionRate: workspace.tasks.length
-        ? Math.round((completedCount / workspace.tasks.length) * 100)
+      completionRate: workspaceTasks.length
+        ? Math.round((completedCount / workspaceTasks.length) * 100)
         : 0,
       focusTasks,
       busiestListName: busiestList?.name ?? null,
       busiestListActiveCount: busiestList ? listActiveCounts.get(busiestList.id) ?? 0 : 0,
     };
-  }, [recurrenceByTask, subtasksByTask, workspace.lists, workspace.subtasks, workspace.tasks]);
-  const listById = new Map(workspace.lists.map((list) => [list.id, list]));
+  }, [
+    recurrenceByTask,
+    subtasksByTask,
+    unarchivedListIds,
+    unarchivedLists,
+    workspace.lists,
+    workspace.subtasks,
+    workspace.tasks,
+  ]);
   const commandItems: CommandItem[] = [
     {
       id: "action-capture",
@@ -1391,9 +1545,9 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     {
       id: "action-search",
       kind: "action",
-      title: "Search this list",
-      detail: activeList ? `Filter ${activeList.name}` : "Focus search",
-      keywords: "find filter search current list",
+      title: "Find in workspace",
+      detail: "Highlight tasks, lists, and subtasks",
+      keywords: "find search highlight workspace page current list",
       run: () => focusCommandTarget("search"),
     },
     {
@@ -1545,7 +1699,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       keywords: "appearance board style wood board",
       run: () => setBoardStyle("wood"),
     },
-    ...sortedLists.map((list) => {
+    ...unarchivedLists.map((list) => {
       const stats = listStats.get(list.id) ?? { active: 0, completed: 0 };
 
       return {
@@ -1559,7 +1713,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       };
     }),
     ...workspace.tasks
-      .filter((task) => !task.isCompleted)
+      .filter((task) => unarchivedListIds.has(task.listId) && !task.isCompleted)
       .slice()
       .sort((a, b) => {
         const aDue = `${a.dueDate ?? "9999-12-31"}T${a.dueTime ?? "23:59"}`;
@@ -1735,8 +1889,200 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   }
 
   function switchList(listId: string) {
+    const list = workspace.lists.find((item) => item.id === listId);
+
+    if (list && !list.archivedAt && !list.isVisibleOnBoard) {
+      const before = workspace;
+      const timestamp = nowIso();
+
+      setWorkspace({
+        ...workspace,
+        lists: workspace.lists.map((item) =>
+          item.id === listId ? { ...item, isVisibleOnBoard: true, updatedAt: timestamp } : item,
+        ),
+        userState: { ...workspace.userState, selectedListId: listId, searchQuery: "" },
+      });
+      setSelectedTaskId(null);
+      persistListPatch(
+        "List shown",
+        listId,
+        { isVisibleOnBoard: true, archivedAt: null, updatedAt: timestamp },
+        before,
+        listId,
+      );
+      return;
+    }
+
     updateUserState({ selectedListId: listId, searchQuery: "" });
     setSelectedTaskId(null);
+  }
+
+  function fallbackListId(excludingListId: string) {
+    return (
+      visibleBoardLists.find((list) => list.id !== excludingListId)?.id ??
+      unarchivedLists.find((list) => list.id !== excludingListId)?.id ??
+      null
+    );
+  }
+
+  function persistListPatch(
+    label: string,
+    listId: string,
+    patch: Pick<Partial<StickyList>, "isVisibleOnBoard" | "archivedAt" | "updatedAt">,
+    before: StickyWorkspaceData,
+    selectedListId = workspace.userState.selectedListId,
+  ) {
+    void persist(
+      label,
+      () => {
+        const operations = [
+          supabase!
+            .from("lists")
+            .update({
+              is_visible_on_board: patch.isVisibleOnBoard ?? true,
+              archived_at: patch.archivedAt ?? null,
+            })
+            .eq("id", listId),
+        ];
+
+        if (selectedListId !== before.userState.selectedListId) {
+          operations.push(
+            supabase!
+              .from("user_state")
+              .update({
+                selected_list_id: selectedListId,
+                search_query: "",
+                last_opened_at: nowIso(),
+              })
+              .eq("user_id", before.user.id),
+          );
+        }
+
+        return Promise.all(operations);
+      },
+      before,
+    );
+  }
+
+  function toggleListBoardVisibility(list: StickyList) {
+    if (list.archivedAt) {
+      return;
+    }
+
+    const before = workspace;
+    const timestamp = nowIso();
+    const nextVisible = !list.isVisibleOnBoard;
+    const nextSelectedListId =
+      !nextVisible && activeListId === list.id
+        ? fallbackListId(list.id)
+        : workspace.userState.selectedListId;
+
+    setWorkspace({
+      ...workspace,
+      lists: workspace.lists.map((item) =>
+        item.id === list.id
+          ? { ...item, isVisibleOnBoard: nextVisible, updatedAt: timestamp }
+          : item,
+      ),
+      userState: {
+        ...workspace.userState,
+        selectedListId: nextSelectedListId,
+        searchQuery: nextSelectedListId === workspace.userState.selectedListId ? workspace.userState.searchQuery : "",
+      },
+    });
+
+    persistListPatch(
+      nextVisible ? "List shown" : "List hidden",
+      list.id,
+      { isVisibleOnBoard: nextVisible, updatedAt: timestamp },
+      before,
+      nextSelectedListId,
+    );
+  }
+
+  function archiveList(list: StickyList) {
+    if (unarchivedLists.length <= 1) {
+      pushToast({
+        title: "Keep one active list",
+        body: "Archive another list after creating or restoring a replacement.",
+      });
+      return;
+    }
+
+    const before = workspace;
+    const timestamp = nowIso();
+    const nextSelectedListId =
+      activeListId === list.id ? fallbackListId(list.id) : workspace.userState.selectedListId;
+
+    setWorkspace({
+      ...workspace,
+      lists: workspace.lists.map((item) =>
+        item.id === list.id
+          ? {
+              ...item,
+              isVisibleOnBoard: false,
+              archivedAt: timestamp,
+              updatedAt: timestamp,
+            }
+          : item,
+      ),
+      userState: {
+        ...workspace.userState,
+        selectedListId: nextSelectedListId,
+        searchQuery: "",
+      },
+    });
+    setSelectedTaskId(null);
+    persistListPatch(
+      "List archive",
+      list.id,
+      { isVisibleOnBoard: false, archivedAt: timestamp, updatedAt: timestamp },
+      before,
+      nextSelectedListId,
+    );
+    pushToast({
+      title: "List archived",
+      body: `${list.name} moved out of the main board.`,
+      actionLabel: "Restore",
+      onAction: () => restoreArchivedList(list.id),
+    });
+  }
+
+  function restoreArchivedList(listId: string) {
+    const before = workspaceRef.current;
+    const list = before.lists.find((item) => item.id === listId);
+
+    if (!list) {
+      return;
+    }
+
+    const timestamp = nowIso();
+    setWorkspace({
+      ...before,
+      lists: before.lists.map((item) =>
+        item.id === listId
+          ? {
+              ...item,
+              isVisibleOnBoard: true,
+              archivedAt: null,
+              updatedAt: timestamp,
+            }
+          : item,
+      ),
+      userState: {
+        ...before.userState,
+        selectedListId: listId,
+        searchQuery: "",
+      },
+    });
+    setSelectedTaskId(null);
+    persistListPatch(
+      "List restore",
+      listId,
+      { isVisibleOnBoard: true, archivedAt: null, updatedAt: timestamp },
+      before,
+      listId,
+    );
   }
 
   function openTaskInContext(taskId: string) {
@@ -1774,6 +2120,8 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
         name: trimmed,
         color,
         sortOrder: nextSortOrder(workspace.lists),
+        isVisibleOnBoard: true,
+        archivedAt: null,
         createdAt: nowIso(),
         updatedAt: nowIso(),
       };
@@ -1842,6 +2190,14 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       return;
     }
 
+    if (!list.archivedAt && unarchivedLists.length <= 1) {
+      pushToast({
+        title: "Keep one active list",
+        body: "Archive or restore another list before removing this active list.",
+      });
+      return;
+    }
+
     const taskCount = workspace.tasks.filter((task) => task.listId === list.id).length;
     openConfirmDialog({
       title: `Delete ${list.name}?`,
@@ -1854,7 +2210,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
   function deleteList(list: StickyList) {
     const before = workspace;
-    const fallbackList = workspace.lists.find((item) => item.id !== list.id) ?? null;
+    const fallbackList = workspace.lists.find((item) => item.id !== list.id && !item.archivedAt) ?? null;
     const deletedTasks = workspace.tasks.filter((task) => task.listId === list.id);
     const deletedTaskIds = new Set(deletedTasks.map((task) => task.id));
     const deletedSubtasks = workspace.subtasks.filter((subtask) =>
@@ -1986,8 +2342,12 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       sortOrder: (index + 1) * 1000,
       updatedAt: timestamp,
     }));
+    const movedById = new Map(moved.map((list) => [list.id, list]));
 
-    setWorkspace({ ...workspace, lists: moved });
+    setWorkspace({
+      ...workspace,
+      lists: workspace.lists.map((list) => movedById.get(list.id) ?? list),
+    });
     void persist(
       "List order",
       () =>
@@ -1999,7 +2359,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   }
 
   function moveListInOrder(listId: string, direction: -1 | 1) {
-    const ordered = workspace.lists.slice().sort(bySortOrder);
+    const ordered = unarchivedLists.slice().sort(bySortOrder);
     const oldIndex = ordered.findIndex((list) => list.id === listId);
     const newIndex = oldIndex + direction;
 
@@ -2012,10 +2372,10 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
   function createTask(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const intent = parseQuickCaptureIntent(quickTitle, workspace.lists);
+    const intent = parseQuickCaptureIntent(quickTitle, unarchivedLists);
     const title = intent.title.trim();
     const targetList = intent.listId
-      ? workspace.lists.find((list) => list.id === intent.listId)
+      ? unarchivedLists.find((list) => list.id === intent.listId)
       : activeList;
     const targetListId = targetList?.id ?? activeListId;
 
@@ -2188,7 +2548,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     if (reorderLocked) {
       pushToast({
         title: "Reorder paused during alternate views",
-        body: "Use All, Custom order, and clear search before changing saved order.",
+        body: "Use All and Custom order before changing saved order.",
       });
       return;
     }
@@ -3044,7 +3404,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     const type = active.data.current?.type as "list" | "task" | "subtask" | undefined;
 
     if (type === "list") {
-      const ordered = workspace.lists.slice().sort(bySortOrder);
+      const ordered = unarchivedLists.slice().sort(bySortOrder);
       const oldIndex = ordered.findIndex((list) => list.id === active.id);
       const newIndex = ordered.findIndex((list) => list.id === over.id);
       if (oldIndex < 0 || newIndex < 0) {
@@ -3055,10 +3415,10 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
     if (type === "task") {
       if (reorderLocked) {
-        pushToast({
-          title: "Reorder paused during alternate views",
-          body: "Use All, Custom order, and clear search before changing saved order.",
-        });
+          pushToast({
+            title: "Reorder paused during alternate views",
+            body: "Use All and Custom order before changing saved order.",
+          });
         return;
       }
 
@@ -3139,7 +3499,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           <nav className="rail-primary-nav" aria-label="Task shortcuts">
             <button
               type="button"
-              className={taskViewFilter === "all" && !searchQuery ? "active" : ""}
+              className={taskViewFilter === "all" ? "active" : ""}
               onClick={() => {
                 setTaskViewFilter("all");
                 setSearchQuery("");
@@ -3149,19 +3509,6 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
               <Check size={16} />
               <span>All tasks</span>
               <strong>{totalActiveTasks}</strong>
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                pushToast({
-                  title: "Starred tasks are not enabled yet",
-                  body: "Use search or lists to find priority tasks for now.",
-                })
-              }
-              aria-label="Show starred tasks"
-            >
-              <Sparkles size={16} />
-              <span>Starred</span>
             </button>
           </nav>
 
@@ -3173,21 +3520,24 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           </div>
 
           <SortableContext
-            items={sortedLists.map((list) => list.id)}
+            items={unarchivedLists.map((list) => list.id)}
             strategy={horizontalListSortingStrategy}
           >
             <nav className="list-stack">
-              {sortedLists
+              {unarchivedLists
                 .map((list, index, orderedLists) => (
                   <SortableListItem
                     key={list.id}
                     list={list}
                     active={list.id === activeListId}
                     stats={listStats.get(list.id) ?? { active: 0, completed: 0 }}
+                    searchQuery={searchQuery}
                     canMoveUp={index > 0}
                     canMoveDown={index < orderedLists.length - 1}
+                    onToggleBoardVisibility={() => toggleListBoardVisibility(list)}
                     onSelect={() => switchList(list.id)}
                     onRename={() => openListEditor(list)}
+                    onArchive={() => archiveList(list)}
                     onMoveUp={() => moveListInOrder(list.id, -1)}
                     onMoveDown={() => moveListInOrder(list.id, 1)}
                     onDelete={() => requestDeleteList(list)}
@@ -3195,6 +3545,27 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                 ))}
             </nav>
           </SortableContext>
+
+          {archivedLists.length ? (
+            <>
+              <div className="rail-section-heading archived-heading">
+                <span>Archived</span>
+                <strong>{archivedLists.length}</strong>
+              </div>
+              <nav className="archived-list-stack" aria-label="Archived lists">
+                {archivedLists.map((list) => (
+                  <ArchivedListItem
+                    key={list.id}
+                    list={list}
+                    stats={listStats.get(list.id) ?? { active: 0, completed: 0 }}
+                    searchQuery={searchQuery}
+                    onRestore={() => restoreArchivedList(list.id)}
+                    onDelete={() => requestDeleteList(list)}
+                  />
+                ))}
+              </nav>
+            </>
+          ) : null}
 
           <button className="rail-add-list-button" type="button" onClick={() => openListEditor("new")} aria-label="Add list">
             <Plus size={20} />
@@ -3253,25 +3624,41 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           <header className="workspace-topbar">
             <div className="workspace-title">
               <p className="eyebrow">Workspace</p>
-              <h2>Tasks</h2>
+              <h2>All tasks</h2>
               <div className="metric-strip">
                 <span>{totalActiveTasks} active</span>
                 <span>{totalCompletedTasks} completed</span>
-                <span>{workspace.subtasks.filter((subtask) => !subtask.isCompleted).length} open subtasks</span>
+                <span>{totalOpenSubtasks} open subtasks</span>
               </div>
             </div>
 
-            <div className="workspace-tools">
-              <label className="search-control">
+            <div className={`workspace-tools${searchExpanded ? " search-expanded" : ""}`}>
+              <label className={`search-control workspace-find-control${searchExpanded ? " expanded" : ""}`}>
                 <Search size={17} />
                 <input
                   ref={searchInputRef}
                   value={workspace.userState.searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
+                  onFocus={() => setSearchFocused(true)}
+                  onBlur={() => setSearchFocused(false)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape" && workspace.userState.searchQuery) {
+                      event.preventDefault();
+                      setSearchQuery("");
+                    }
+                  }}
                   type="search"
-                  placeholder="Search current list"
-                  aria-label="Search current list"
+                  placeholder="Find in workspace"
+                  aria-label="Find in workspace"
                 />
+                {searchExpanded ? (
+                  <span
+                    className={`search-match-count${searchQuery && !searchMatchCount ? " empty" : ""}`}
+                    aria-live="polite"
+                  >
+                    {searchSummary}
+                  </span>
+                ) : null}
               </label>
               <button
                 ref={commandTriggerRef}
@@ -3317,8 +3704,11 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                   className="appearance-trigger profile-chip profile-appearance-trigger"
                   aria-label="Open appearance settings"
                 >
-                  <span>{(workspace.user.displayName || workspace.user.email || "AR").slice(0, 2).toUpperCase()}</span>
-                  <i aria-hidden="true" />
+                  <span className="profile-avatar">
+                    {(workspace.user.displayName || workspace.user.email || "AR").slice(0, 2).toUpperCase()}
+                  </span>
+                  <Settings2 className="profile-settings-icon" size={15} aria-hidden="true" />
+                  <i className="profile-status-dot" aria-hidden="true" />
                 </summary>
                 <div className="preference-controls" aria-label="Workspace appearance">
                   <div className="appearance-group">
@@ -3451,7 +3841,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           {reorderLocked ? (
             <div className="filter-banner">
               <Search size={15} />
-              Reordering is locked while search, filters, or due-date sorting are active, so custom order stays intact.
+              Reordering is locked while filters or due-date sorting are active, so custom order stays intact.
             </div>
           ) : null}
 
@@ -3471,55 +3861,66 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           ) : null}
 
           <section className="board-scroll" aria-label="Active tasks">
-            {boardColumns.map((column, index) => (
-              <StickyBoardColumn
-                key={column.list.id}
-                column={column}
-                columnIndex={index}
-                active={column.list.id === activeListId}
-                quickTitle={quickTitle}
-                quickCaptureIntent={quickCaptureIntent}
-                quickInputRef={quickInputRef}
-                searchQuery={searchQuery}
-                taskViewFiltered={taskViewFiltered}
-                taskViewFilter={taskViewFilter}
-                reorderLocked={reorderLocked}
-                selectedTaskId={selectedTaskId}
-                subtasksByTask={subtasksByTask}
-                recurrenceByTask={recurrenceByTask}
-                onActivate={() => switchList(column.list.id)}
-                onActivateQuickAdd={() => {
-                  if (selectedTaskId) {
-                    quickCaptureClosedDetailsRef.current = true;
+            {boardColumns.length ? (
+              boardColumns.map((column, index) => (
+                <StickyBoardColumn
+                  key={column.list.id}
+                  column={column}
+                  columnIndex={index}
+                  active={column.list.id === activeListId}
+                  renderImmediately={
+                    Boolean(searchQuery) || column.list.id === activeListId || index < 3
                   }
-                  switchList(column.list.id);
-                  window.setTimeout(() => quickInputRef.current?.focus(), 0);
-                }}
-                onPrepareQuickAdd={() => {
-                  if (selectedTaskId) {
-                    quickCaptureClosedDetailsRef.current = true;
-                  }
-                  setSelectedTaskId(null);
-                }}
-                onQuickTitleChange={setQuickTitle}
-                onSubmitQuickTask={createTask}
-                onRenameList={() => openListEditor(column.list)}
-                onDeleteList={() => requestDeleteList(column.list)}
-                onOpenTask={(task) => openTaskInContext(task.id)}
-                onCompleteTask={completeTask}
-                onDeleteTask={requestDeleteTask}
-                onMoveTask={moveTaskInOrder}
-                onToggleCompleted={() => toggleCompletedPile(column.list.id)}
-                onRestoreTask={restoreTask}
-                onClearCompleted={requestClearCompleted}
-              />
-            ))}
+                  quickTitle={quickTitle}
+                  quickCaptureIntent={quickCaptureIntent}
+                  quickInputRef={quickInputRef}
+                  searchQuery={searchQuery}
+                  taskViewFiltered={taskViewFiltered}
+                  taskViewFilter={taskViewFilter}
+                  reorderLocked={reorderLocked}
+                  selectedTaskId={selectedTaskId}
+                  subtasksByTask={subtasksByTask}
+                  recurrenceByTask={recurrenceByTask}
+                  onActivate={() => switchList(column.list.id)}
+                  onActivateQuickAdd={() => {
+                    if (selectedTaskId) {
+                      quickCaptureClosedDetailsRef.current = true;
+                    }
+                    switchList(column.list.id);
+                    window.setTimeout(() => quickInputRef.current?.focus(), 0);
+                  }}
+                  onPrepareQuickAdd={() => {
+                    if (selectedTaskId) {
+                      quickCaptureClosedDetailsRef.current = true;
+                    }
+                    setSelectedTaskId(null);
+                  }}
+                  onQuickTitleChange={setQuickTitle}
+                  onSubmitQuickTask={createTask}
+                  onRenameList={() => openListEditor(column.list)}
+                  onDeleteList={() => requestDeleteList(column.list)}
+                  onOpenTask={(task) => openTaskInContext(task.id)}
+                  onCompleteTask={completeTask}
+                  onDeleteTask={requestDeleteTask}
+                  onMoveTask={moveTaskInOrder}
+                  onToggleCompleted={() => toggleCompletedPile(column.list.id)}
+                  onRestoreTask={restoreTask}
+                  onClearCompleted={requestClearCompleted}
+                />
+              ))
+            ) : (
+              <div className="board-empty-state" role="status">
+                <Layers3 size={24} />
+                <strong>No lists shown</strong>
+                <span>Check a list in the sidebar to put it back on the All tasks board.</span>
+              </div>
+            )}
           </section>
         </section>
 
         <TaskDetailsPanel
           task={selectedTask}
-          lists={sortedLists}
+          lists={unarchivedLists}
           subtasks={selectedTaskSubtasks}
           recurrenceRule={selectedTaskRecurrence}
           catchUpTarget={selectedTaskCatchUp}
@@ -3594,6 +3995,7 @@ function StickyBoardColumn({
   column,
   columnIndex,
   active,
+  renderImmediately,
   quickTitle,
   quickCaptureIntent,
   quickInputRef,
@@ -3622,6 +4024,7 @@ function StickyBoardColumn({
   column: BoardColumn;
   columnIndex: number;
   active: boolean;
+  renderImmediately: boolean;
   quickTitle: string;
   quickCaptureIntent: QuickCaptureIntent;
   quickInputRef: React.RefObject<HTMLInputElement | null>;
@@ -3647,29 +4050,61 @@ function StickyBoardColumn({
   onRestoreTask: (taskId: string) => void;
   onClearCompleted: () => void;
 }) {
+  const columnRef = useRef<HTMLElement | null>(null);
+  const [nearViewport, setNearViewport] = useState(renderImmediately);
   const { list, activeTasks, visibleTasks, completedTasks, completedOpen } = column;
+  const contentReady = renderImmediately || nearViewport;
   const completedListId = active ? "completed-stickies-list" : `completed-tasks-${list.id}`;
   const plateGroups = list.name.toLowerCase() === "plate" ? getPlateTaskGroups(visibleTasks) : [];
-  const shouldShowPlateGroups = plateGroups.length > 0 && !searchQuery && !taskViewFiltered;
+  const shouldShowPlateGroups = plateGroups.length > 0 && !taskViewFiltered;
   const paperDepth = (columnIndex % 3) + 1;
-  const emptyTitle = searchQuery
-    ? "No matching tasks"
-    : taskViewFiltered
-      ? `No ${TASK_VIEW_LABELS[taskViewFilter].toLowerCase()} tasks`
-      : "No tasks yet";
-  const emptyBody = searchQuery
-    ? "Try a different phrase or clear search to see this list."
-    : taskViewFiltered
-      ? "Switch back to All to see this saved order."
-      : "Add a task to start this list.";
+  const emptyTitle = taskViewFiltered ? `No ${TASK_VIEW_LABELS[taskViewFilter].toLowerCase()} tasks` : "No tasks yet";
+  const emptyBody = taskViewFiltered ? "Switch back to All to see this saved order." : "Add a task to start this list.";
+  const renderedTaskCount = contentReady ? visibleTasks.length : 0;
+  const completedRowsOpen = contentReady && completedOpen ? completedTasks.length : 0;
+  const columnSizingStyle = {
+    "--pad-task-space": `${renderedTaskCount * 34}px`,
+    "--pad-completed-space": `${completedRowsOpen * 34}px`,
+    "--wood-task-space": `${renderedTaskCount * 72}px`,
+    "--wood-completed-space": `${completedRowsOpen * 42}px`,
+  } as CSSProperties;
+
+  useEffect(() => {
+    if (renderImmediately) {
+      setNearViewport(true);
+      return;
+    }
+
+    const node = columnRef.current;
+
+    if (!node || typeof IntersectionObserver === "undefined") {
+      setNearViewport(true);
+      return;
+    }
+
+    const root = node.closest<HTMLElement>(".board-scroll");
+    const observer = new IntersectionObserver(
+      ([entry]) => setNearViewport(entry?.isIntersecting ?? false),
+      {
+        root,
+        rootMargin: "0px 420px",
+        threshold: 0.01,
+      },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [renderImmediately]);
 
   return (
     <section
+      ref={columnRef}
       className={`board-column color-${list.color} paper-depth-${paperDepth}${active ? " active" : ""}`}
       aria-label={`List ${list.name}`}
       data-list-id={list.id}
       data-list-slug={listSlug(list.name)}
       data-paper-depth={paperDepth}
+      style={columnSizingStyle}
     >
       <span className="column-paper-stack" aria-hidden="true" />
       <span className="column-pin" aria-hidden="true" />
@@ -3677,7 +4112,9 @@ function StickyBoardColumn({
 
       <header className="column-header">
         <button className="column-title-button" type="button" onClick={onActivate}>
-          <h2>{list.name}</h2>
+          <h2>
+            <HighlightText text={list.name} query={searchQuery} />
+          </h2>
           <span>
             {activeTasks.length} active / {completedTasks.length} done
           </span>
@@ -3749,12 +4186,23 @@ function StickyBoardColumn({
       )}
 
       <div className="task-lane">
-        {shouldShowPlateGroups ? (
-          <PlateTaskGroups
-            groups={plateGroups}
-            selectedTaskId={selectedTaskId}
-            onOpenTask={onOpenTask}
-            onCompleteTask={onCompleteTask}
+        {!contentReady && visibleTasks.length ? (
+          <button
+            className="deferred-task-loader"
+            type="button"
+            onClick={() => setNearViewport(true)}
+            aria-label={`Load ${visibleTasks.length} ${plural(visibleTasks.length, "task")} in ${list.name}`}
+          >
+            <Layers3 size={15} aria-hidden="true" />
+            <span>{visibleTasks.length} {plural(visibleTasks.length, "task")}</span>
+          </button>
+        ) : shouldShowPlateGroups ? (
+            <PlateTaskGroups
+              groups={plateGroups}
+              searchQuery={searchQuery}
+              selectedTaskId={selectedTaskId}
+              onOpenTask={onOpenTask}
+              onCompleteTask={onCompleteTask}
           />
         ) : visibleTasks.length ? (
           <SortableContext
@@ -3773,6 +4221,7 @@ function StickyBoardColumn({
                     subtasks={subtasksByTask.get(task.id) ?? []}
                     recurrenceRule={recurrenceByTask.get(task.id) ?? null}
                     dueLabel={humanDue(task)}
+                    searchQuery={searchQuery}
                     reorderDisabled={reorderLocked}
                     canMoveUp={!reorderLocked && orderIndex > 0}
                     canMoveDown={!reorderLocked && orderIndex >= 0 && orderIndex < activeTasks.length - 1}
@@ -3798,7 +4247,10 @@ function StickyBoardColumn({
         <button
           className="completed-toggle"
           type="button"
-          onClick={onToggleCompleted}
+          onClick={() => {
+            setNearViewport(true);
+            onToggleCompleted();
+          }}
           aria-expanded={completedOpen}
           aria-controls={completedListId}
         >
@@ -3808,7 +4260,7 @@ function StickyBoardColumn({
         </button>
 
         <AnimatePresence initial={false}>
-          {completedOpen ? (
+          {completedOpen && contentReady ? (
             <motion.div
               id={completedListId}
               className="completed-list"
@@ -3820,6 +4272,7 @@ function StickyBoardColumn({
                 <CompletedTaskRow
                   key={task.id}
                   task={task}
+                  searchQuery={searchQuery}
                   onRestore={() => onRestoreTask(task.id)}
                   onOpen={() => onOpenTask(task)}
                   onDelete={() => onDeleteTask(task)}
@@ -3844,11 +4297,13 @@ function StickyBoardColumn({
 
 function PlateTaskGroups({
   groups,
+  searchQuery,
   selectedTaskId,
   onOpenTask,
   onCompleteTask,
 }: {
   groups: PlateTaskGroup[];
+  searchQuery: string;
   selectedTaskId: string | null;
   onOpenTask: (task: StickyTask) => void;
   onCompleteTask: (task: StickyTask) => void;
@@ -3866,11 +4321,13 @@ function PlateTaskGroups({
             className={`plate-group color-${group.color}${collapsed ? " collapsed" : ""}`}
             data-paper-variant={visualVariant(group.name, 3)}
             role="listitem"
-          >
-            <header className="plate-group-title">
-              {collapsed ? <ChevronRight size={17} aria-hidden="true" /> : <ChevronDown size={17} aria-hidden="true" />}
-              <span>{group.name}</span>
-            </header>
+            >
+              <header className="plate-group-title">
+                {collapsed ? <ChevronRight size={17} aria-hidden="true" /> : <ChevronDown size={17} aria-hidden="true" />}
+                <span>
+                  <HighlightText text={group.name} query={searchQuery} />
+                </span>
+              </header>
             {visibleTasks.length ? (
               <div className="plate-group-tasks">
                 {visibleTasks.map((task) => (
@@ -3889,7 +4346,7 @@ function PlateTaskGroups({
                       <Check size={18} />
                     </button>
                     <button className="plate-task-title" type="button" onClick={() => onOpenTask(task)}>
-                      {task.title}
+                      <HighlightText text={task.title} query={searchQuery} />
                     </button>
                   </article>
                 ))}
@@ -3906,10 +4363,13 @@ function SortableListItem({
   list,
   active,
   stats,
+  searchQuery,
   canMoveUp,
   canMoveDown,
+  onToggleBoardVisibility,
   onSelect,
   onRename,
+  onArchive,
   onMoveUp,
   onMoveDown,
   onDelete,
@@ -3917,10 +4377,13 @@ function SortableListItem({
   list: StickyList;
   active: boolean;
   stats: { active: number; completed: number };
+  searchQuery: string;
   canMoveUp: boolean;
   canMoveDown: boolean;
+  onToggleBoardVisibility: () => void;
   onSelect: () => void;
   onRename: () => void;
+  onArchive: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onDelete: () => void;
@@ -3934,6 +4397,7 @@ function SortableListItem({
     `Open list ${list.name}`,
     `${stats.active} active ${plural(stats.active, "task")}`,
     `${stats.completed} completed ${plural(stats.completed, "task")}`,
+    list.isVisibleOnBoard ? "shown on All tasks" : "hidden from All tasks",
     active ? "current list" : null,
   ]
     .filter(Boolean)
@@ -3941,25 +4405,47 @@ function SortableListItem({
 
   return (
     <div ref={sortable.setNodeRef} style={style} className={`list-tab-wrap ${sortable.isDragging ? "dragging" : ""}`}>
-      <button
-        className={`list-tab color-${list.color}${active ? " active" : ""}`}
-        type="button"
-        onClick={onSelect}
-        aria-label={listTabLabel}
-      >
-        <span
-          className="drag-handle"
-          {...sortable.attributes}
-          {...sortable.listeners}
-          aria-label={`Drag list named ${list.name}`}
+      <div className={`list-tab-row color-${list.color}`}>
+        <label
+          className="list-board-toggle"
+          title={list.isVisibleOnBoard ? "Shown on All tasks" : "Hidden from All tasks"}
         >
-          <GripVertical size={16} />
-        </span>
-        <span className="list-tab-name">{list.name}</span>
-        <span className="list-tab-counts">
-          {stats.active}<small>{stats.completed}</small>
-        </span>
-      </button>
+          <input
+            type="checkbox"
+            checked={list.isVisibleOnBoard}
+            onChange={onToggleBoardVisibility}
+            aria-label={
+              list.isVisibleOnBoard
+                ? `Hide ${list.name} from All tasks`
+                : `Show ${list.name} on All tasks`
+            }
+          />
+          <span aria-hidden="true" />
+        </label>
+        <button
+          className={`list-tab color-${list.color}${active ? " active" : ""}${
+            list.isVisibleOnBoard ? "" : " hidden-on-board"
+          }`}
+          type="button"
+          onClick={onSelect}
+          aria-label={listTabLabel}
+        >
+          <span
+            className="drag-handle"
+            {...sortable.attributes}
+            {...sortable.listeners}
+            aria-label={`Drag list named ${list.name}`}
+          >
+            <GripVertical size={16} />
+          </span>
+          <span className="list-tab-name">
+            <HighlightText text={list.name} query={searchQuery} />
+          </span>
+          <span className="list-tab-counts">
+            {stats.active}<small>{stats.completed}</small>
+          </span>
+        </button>
+      </div>
       <div className="list-tab-actions">
         <button
           type="button"
@@ -3980,10 +4466,45 @@ function SortableListItem({
         <button type="button" onClick={onRename} aria-label={`Rename ${list.name}`}>
           <Pencil size={14} />
         </button>
+        <button type="button" onClick={onArchive} aria-label={`Archive ${list.name}`}>
+          <Archive size={14} />
+        </button>
         <button type="button" onClick={onDelete} aria-label={`Delete ${list.name}`}>
           <Trash2 size={14} />
         </button>
       </div>
+    </div>
+  );
+}
+
+function ArchivedListItem({
+  list,
+  stats,
+  searchQuery,
+  onRestore,
+  onDelete,
+}: {
+  list: StickyList;
+  stats: { active: number; completed: number };
+  searchQuery: string;
+  onRestore: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className={`archived-list-item color-${list.color}`}>
+      <Archive size={15} aria-hidden="true" />
+      <span className="archived-list-name">
+        <HighlightText text={list.name} query={searchQuery} />
+      </span>
+      <span className="archived-list-counts">
+        {stats.active}<small>{stats.completed}</small>
+      </span>
+      <button type="button" onClick={onRestore} aria-label={`Restore archived list ${list.name}`}>
+        <Undo2 size={14} />
+      </button>
+      <button type="button" onClick={onDelete} aria-label={`Delete archived list ${list.name}`}>
+        <Trash2 size={14} />
+      </button>
     </div>
   );
 }
@@ -3994,6 +4515,7 @@ function SortableTaskCard({
   subtasks,
   recurrenceRule,
   dueLabel,
+  searchQuery,
   reorderDisabled,
   canMoveUp,
   canMoveDown,
@@ -4008,6 +4530,7 @@ function SortableTaskCard({
   subtasks: StickySubtask[];
   recurrenceRule: StickyRecurrenceRule | null;
   dueLabel: string | null;
+  searchQuery: string;
   reorderDisabled: boolean;
   canMoveUp: boolean;
   canMoveDown: boolean;
@@ -4023,6 +4546,11 @@ function SortableTaskCard({
     disabled: reorderDisabled,
   });
   const openSubtasks = subtasks.filter((subtask) => !subtask.isCompleted).length;
+  const recurrenceLabel = recurrenceRule
+    ? recurrenceRule.paused
+      ? "Repeat paused"
+      : recurrenceCadence(recurrenceRule)
+    : null;
   const style = {
     transform: CSS.Transform.toString(sortable.transform),
     transition: sortable.transition,
@@ -4057,14 +4585,24 @@ function SortableTaskCard({
         <Check size={18} />
       </button>
       <button className="task-body-button" type="button" onClick={onOpen}>
-        <span className="task-title">{task.title}</span>
-        {task.details ? <span className="task-details">{task.details}</span> : null}
+        <span className="task-title">
+          <HighlightText text={task.title} query={searchQuery} />
+        </span>
+        {task.details ? (
+          <span className="task-details">
+            <HighlightText text={task.details} query={searchQuery} />
+          </span>
+        ) : null}
         <span className="task-meta-row">
-          {dueLabel ? <span><CalendarDays size={14} /> {dueLabel}</span> : null}
-          {openSubtasks ? <span><ListChecks size={14} /> {openSubtasks} subtasks</span> : null}
-          {recurrenceRule ? (
+          {dueLabel ? (
             <span>
-              <Repeat2 size={14} /> {recurrenceRule.paused ? "Repeat paused" : recurrenceCadence(recurrenceRule)}
+              <CalendarDays size={14} /> <HighlightText text={dueLabel} query={searchQuery} />
+            </span>
+          ) : null}
+          {openSubtasks ? <span><ListChecks size={14} /> {openSubtasks} subtasks</span> : null}
+          {recurrenceLabel ? (
+            <span>
+              <Repeat2 size={14} /> <HighlightText text={recurrenceLabel} query={searchQuery} />
             </span>
           ) : null}
         </span>
@@ -4107,11 +4645,13 @@ function SortableTaskCard({
 
 function CompletedTaskRow({
   task,
+  searchQuery,
   onRestore,
   onOpen,
   onDelete,
 }: {
   task: StickyTask;
+  searchQuery: string;
   onRestore: () => void;
   onOpen: () => void;
   onDelete: () => void;
@@ -4122,7 +4662,7 @@ function CompletedTaskRow({
         <Undo2 size={15} />
       </button>
       <button type="button" className="completed-title" onClick={onOpen}>
-        {task.title}
+        <HighlightText text={task.title} query={searchQuery} />
       </button>
       <button type="button" className="icon-chip subtle" onClick={onDelete} aria-label={`Delete ${task.title}`}>
         <Trash2 size={14} />

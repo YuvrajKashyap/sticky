@@ -27,6 +27,7 @@ export default defineConfig({
         timeout: 120_000,
         env: {
           CRON_SECRET: process.env.CRON_SECRET ?? "test-cron-secret",
+          STICKY_DEMO_MODE: "true",
           NEXT_PUBLIC_STICKY_DEMO_MODE:
             process.env.NEXT_PUBLIC_STICKY_DEMO_MODE ?? "true",
           SUPABASE_SECRET_KEY: "",

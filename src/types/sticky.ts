@@ -29,6 +29,8 @@ export type StickyList = {
   name: string;
   color: StickyColor;
   sortOrder: number;
+  isVisibleOnBoard: boolean;
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -111,6 +113,8 @@ export type DbList = {
   name: string;
   color: StickyColor;
   sort_order: number;
+  is_visible_on_board?: boolean | null;
+  archived_at?: string | null;
   created_at: string;
   updated_at: string;
 };

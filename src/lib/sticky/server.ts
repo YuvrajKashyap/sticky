@@ -71,17 +71,17 @@ function displayNameFromClaims(claims: ClaimsData["claims"]) {
 export async function loadWorkspace(): Promise<WorkspaceLoadResult> {
   noStore();
 
+  if (isDemoModeEnabled()) {
+    return {
+      status: "demo",
+      data: createDemoWorkspaceData(),
+      reason: "Sticky is running in local demo mode while sign-in is not connected.",
+    };
+  }
+
   const supabase = await createSupabaseServerClient();
 
   if (!supabase) {
-    if (isDemoModeEnabled()) {
-      return {
-        status: "demo",
-        data: createDemoWorkspaceData(),
-        reason: "Sticky is running in local demo mode while sign-in is not connected.",
-      };
-    }
-
     return {
       status: "signed_out",
       configurationMissing: true,

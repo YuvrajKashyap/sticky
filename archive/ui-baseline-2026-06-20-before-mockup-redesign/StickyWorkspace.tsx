@@ -1599,6 +1599,8 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
         name: trimmed,
         color,
         sortOrder: nextSortOrder(workspace.lists),
+        isVisibleOnBoard: true,
+        archivedAt: null,
         createdAt: nowIso(),
         updatedAt: nowIso(),
       };
