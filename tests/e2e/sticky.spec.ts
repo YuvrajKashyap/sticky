@@ -440,6 +440,7 @@ test.describe("Sticky workspace", () => {
     await expectNoConsoleErrors(page, async () => {
       await page.getByLabel("Open appearance settings").click();
       await expect(page.getByLabel("Workspace appearance")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
       await page.getByRole("button", { name: "Dark" }).click();
       await expect(page.locator(".sticky-app")).toHaveClass(/tone-dark/);
 

@@ -3572,25 +3572,6 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
             Add list
           </button>
 
-          <div className="rail-footer">
-            <div>
-              <p>{workspace.user.displayName || workspace.user.email}</p>
-              <span
-                className={`save-status ${currentSaveStatus.tone}`}
-                role="status"
-                aria-live="polite"
-                title={saveState.error ?? currentSaveStatus.label}
-              >
-                <span className="save-status-label">{currentSaveStatus.label}</span>
-                <span className="save-status-short" aria-hidden="true">
-                  {currentSaveStatus.shortLabel}
-                </span>
-              </span>
-            </div>
-            <button className="icon-chip" type="button" onClick={signOut} aria-label="Sign out">
-              <LogOut size={17} />
-            </button>
-          </div>
         </aside>
 
         <section className="task-stage" aria-label="Sticky workspace">
@@ -3779,6 +3760,18 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                         Compact
                       </button>
                     </div>
+                  </div>
+                  <div className="preference-account-row">
+                    <div>
+                      <span>Signed in as</span>
+                      <strong title={workspace.user.email}>
+                        {workspace.user.displayName || workspace.user.email}
+                      </strong>
+                    </div>
+                    <button type="button" onClick={signOut}>
+                      <LogOut size={16} aria-hidden="true" />
+                      Sign out
+                    </button>
                   </div>
                 </div>
               </details>

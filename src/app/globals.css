@@ -5162,6 +5162,59 @@ a {
   right: 0;
 }
 
+.preference-account-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-1);
+}
+
+.preference-account-row > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.preference-account-row span {
+  color: var(--ink-4);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.preference-account-row strong {
+  overflow: hidden;
+  color: var(--ink-1);
+  font-size: 0.82rem;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preference-account-row button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid var(--line-1);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.preference-account-row button:hover {
+  border-color: color-mix(in srgb, var(--brand) 32%, var(--line-1));
+  background: var(--brand-soft);
+  color: var(--brand-deep);
+}
+
 .board-scroll {
   gap: var(--column-gap);
   height: 100%;
