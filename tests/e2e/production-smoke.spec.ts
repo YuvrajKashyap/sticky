@@ -87,6 +87,26 @@ test.describe("Sticky production smoke", () => {
     expect(consoleErrors).toEqual([]);
   });
 
+  test("Google sign-in is pinned to the Sticky callback", async ({ request }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "auth route check only needs one browser project");
+
+    const response = await request.get("/auth/google", { maxRedirects: 0 });
+
+    expect(response.status()).toBeGreaterThanOrEqual(300);
+    expect(response.status()).toBeLessThan(400);
+
+    const location = response.headers().location;
+    expect(location).toBeTruthy();
+
+    const authorizeUrl = new URL(location!);
+    expect(authorizeUrl.hostname).toBe("sqskfdcwfwywjoobbpos.supabase.co");
+    expect(authorizeUrl.pathname).toBe("/auth/v1/authorize");
+    expect(authorizeUrl.searchParams.get("provider")).toBe("google");
+    expect(authorizeUrl.searchParams.get("redirect_to")).toBe(
+      "https://sticky.yuvrajkashyap.com/auth/callback",
+    );
+  });
+
   test("invalid email sign-in links fail safely on the Sticky origin", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "auth route check only needs one browser project");
 

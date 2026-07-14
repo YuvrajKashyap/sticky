@@ -68,10 +68,8 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
     setMessage("Check your email for the secure Sticky sign-in link.");
   }
 
-  async function signInWithGoogle() {
-    const supabase = createSupabaseBrowserClient();
-
-    if (!supabase) {
+  function signInWithGoogle() {
+    if (configurationMissing) {
       setStatus("error");
       setMessage("Sticky sign-in is not connected in this environment.");
       return;
@@ -80,18 +78,7 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
     setStatus("sending");
     setSendingMethod("google");
     setMessage("");
-
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: getAuthCallbackUrl(window.location.origin),
-      },
-    });
-
-    if (error) {
-      setStatus("error");
-      setMessage(userFacingStickyMessage(error.message, "Sticky could not start Google sign-in. Please try again."));
-    }
+    window.location.assign("/auth/google");
   }
 
   const isSending = status === "sending";
