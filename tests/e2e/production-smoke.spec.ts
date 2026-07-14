@@ -46,8 +46,8 @@ test.describe("Sticky production smoke", () => {
     await page.goto("/");
     await expect(page).toHaveTitle(/Sticky/);
     await expect(page.getByRole("heading", { name: "Sign in to Sticky" })).toBeVisible();
-    await expect(page.getByText("Tactile planning")).toBeVisible();
-    await expect(page.getByText("Private by default")).toBeVisible();
+    await expect(page.getByText("Your lists are right where you left them.")).toBeVisible();
+    await expect(page.getByText("Only approved accounts can open this workspace.")).toBeVisible();
     await expectNoTechnicalTerms(page);
     await expectMobileZoomAllowed(page);
     await expectNoHorizontalOverflow(page);

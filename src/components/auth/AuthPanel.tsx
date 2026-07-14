@@ -1,13 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  ArrowRight,
-  CheckCircle2,
-  KeyRound,
-  LockKeyhole,
-  Sparkles,
-} from "lucide-react";
+import { ArrowRight, LoaderCircle, LockKeyhole } from "lucide-react";
 import { userFacingStickyMessage } from "@/lib/sticky/messages";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getAuthCallbackUrl } from "@/lib/supabase/redirect";
@@ -21,6 +15,7 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
   const safeAccessMessage = userFacingStickyMessage(accessMessage);
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [sendingMethod, setSendingMethod] = useState<"email" | "google" | null>(null);
   const [message, setMessage] = useState(safeAccessMessage);
 
   useEffect(() => {
@@ -53,6 +48,7 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
     }
 
     setStatus("sending");
+    setSendingMethod("email");
     setMessage("");
 
     const { error } = await supabase.auth.signInWithOtp({
@@ -82,6 +78,7 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
     }
 
     setStatus("sending");
+    setSendingMethod("google");
     setMessage("");
 
     const { error } = await supabase.auth.signInWithOAuth({
@@ -97,43 +94,30 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
     }
   }
 
+  const isSending = status === "sending";
+
   return (
     <main className="auth-screen">
-      <section className="auth-hero" aria-label="Sticky sign in">
-        <div className="auth-mark" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-        </div>
+      <section className="auth-intake" aria-label="Sign in form">
+        <span className="auth-pin" aria-hidden="true" />
 
-        <div>
-          <p className="eyebrow">Sticky</p>
-          <h1>
-            A calm home for <em>everything</em> you keep meaning to do.
-          </h1>
-          <p className="auth-copy">
-            Fast capture, ordered lists, subtasks, schedules, and repeating routines —
-            laid out on warm paper, signed in to you alone.
-          </p>
-        </div>
-
-        <div className="auth-feature-row" aria-label="Sticky capabilities">
-          <span><Sparkles size={16} aria-hidden="true" /> Tactile planning</span>
-          <span><CheckCircle2 size={16} aria-hidden="true" /> Calm completed lane</span>
-          <span><LockKeyhole size={16} aria-hidden="true" /> Private by default</span>
-        </div>
-      </section>
-
-      <section className="auth-card" aria-label="Sign in form">
-        <div className="auth-card-header">
-          <div className="auth-card-icon" aria-hidden="true">
-            <KeyRound size={22} />
+        <header className="auth-intake-header">
+          <div className="auth-meta-row">
+            <div className="auth-brand" translate="no">
+              <span className="auth-mark" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </span>
+              <span>Sticky</span>
+            </div>
+            <span className="auth-meta-rule" aria-hidden="true" />
+            <p className="auth-kicker"><LockKeyhole size={14} aria-hidden="true" /> Private workspace</p>
           </div>
-          <div>
-            <p className="eyebrow">Private workspace</p>
-            <h2>Sign in to Sticky</h2>
-          </div>
-        </div>
+
+          <h1>Sign in to Sticky</h1>
+          <p className="auth-intro">Your lists are right where you left them.</p>
+        </header>
 
         {configurationMissing ? (
           <div className="notice warning">
@@ -142,37 +126,56 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
           </div>
         ) : null}
 
+        <button
+          className="google-action"
+          type="button"
+          onClick={signInWithGoogle}
+          disabled={isSending}
+        >
+          <span className="google-mark" aria-hidden="true">G</span>
+          {sendingMethod === "google" && isSending ? "Opening Google…" : "Continue with Google"}
+          {sendingMethod === "google" && isSending ? (
+            <LoaderCircle className="auth-spinner" size={17} aria-hidden="true" />
+          ) : <span aria-hidden="true" />}
+        </button>
+
+        <div className="auth-divider" aria-hidden="true"><span>or</span></div>
+
         <form className="auth-form" onSubmit={signInWithEmail}>
           <label>
-            <span>Email</span>
+            <span>Email address</span>
             <input
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               type="email"
+              name="email"
               placeholder="you@example.com"
               autoComplete="email"
+              spellCheck={false}
               required
             />
           </label>
-          <button className="primary-action" type="submit" disabled={status === "sending"}>
-            {status === "sending" ? "Sending link" : "Email me a sign-in link"}
-            <ArrowRight size={18} aria-hidden="true" />
+          <button className="primary-action" type="submit" disabled={isSending}>
+            {sendingMethod === "email" && isSending ? "Sending…" : "Send sign-in link"}
+            {sendingMethod === "email" && isSending ? (
+              <LoaderCircle className="auth-spinner" size={17} aria-hidden="true" />
+            ) : (
+              <ArrowRight size={18} aria-hidden="true" />
+            )}
           </button>
         </form>
 
-        <button className="secondary-action" type="button" onClick={signInWithGoogle}>
-          Continue with Google
-        </button>
-
-        {message ? (
-          <div className={`notice ${status === "error" || safeAccessMessage ? "error" : "success"}`}>
-            {message}
-          </div>
-        ) : null}
+        <div className="auth-status" aria-live="polite">
+          {message ? (
+            <div className={`notice ${status === "error" || safeAccessMessage ? "error" : "success"}`}>
+              {message}
+            </div>
+          ) : null}
+        </div>
 
         <p className="auth-footnote">
-          Only approved accounts can open this workspace. Your tasks stay private to
-          your signed-in account.
+          <LockKeyhole size={13} aria-hidden="true" />
+          Only approved accounts can open this workspace.
         </p>
       </section>
     </main>
