@@ -96,9 +96,11 @@ Use this before calling a Sticky release ready.
 - Production, preview, and development Vercel env vars are set.
 - Server-only `CRON_SECRET` and `SUPABASE_SECRET_KEY` are set before enabling
   production recurrence automation.
-- Supabase Auth site URL is `https://sticky.yuvrajkashyap.com`.
-- Supabase Auth redirect URLs include local, production, and the verified preview
-  callback URL.
+- The shared Supabase Auth site URL remains the platform-wide fallback;
+  Sticky does not overwrite it.
+- Supabase Auth redirect URLs allow local and
+  `https://sticky.yuvrajkashyap.com/auth/callback`, and the magic-link template
+  honors Sticky's explicit redirect URL.
 - Preview deployment passes Playwright with `PLAYWRIGHT_BASE_URL`.
 - Hosted signed-out production smoke passes with `npm run test:production-smoke`
   against the release URL.

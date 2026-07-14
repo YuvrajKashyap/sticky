@@ -15,8 +15,7 @@ const recurrenceCronPath = process.env.STICKY_CRON_PATH ?? "/api/recurrence/catc
 const recurrenceCronSchedule = process.env.STICKY_CRON_SCHEDULE ?? "15 11 * * *";
 const deploymentLogWindow = process.env.STICKY_LOG_WINDOW ?? "30m";
 const supabaseProjectRef = process.env.SUPABASE_PROJECT_REF ?? "sqskfdcwfwywjoobbpos";
-const supabaseAuthSiteUrl =
-  process.env.SUPABASE_AUTH_SITE_URL ?? `https://${customDomain}`;
+const supabaseAuthSiteUrl = process.env.SUPABASE_AUTH_SITE_URL ?? null;
 let productionDeploymentOrigin = null;
 let vercelProjectMetadataPromise = null;
 
@@ -86,12 +85,21 @@ function getSupabaseAuthRedirectUrls() {
 
   return [
     "http://localhost:3000/auth/callback",
-    "http://localhost:3100/auth/callback",
     `https://${customDomain}/auth/callback`,
-    "https://sticky-green.vercel.app/auth/callback",
-    "https://sticky-yuvraj-kashyaps-projects.vercel.app/auth/callback",
-    productionDeploymentOrigin ? `${productionDeploymentOrigin}/auth/callback` : null,
   ].filter(Boolean);
+}
+
+function redirectUrlIsAllowed(redirectUrl, allowedUrls) {
+  if (allowedUrls.has(redirectUrl)) {
+    return true;
+  }
+
+  try {
+    const { origin } = new URL(redirectUrl);
+    return allowedUrls.has(`${origin}/**`) || allowedUrls.has(`${origin}/*`);
+  } catch {
+    return false;
+  }
 }
 
 function findConfigValue(value, acceptedKeys) {
@@ -695,15 +703,25 @@ async function checkSupabaseAuthConfig() {
       "redirect_urls",
       "redirect_uris",
     ]);
+    const magicLinkTemplate = findConfigValue(config, [
+      "mailer_templates_magic_link_content",
+    ]);
     const redirectUrls = new Set(asArray(redirectListValue));
 
-    if (String(siteUrlValue ?? "") === supabaseAuthSiteUrl) {
+    if (supabaseAuthSiteUrl && String(siteUrlValue ?? "") === supabaseAuthSiteUrl) {
       pass("Supabase Auth site URL", `site URL is ${supabaseAuthSiteUrl}`);
-    } else {
+    } else if (supabaseAuthSiteUrl) {
       fail(
         "Supabase Auth site URL",
         `site URL is ${siteUrlValue ? String(siteUrlValue) : "missing"}, expected ${supabaseAuthSiteUrl}`,
       );
+    } else if (siteUrlValue) {
+      pass(
+        "Supabase Auth site URL",
+        `shared project default is ${String(siteUrlValue)}; Sticky uses its explicit redirect URL`,
+      );
+    } else {
+      fail("Supabase Auth site URL", "shared project site URL is missing");
     }
 
     if (!redirectUrls.size) {
@@ -712,11 +730,22 @@ async function checkSupabaseAuthConfig() {
     }
 
     for (const redirectUrl of getSupabaseAuthRedirectUrls()) {
-      if (redirectUrls.has(redirectUrl)) {
+      if (redirectUrlIsAllowed(redirectUrl, redirectUrls)) {
         pass("Supabase Auth redirect URL", `${redirectUrl} is allowed`);
       } else {
         fail("Supabase Auth redirect URL", `${redirectUrl} is missing`);
       }
+    }
+
+    const magicLinkContent = String(magicLinkTemplate ?? "");
+    if (
+      magicLinkContent.includes("{{ .RedirectTo }}") &&
+      magicLinkContent.includes("{{ .TokenHash }}") &&
+      magicLinkContent.includes("type=magiclink")
+    ) {
+      pass("Supabase Auth magic link", "template honors Sticky's explicit callback URL");
+    } else {
+      fail("Supabase Auth magic link", "template does not honor Sticky's explicit callback URL");
     }
   } catch (error) {
     fail("Supabase Auth config", error instanceof Error ? error.message : String(error));

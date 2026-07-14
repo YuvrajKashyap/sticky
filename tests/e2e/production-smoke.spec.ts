@@ -87,6 +87,27 @@ test.describe("Sticky production smoke", () => {
     expect(consoleErrors).toEqual([]);
   });
 
+  test("invalid email sign-in links fail safely on the Sticky origin", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "auth route check only needs one browser project");
+
+    await page.goto("/auth/callback?token_hash=invalid&type=magiclink");
+    const redirectedUrl = new URL(page.url());
+
+    expect(redirectedUrl.origin).toBe(
+      new URL(
+        String(
+          testInfo.project.use.baseURL ??
+            process.env.PLAYWRIGHT_BASE_URL ??
+            "https://sticky.yuvrajkashyap.com",
+        ),
+      ).origin,
+    );
+    expect(redirectedUrl.pathname).toBe("/");
+    expect(redirectedUrl.searchParams.get("auth_error")).toBeTruthy();
+    await expect(page.getByRole("heading", { name: "Sign in to Sticky" })).toBeVisible();
+    await expectNoTechnicalTerms(page);
+  });
+
   test("production routes expose install assets and hardened headers", async ({ request }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "route smoke only needs one browser project");
 

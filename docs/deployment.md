@@ -39,11 +39,10 @@ This runbook is for deploying Sticky to `sticky.yuvrajkashyap.com`.
 - Preferences: completed pile state, density, color mode, task view filter
   including Today, and task sort mode are persisted in
   `sticky.user_preferences`.
-- Supabase Auth URL configuration still needs to be applied in the Supabase
-  dashboard or with a Management API token. This shell does not have
-  `SUPABASE_ACCESS_TOKEN`, and Chrome dashboard automation is unavailable
-  because Chrome is not running and the Codex Chrome Extension is not installed
-  in the selected Chrome profile.
+- Supabase Auth includes Sticky's production and local callbacks. The shared
+  project keeps `https://yuvrajkashyap.com` as its global fallback, while
+  Sticky always passes its own callback and the magic-link template honors that
+  explicit redirect.
 - Supabase connector checks were refreshed again on 2026-06-14 against
   `sqskfdcwfwywjoobbpos` and reported `yk-platform` as `ACTIVE_HEALTHY`.
   Current Sticky-owned security advisors still show only the expected
@@ -206,11 +205,16 @@ do update set
   updated_at = now();
 ```
 
-6. In Supabase Auth URL configuration, set the site URL to:
+6. Keep the shared Supabase project's site URL at its platform-wide default:
 
 ```text
-https://sticky.yuvrajkashyap.com
+https://yuvrajkashyap.com
 ```
+
+Sticky must not replace this shared fallback. Its sign-in code passes
+`https://sticky.yuvrajkashyap.com/auth/callback` explicitly, and the magic-link
+template must use `{{ .RedirectTo }}` and `{{ .TokenHash }}` rather than a
+hardcoded app URL.
 
 7. Add redirect URLs:
 
@@ -223,11 +227,9 @@ https://sticky-green.vercel.app/auth/callback
 https://sticky-yuvraj-kashyaps-projects.vercel.app/auth/callback
 ```
 
-Generated Vercel deployment hosts change after new deploys. Re-run
-`npm run launch:check` with a local `SUPABASE_ACCESS_TOKEN` before release; it
-derives the current generated production callback from `vercel inspect` and
-checks it against Supabase Auth. After the first Vercel preview deploy, add that
-exact preview callback URL too, for example `https://<preview-host>/auth/callback`.
+Generated Vercel deployment hosts change after new deploys. Production auth
+uses the stable Sticky custom domain. Add a preview callback only when preview
+auth is intentionally enabled, for example `https://<preview-host>/auth/callback`.
 If you intentionally choose a wildcard for Vercel previews, Supabase documents the pattern
 `https://*-<team-or-account-slug>.vercel.app/**`; verify the pattern against the
 actual preview host before relying on it.
@@ -236,18 +238,17 @@ The same settings can be applied through the Supabase Management API with a
 token that has `auth_config_write` and `project_admin_write`:
 
 ```powershell
-$redirects = @(
-  "http://localhost:3000/auth/callback",
-  "http://localhost:3100/auth/callback",
-  "https://sticky.yuvrajkashyap.com/auth/callback",
-  "https://sticky-dmjsljlat-yuvraj-kashyaps-projects.vercel.app/auth/callback",
-  "https://sticky-green.vercel.app/auth/callback",
-  "https://sticky-yuvraj-kashyaps-projects.vercel.app/auth/callback"
-) -join ","
+$config = Invoke-RestMethod `
+  -Uri "https://api.supabase.com/v1/projects/sqskfdcwfwywjoobbpos/config/auth" `
+  -Headers @{ Authorization = "Bearer $env:SUPABASE_ACCESS_TOKEN" }
+
+$redirects = @($config.uri_allow_list -split ",") + @(
+  "http://localhost:3000/**",
+  "https://sticky.yuvrajkashyap.com/**"
+)
 
 $body = @{
-  site_url = "https://sticky.yuvrajkashyap.com"
-  uri_allow_list = $redirects
+  uri_allow_list = ($redirects | Sort-Object -Unique) -join ","
 } | ConvertTo-Json
 
 Invoke-RestMethod `
