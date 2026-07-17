@@ -86,6 +86,8 @@ test("connected settings and task reminders stay integrated with the workspace",
   await expect(connections.getByText("Google Tasks")).toHaveCount(0);
   await expect(connections.getByText("Poke", { exact: true })).toBeVisible();
   await expect(connections.getByRole("button", { name: "Create private connection" })).toBeVisible();
+  await expect(connections.getByText("Littlebird", { exact: true })).toBeVisible();
+  await expect(connections.getByRole("button", { name: "Create Littlebird connection" })).toBeVisible();
   await expect(connections.getByText("Web notifications")).toBeVisible();
   await connections.getByRole("button", { name: "Close connections" }).click();
 

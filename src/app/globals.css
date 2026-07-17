@@ -5278,6 +5278,9 @@ mark.find-highlight {
   flex-direction: column;
   gap: 12px;
   width: min(440px, 100%);
+  max-height: min(720px, calc(100dvh - 32px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 20px;
   border-radius: var(--radius-xl);
   background: color-mix(in srgb, var(--surface) 92%, transparent);
