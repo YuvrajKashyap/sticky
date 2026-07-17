@@ -6261,6 +6261,35 @@ mark.find-highlight {
     max-height: 72dvh;
     overflow-y: auto;
   }
+
+  /* ---- Board: clear the dock, roomier taps ---- */
+  .board-scroll {
+    padding: 12px 14px calc(var(--dock-h) + var(--safe-b) + 34px);
+    gap: 16px;
+  }
+
+  .task-card {
+    padding: 12px 10px 12px 13px;
+  }
+
+  .task-actions {
+    gap: 3px;
+  }
+
+  .task-actions button {
+    width: 34px;
+    height: 30px;
+    border-radius: 8px;
+  }
+
+  .board-add-task,
+  .completed-toggle {
+    min-height: 46px;
+  }
+
+  .quick-capture input {
+    font-size: 1rem;
+  }
 }
 
 /* ----------------------------------------------------------------------
