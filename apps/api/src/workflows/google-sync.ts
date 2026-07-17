@@ -17,7 +17,9 @@ async function syncGoogleStep(userId: string) {
     actorType: "workflow",
     actorId: "google-sync",
     credentialId: null,
-    scopes: new Set<StickyScope>(["tasks:read", "tasks:write", "integrations:read", "integrations:write"]),
+    scopes: new Set<StickyScope>([
+      "tasks:read", "tasks:write", "calendar:read", "calendar:write", "integrations:read", "integrations:write",
+    ]),
     requestId: crypto.randomUUID(),
     idempotencyKey: `google-sync:${Date.now()}`,
     providerUserId: null,

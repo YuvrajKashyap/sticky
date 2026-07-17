@@ -57,7 +57,9 @@ export async function authenticateRequest(request: Request, requestId: string): 
     actorId: data.user.id,
     credentialId: null,
     scopes: new Set<StickyScope>([
-      "tasks:read", "tasks:write", "tasks:destructive", "integrations:read", "integrations:write", "credentials:manage",
+      "tasks:read", "tasks:write", "tasks:destructive",
+      "calendar:read", "calendar:write", "calendar:destructive",
+      "integrations:read", "integrations:write", "credentials:manage",
     ]),
     requestId,
     idempotencyKey: request.headers.get("idempotency-key"),

@@ -1,0 +1,307 @@
+.addEvent,
+.dayAdd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.25rem;
+  padding: 0 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--accent, #226b62) 28%, transparent);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--accent, #226b62) 11%, var(--surface, #fff));
+  color: var(--ink, #21302d);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.addEvent:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.status {
+  margin: 0;
+  padding: 0.5rem 1rem;
+  border-top: 1px solid color-mix(in srgb, currentColor 8%, transparent);
+  color: var(--muted-ink, #60706c);
+  font-size: 0.78rem;
+}
+
+.eventPill,
+.weekEvent,
+.agendaEvent,
+.dayEvent {
+  border: 0;
+  color: #173b36;
+  text-align: left;
+  cursor: pointer;
+}
+
+.eventPill {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0.22rem 0.4rem;
+  border-left: 3px solid #2a8075;
+  border-radius: 0.35rem;
+  background: color-mix(in srgb, #58b6a9 22%, var(--surface, #fff));
+  font-size: 0.68rem;
+}
+
+.eventPill span {
+  flex: 0 0 auto;
+  color: #53706b;
+  font-size: 0.61rem;
+}
+
+.eventPill strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weekEvent,
+.agendaEvent {
+  display: grid;
+  gap: 0.2rem;
+  width: 100%;
+  padding: 0.65rem 0.7rem;
+  border: 1px solid color-mix(in srgb, #2a8075 20%, transparent);
+  border-left: 3px solid #2a8075;
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, #58b6a9 13%, var(--surface, #fff));
+}
+
+.weekEvent span,
+.agendaEvent > span {
+  color: #5d7772;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.035em;
+}
+
+.agendaEvent small {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #627772;
+}
+
+.agendaAdd {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  margin-left: auto;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.dayAdd {
+  margin-left: auto;
+}
+
+.dayEvent {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, 0.3fr) 4px 1fr;
+  align-items: center;
+  gap: 0.8rem;
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border: 1px solid color-mix(in srgb, #2a8075 18%, transparent);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, #58b6a9 12%, var(--surface, #fff));
+}
+
+.dayEvent > span:first-child,
+.dayEvent small {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.dayEvent i {
+  width: 3px;
+  height: 2.3rem;
+  border-radius: 99px;
+  background: #2a8075;
+}
+
+.dayEvent > span:last-child {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.dayEvent small {
+  color: #637671;
+}
+
+.backdrop {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(18 29 27 / 38%);
+  backdrop-filter: blur(6px);
+}
+
+.editor {
+  width: min(34rem, 100%);
+  max-height: min(46rem, calc(100dvh - 2rem));
+  overflow: auto;
+  padding: 1.15rem;
+  border: 1px solid rgb(255 255 255 / 42%);
+  border-radius: 1.35rem;
+  background: var(--surface, #fffdf8);
+  box-shadow: 0 30px 80px rgb(17 35 31 / 24%);
+  color: var(--ink, #1f2f2b);
+}
+
+.editor header,
+.editor footer,
+.editor footer > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.editor header {
+  margin-bottom: 1rem;
+}
+
+.editor header span,
+.editor label > span {
+  color: var(--muted-ink, #677671);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.055em;
+}
+
+.editor h3 {
+  margin: 0.12rem 0 0;
+  font-size: 1.25rem;
+}
+
+.editor header button,
+.editor footer button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 2.35rem;
+  padding: 0 0.8rem;
+  border: 1px solid color-mix(in srgb, currentColor 13%, transparent);
+  border-radius: 0.7rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.editor header button {
+  width: 2.35rem;
+  padding: 0;
+}
+
+.editor label {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.8rem;
+}
+
+.editor input,
+.editor textarea {
+  width: 100%;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  border-radius: 0.72rem;
+  background: color-mix(in srgb, var(--surface, #fff) 84%, #cce0db);
+  color: inherit;
+  font: inherit;
+  outline: none;
+}
+
+.editor input:focus,
+.editor textarea:focus {
+  border-color: #2a8075;
+  box-shadow: 0 0 0 3px rgb(42 128 117 / 12%);
+}
+
+.titleField input {
+  padding-block: 0.8rem;
+  font-size: 1.05rem;
+  font-weight: 750;
+}
+
+.whenGrid {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.allDay {
+  display: flex !important;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+
+.allDay input {
+  width: 1rem;
+  height: 1rem;
+  padding: 0;
+}
+
+.editor footer {
+  margin-top: 1.15rem;
+  padding-top: 1rem;
+  border-top: 1px solid color-mix(in srgb, currentColor 9%, transparent);
+}
+
+.saveButton {
+  border-color: #276f66 !important;
+  background: #276f66 !important;
+  color: #fff !important;
+}
+
+.deleteButton {
+  color: #9c403d !important;
+}
+
+@media (max-width: 720px) {
+  .addEvent {
+    width: 2.35rem;
+    padding: 0;
+    font-size: 0;
+  }
+
+  .whenGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .whenGrid label:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .dayEvent {
+    grid-template-columns: 5.4rem 3px 1fr;
+    padding-inline: 0.75rem;
+  }
+
+  .editor {
+    align-self: end;
+    max-height: calc(100dvh - 1rem);
+    border-radius: 1.25rem 1.25rem 0.4rem 0.4rem;
+  }
+}

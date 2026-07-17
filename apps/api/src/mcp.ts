@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import type { ActorContext } from "@sticky/contracts";
+import type { ActorContext, StickyScope } from "@sticky/contracts";
 import { destructiveConfirmationSchema } from "@sticky/contracts";
 import { requireDestructiveConfirmation, requireScope, resolveReminderTime, StickyDomainError } from "@sticky/domain";
 import { createMcpHonoApp } from "@modelcontextprotocol/hono";
@@ -26,9 +26,43 @@ function result(value: unknown) {
   };
 }
 
-async function mutationResult<T>(tool: string, input: unknown, operation: (current: ActorContext) => Promise<T>) {
+function nextDate(date: string) {
+  const value = new Date(`${date}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + 1);
+  return value.toISOString().slice(0, 10);
+}
+
+function zonedMidnight(date: string, timeZone: string) {
+  const target = Date.parse(`${date}T00:00:00Z`);
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  });
+  let instant = target;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const values = Object.fromEntries(formatter.formatToParts(new Date(instant)).map((part) => [part.type, part.value]));
+    const renderedAsUtc = Date.UTC(
+      Number(values.year),
+      Number(values.month) - 1,
+      Number(values.day),
+      Number(values.hour),
+      Number(values.minute),
+      Number(values.second),
+    );
+    instant += target - renderedAsUtc;
+  }
+  return new Date(instant).toISOString();
+}
+
+async function mutationResult<T>(tool: string, input: unknown, operation: (current: ActorContext) => Promise<T>, scope: StickyScope = "tasks:write") {
   const current = actor();
-  requireScope(current, "tasks:write");
+  requireScope(current, scope);
   const execution = await idempotent(current, `mcp:${tool}`, input, () => operation(current));
   if (!execution.replayed && process.env.WORKFLOW_ENABLED !== "false") {
     await start(outboxWorkflow, [current.userId]);
@@ -63,11 +97,42 @@ function registerTools(server: McpServer) {
   server.registerTool("get_agenda", { description: "Get incomplete tasks due in an inclusive date range.", inputSchema: z.object({ from: z.iso.date(), to: z.iso.date() }), annotations: { readOnlyHint: true } },
     async ({ from, to }) => { const current = actor(); requireScope(current, "tasks:read"); const tasks = await getRuntime().repository.listTasks(current); return result({ tasks: tasks.filter((task) => task.dueDate && task.dueDate >= from && task.dueDate <= to) }); });
 
+  server.registerTool("list_calendars", { description: "List the user's Sticky calendars and identify the default calendar.", inputSchema: z.object({ includeArchived: z.boolean().default(false) }), annotations: { readOnlyHint: true } },
+    async ({ includeArchived }) => { const current = actor(); requireScope(current, "calendar:read"); return result({ calendars: await getRuntime().repository.listCalendars(current, includeArchived) }); });
+
+  server.registerTool("list_calendar_events", { description: "List real Sticky calendar events that overlap a time range. These are time commitments, distinct from task due dates.", inputSchema: z.object({ from: z.iso.datetime({ offset: true }), to: z.iso.datetime({ offset: true }) }), annotations: { readOnlyHint: true } },
+    async (range) => { const current = actor(); requireScope(current, "calendar:read"); return result({ events: await getRuntime().repository.listCalendarEvents(current, range) }); });
+
+  server.registerTool("get_daily_plan", { description: "Read one day of Sticky due tasks and calendar events together before planning or changing the day.", inputSchema: z.object({ date: z.iso.date(), timezone: z.string().refine((value) => { try { new Intl.DateTimeFormat("en-US", { timeZone: value }); return true; } catch { return false; } }, "Use a valid IANA timezone.").default("America/Chicago") }), annotations: { readOnlyHint: true } },
+    async ({ date, timezone }) => {
+      const current = actor();
+      requireScope(current, "tasks:read"); requireScope(current, "calendar:read");
+      const from = zonedMidnight(date, timezone);
+      const to = zonedMidnight(nextDate(date), timezone);
+      const [tasks, events] = await Promise.all([
+        getRuntime().repository.listTasks(current),
+        getRuntime().repository.listCalendarEvents(current, { from, to }),
+      ]);
+      return result({ date, timezone, tasks: tasks.filter((task) => task.dueDate === date), events });
+    });
+
   server.registerTool("create_list", { description: "Create a Sticky list.", inputSchema: z.object({ name: z.string().trim().min(1).max(80), color: z.enum(["sun", "coral", "mint", "sky", "violet", "ink"]).default("sun") }) },
     async (input) => mutationResult("create_list", input, async (current) => ({ list: await getRuntime().repository.createList(current, input) })));
 
   server.registerTool("create_task", { description: "Create a task in a Sticky list.", inputSchema: z.object({ listId: id, title: z.string().trim().min(1).max(180), details: z.string().max(20_000).default(""), dueDate: z.iso.date().nullable().default(null), dueTime: z.string().nullable().default(null), timezone: z.string().default("America/Chicago") }) },
     async (input) => mutationResult("create_task", input, async (current) => ({ task: await getRuntime().repository.createTask(current, { ...input, color: "sun" }) })));
+
+  server.registerTool("create_calendar_event", { description: "Create a timed or all-day event in Sticky Calendar.", inputSchema: z.discriminatedUnion("allDay", [
+    z.object({ calendarId: id.optional(), taskId: id.nullable().default(null), title: z.string().trim().min(1).max(240), details: z.string().max(20_000).default(""), location: z.string().max(500).default(""), allDay: z.literal(false), startAt: z.iso.datetime({ offset: true }), endAt: z.iso.datetime({ offset: true }), timezone: z.string().default("America/Chicago") }),
+    z.object({ calendarId: id.optional(), taskId: id.nullable().default(null), title: z.string().trim().min(1).max(240), details: z.string().max(20_000).default(""), location: z.string().max(500).default(""), allDay: z.literal(true), startDate: z.iso.date(), endDate: z.iso.date(), timezone: z.string().default("America/Chicago") }),
+  ]) },
+    async (input) => mutationResult("create_calendar_event", input, async (current) => ({ event: await getRuntime().repository.createCalendarEvent(current, { ...input, recurrence: [], status: "confirmed", transparency: "opaque", color: null }) }), "calendar:write"));
+
+  server.registerTool("update_calendar_event", { description: "Update a Sticky calendar event using its current record version.", inputSchema: z.object({ eventId: id, version, title: z.string().trim().min(1).max(240).optional(), details: z.string().max(20_000).optional(), location: z.string().max(500).optional(), allDay: z.boolean().optional(), startAt: z.iso.datetime({ offset: true }).nullable().optional(), endAt: z.iso.datetime({ offset: true }).nullable().optional(), startDate: z.iso.date().nullable().optional(), endDate: z.iso.date().nullable().optional(), timezone: z.string().optional(), status: z.enum(["confirmed", "tentative", "cancelled"]).optional() }) },
+    async ({ eventId, ...input }) => mutationResult("update_calendar_event", { eventId, ...input }, async (current) => ({ event: await getRuntime().repository.updateCalendarEvent(current, eventId, input) }), "calendar:write"));
+
+  server.registerTool("time_block_task", { description: "Reserve time on Sticky Calendar for an existing task and link the event back to that task.", inputSchema: z.object({ taskId: id, startAt: z.iso.datetime({ offset: true }), durationMinutes: z.int().min(5).max(1_440).default(30), calendarId: id.optional(), location: z.string().max(500).default("") }) },
+    async ({ taskId, ...input }) => mutationResult("time_block_task", { taskId, ...input }, async (current) => ({ event: await getRuntime().repository.timeBlockTask(current, taskId, input) }), "calendar:write"));
 
   server.registerTool("update_task", { description: "Update title, details, date, time, or timezone using the current record version.", inputSchema: z.object({ taskId: id, version, title: z.string().trim().min(1).max(180).optional(), details: z.string().max(20_000).optional(), dueDate: z.iso.date().nullable().optional(), dueTime: z.string().nullable().optional(), timezone: z.string().optional() }) },
     async ({ taskId, ...input }) => mutationResult("update_task", { taskId, ...input }, async (current) => ({ task: await getRuntime().repository.updateTask(current, taskId, input) })));
@@ -107,6 +172,16 @@ function registerTools(server: McpServer) {
   server.registerTool("delete_list", { description: "Permanently delete a list and its tasks. Requires explicit confirmation.", inputSchema: z.object({ listId: id, confirmation: destructive }), annotations: { destructiveHint: true } },
     async (input) => { const current = actor(); requireDestructiveConfirmation(current, input.confirmation, ["delete", input.listId]); return mutationResult("delete_list", input, async () => { await getRuntime().repository.deleteList(current, input.listId); return { deleted: true, listId: input.listId }; }); });
 
+  server.registerTool("delete_calendar_event", { description: "Permanently delete a Sticky calendar event. Requires explicit confirmation.", inputSchema: z.object({ eventId: id, confirmation: destructive }), annotations: { destructiveHint: true } },
+    async (input) => {
+      const current = actor();
+      requireDestructiveConfirmation(current, input.confirmation, ["delete", input.eventId], "calendar:destructive");
+      return mutationResult("delete_calendar_event", input, async () => {
+        await getRuntime().repository.deleteCalendarEvent(current, input.eventId);
+        return { deleted: true, eventId: input.eventId };
+      }, "calendar:write");
+    });
+
   server.registerTool("clear_completed", { description: "Permanently delete all completed tasks in a list. Requires explicit confirmation.", inputSchema: z.object({ listId: id, confirmation: destructive }), annotations: { destructiveHint: true } },
     async (input) => { const current = actor(); requireDestructiveConfirmation(current, input.confirmation, ["clear", "completed", input.listId]); return mutationResult("clear_completed", input, async () => { const { data, error } = await getRuntime().db.from("tasks").delete().eq("user_id", current.userId).eq("list_id", input.listId).eq("is_completed", true).select("id"); if (error) throw error; return { deletedTaskIds: data.map((item) => item.id) }; }); });
 }
@@ -137,7 +212,7 @@ export function createMcpApp() {
     const server = new McpServer(
       { name: "Sticky", version: "1.0.0" },
       {
-        instructions: "Sticky is the user's canonical task system. Read the available lists before creating a task, preserve existing data, and request explicit confirmation before destructive actions.",
+        instructions: "Sticky is the user's canonical focused task and planning system. Tasks and calendar events are distinct: due dates describe deadlines, while events reserve time. Read lists and the relevant day before planning, preserve existing data, and request explicit confirmation before destructive actions.",
       },
     );
     registerTools(server);

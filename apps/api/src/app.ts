@@ -1,17 +1,22 @@
 import type { ActorContext, ApiSuccess } from "@sticky/contracts";
 import {
   apiCredentialCreateSchema,
+  calendarRangeSchema,
   completeTaskSchema,
+  createCalendarEventSchema,
   createListSchema,
   createReminderSchema,
   createSubtaskSchema,
   createTaskSchema,
   destructiveConfirmationSchema,
+  googleCalendarSelectionSchema,
   googleListSelectionSchema,
   moveTaskSchema,
   snoozeReminderSchema,
   updateListSchema,
+  updateCalendarEventSchema,
   updateTaskSchema,
+  timeBlockTaskSchema,
 } from "@sticky/contracts";
 import { requireDestructiveConfirmation, requireScope, resolveReminderTime, StickyDomainError } from "@sticky/domain";
 import { start } from "workflow/api";
@@ -26,8 +31,10 @@ import { createCredentialToken, getRuntime } from "./runtime";
 import {
   finishGoogleConnection,
   googleAuthorizationUrl,
+  listGoogleCalendars,
   listGoogleTaskLists,
   pushOutboxEvent,
+  selectGoogleCalendars,
   selectGoogleLists,
   syncGoogle,
 } from "./services/google";
@@ -340,6 +347,44 @@ const app = new Hono<Env>();
     return mutate(c, body, async () => ({ subtask: await getRuntime().repository.createSubtask(actor, c.req.param("id"), body) }));
   });
 
+  app.get("/api/v1/calendars", async (c) => {
+    const actor = c.get("actor"); requireScope(actor, "calendar:read");
+    return success(c, { calendars: await getRuntime().repository.listCalendars(actor, c.req.query("archived") === "include") });
+  });
+  app.get("/api/v1/calendar-events", async (c) => {
+    const actor = c.get("actor"); requireScope(actor, "calendar:read");
+    const range = calendarRangeSchema.parse({ from: c.req.query("from"), to: c.req.query("to") });
+    return success(c, { events: await getRuntime().repository.listCalendarEvents(actor, range) });
+  });
+  app.get("/api/v1/calendar-events/:id", async (c) => {
+    const actor = c.get("actor"); requireScope(actor, "calendar:read");
+    return success(c, { event: await getRuntime().repository.getCalendarEvent(actor, c.req.param("id")) });
+  });
+  app.post("/api/v1/calendar-events", async (c) => {
+    const actor = c.get("actor"); requireScope(actor, "calendar:write");
+    const body = await parseJson(c, createCalendarEventSchema);
+    return mutate(c, body, async () => ({ event: await getRuntime().repository.createCalendarEvent(actor, body) }));
+  });
+  app.patch("/api/v1/calendar-events/:id", async (c) => {
+    const actor = c.get("actor"); requireScope(actor, "calendar:write");
+    const body = await parseJson(c, updateCalendarEventSchema);
+    return mutate(c, body, async () => ({ event: await getRuntime().repository.updateCalendarEvent(actor, c.req.param("id"), body) }));
+  });
+  app.delete("/api/v1/calendar-events/:id", async (c) => {
+    const actor = c.get("actor");
+    const body = await parseJson(c, z.object({ confirmation: destructiveConfirmationSchema }));
+    requireDestructiveConfirmation(actor, body.confirmation, ["delete", c.req.param("id")], "calendar:destructive");
+    return mutate(c, body, async () => {
+      await getRuntime().repository.deleteCalendarEvent(actor, c.req.param("id"));
+      return { deleted: true };
+    });
+  });
+  app.post("/api/v1/tasks/:id/time-block", async (c) => {
+    const actor = c.get("actor"); requireScope(actor, "calendar:write");
+    const body = await parseJson(c, timeBlockTaskSchema);
+    return mutate(c, body, async () => ({ event: await getRuntime().repository.timeBlockTask(actor, c.req.param("id"), body) }));
+  });
+
   app.get("/api/v1/reminders", async (c) => {
     const actor = c.get("actor"); requireScope(actor, "tasks:read");
     return success(c, { reminders: await getRuntime().repository.listReminders(actor, c.req.query("taskId")) });
@@ -393,6 +438,7 @@ const app = new Hono<Env>();
       integrations: data,
       capabilities: {
         googleTasks: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+        googleCalendar: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
         pokeDelivery: Boolean(process.env.POKE_API_KEY),
         webPush: Boolean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY),
       },
@@ -415,6 +461,19 @@ const app = new Hono<Env>();
       return { ...selection, workflowRunId: run?.runId ?? null };
     });
   });
+  app.get("/api/v1/integrations/google/calendars", async (c) => {
+    const actor = c.get("actor"); requireScope(actor, "integrations:read");
+    return success(c, { calendars: await listGoogleCalendars(actor) });
+  });
+  app.post("/api/v1/integrations/google/calendars", async (c) => {
+    const actor = c.get("actor"); requireScope(actor, "integrations:write");
+    const body = await parseJson(c, googleCalendarSelectionSchema);
+    return mutate(c, body, async () => {
+      const selection = await selectGoogleCalendars(actor, body.calendars);
+      const run = process.env.WORKFLOW_ENABLED === "false" ? null : await start(googleSyncWorkflow, [actor.userId]);
+      return { ...selection, workflowRunId: run?.runId ?? null };
+    });
+  });
   app.post("/api/v1/integrations/google/sync", async (c) => {
     const actor = c.get("actor"); requireScope(actor, "integrations:write");
     return mutate(c, {}, () => syncGoogle(actor));
@@ -422,7 +481,8 @@ const app = new Hono<Env>();
   app.delete("/api/v1/integrations/google", async (c) => {
     const actor = c.get("actor"); requireScope(actor, "integrations:write");
     return mutate(c, {}, async () => {
-      const { error } = await getRuntime().db.from("integration_accounts").update({ status: "revoked", encrypted_credentials: null }).eq("user_id", actor.userId).eq("provider", "google_tasks");
+      const { error } = await getRuntime().db.from("integration_accounts").update({ status: "revoked", encrypted_credentials: null })
+        .eq("user_id", actor.userId).in("provider", ["google_workspace", "google_tasks"]);
       if (error) throw error;
       return { disconnected: true, stickyDataPreserved: true };
     });

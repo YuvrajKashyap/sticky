@@ -10,8 +10,9 @@ export function requireDestructiveConfirmation(
   actor: ActorContext,
   confirmation: { confirmed: true; summary: string } | undefined,
   expectedTerms: string[],
+  destructiveScope: StickyScope = "tasks:destructive",
 ): void {
-  requireScope(actor, "tasks:destructive");
+  requireScope(actor, destructiveScope);
   if (actor.actorType === "human") return;
   const summary = confirmation?.summary.toLowerCase() ?? "";
   if (!confirmation?.confirmed || !expectedTerms.every((term) => summary.includes(term.toLowerCase()))) {

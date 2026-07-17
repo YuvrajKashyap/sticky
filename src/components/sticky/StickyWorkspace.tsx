@@ -4147,6 +4147,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
           {viewMode === "calendar" ? (
             <StickyCalendar
+              mode={mode}
               tasks={calendarTasks}
               lists={unarchivedLists}
               onTaskSelect={(taskId) => {

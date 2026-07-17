@@ -1,17 +1,23 @@
 import type {
   ActorContext,
+  CalendarDto,
+  CalendarEventDto,
+  CalendarRangeInput,
+  CreateCalendarEventInput,
   CreateListInput,
   CreateReminderInput,
   CreateTaskInput,
   ListDto,
   ReminderDto,
   TaskDto,
+  TimeBlockTaskInput,
+  UpdateCalendarEventInput,
   UpdateListInput,
   UpdateTaskInput,
 } from "@sticky/contracts";
 import { assertVersion, conflict, StickyDomainError } from "@sticky/domain";
 import type { StickySupabaseClient } from "./client";
-import { mapListRow, mapReminderRow, mapTaskRow, type DataRow } from "./mappers";
+import { mapCalendarEventRow, mapCalendarRow, mapListRow, mapReminderRow, mapTaskRow, type DataRow } from "./mappers";
 
 type QueryError = { code?: string; message: string; details?: string | null };
 
@@ -229,6 +235,183 @@ export class StickyRepository {
     return ((data ?? []) as DataRow[]).map(mapReminderRow);
   }
 
+  async listCalendars(actor: ActorContext, includeArchived = false): Promise<CalendarDto[]> {
+    let query = this.db.from("calendars").select("*").eq("user_id", actor.userId)
+      .order("is_default", { ascending: false }).order("created_at");
+    if (!includeArchived) query = query.is("archived_at", null);
+    const { data, error } = await query;
+    throwQuery(error);
+    const calendars = ((data ?? []) as DataRow[]).map(mapCalendarRow);
+    return calendars.length || includeArchived ? calendars : [await this.ensureDefaultCalendar(actor)];
+  }
+
+  async ensureDefaultCalendar(actor: ActorContext): Promise<CalendarDto> {
+    const existing = await this.db.from("calendars").select("*")
+      .eq("user_id", actor.userId).eq("is_default", true).is("archived_at", null).maybeSingle();
+    throwQuery(existing.error);
+    if (existing.data) return mapCalendarRow(existing.data as DataRow);
+
+    const inserted = await this.db.from("calendars").insert({
+      user_id: actor.userId,
+      name: "Sticky",
+      color: "sky",
+      timezone: "America/Chicago",
+      is_default: true,
+    }).select("*").single();
+    if (inserted.error?.code === "23505") {
+      const retry = await this.db.from("calendars").select("*")
+        .eq("user_id", actor.userId).eq("is_default", true).is("archived_at", null).single();
+      throwQuery(retry.error);
+      return mapCalendarRow(retry.data as DataRow);
+    }
+    throwQuery(inserted.error);
+    return mapCalendarRow(inserted.data as DataRow);
+  }
+
+  async createCalendar(actor: ActorContext, input: { name: string; color?: CalendarDto["color"]; timezone?: string }): Promise<CalendarDto> {
+    const { data, error } = await this.db.from("calendars").insert({
+      user_id: actor.userId,
+      name: input.name,
+      color: input.color ?? "sky",
+      timezone: input.timezone ?? "America/Chicago",
+      is_default: false,
+    }).select("*").single();
+    throwQuery(error);
+    const calendar = mapCalendarRow(data as DataRow);
+    await this.writeActivity(activity(actor, "calendar.created", undefined, undefined, { calendarId: calendar.id }));
+    return calendar;
+  }
+
+  async getCalendar(actor: ActorContext, id: string): Promise<CalendarDto> {
+    const { data, error } = await this.db.from("calendars").select("*")
+      .eq("id", id).eq("user_id", actor.userId).maybeSingle();
+    throwQuery(error);
+    if (!data) throw new StickyDomainError("not_found", "Calendar not found.", 404);
+    return mapCalendarRow(data as DataRow);
+  }
+
+  async listCalendarEvents(actor: ActorContext, range: CalendarRangeInput): Promise<CalendarEventDto[]> {
+    const fromDate = range.from.slice(0, 10);
+    const toDate = range.to.slice(0, 10);
+    const base = () => this.db.from("calendar_events").select("*")
+      .eq("user_id", actor.userId).neq("status", "cancelled");
+    const [timed, allDay] = await Promise.all([
+      base().eq("all_day", false).lt("start_at", range.to).gt("end_at", range.from).order("start_at"),
+      base().eq("all_day", true).lt("start_date", toDate).gt("end_date", fromDate).order("start_date"),
+    ]);
+    throwQuery(timed.error);
+    throwQuery(allDay.error);
+    return ([...(timed.data ?? []), ...(allDay.data ?? [])] as DataRow[])
+      .map(mapCalendarEventRow)
+      .sort((a, b) => (a.startAt ?? a.startDate ?? "").localeCompare(b.startAt ?? b.startDate ?? ""));
+  }
+
+  async getCalendarEvent(actor: ActorContext, id: string): Promise<CalendarEventDto> {
+    const { data, error } = await this.db.from("calendar_events").select("*")
+      .eq("id", id).eq("user_id", actor.userId).maybeSingle();
+    throwQuery(error);
+    if (!data) throw new StickyDomainError("not_found", "Calendar event not found.", 404);
+    return mapCalendarEventRow(data as DataRow);
+  }
+
+  async createCalendarEvent(actor: ActorContext, input: CreateCalendarEventInput): Promise<CalendarEventDto> {
+    const calendar = input.calendarId
+      ? await this.getCalendar(actor, input.calendarId)
+      : await this.ensureDefaultCalendar(actor);
+    if (input.taskId) await this.getTask(actor, input.taskId);
+    this.assertEventSchedule(input);
+    const schedule = input.allDay
+      ? { start_date: input.startDate, end_date: input.endDate, start_at: null, end_at: null }
+      : { start_at: input.startAt, end_at: input.endAt, start_date: null, end_date: null };
+    const { data, error } = await this.db.from("calendar_events").insert({
+      id: input.id,
+      user_id: actor.userId,
+      calendar_id: calendar.id,
+      task_id: input.taskId,
+      title: input.title,
+      details: input.details,
+      location: input.location,
+      all_day: input.allDay,
+      timezone: input.timezone,
+      recurrence: input.recurrence,
+      status: input.status,
+      transparency: input.transparency,
+      color: input.color,
+      ...schedule,
+    }).select("*").single();
+    throwQuery(error);
+    const event = mapCalendarEventRow(data as DataRow);
+    await this.writeActivity(activity(actor, "calendar_event.created", event.taskId ?? undefined, undefined, { calendarEventId: event.id, calendarId: event.calendarId }));
+    return event;
+  }
+
+  async updateCalendarEvent(actor: ActorContext, id: string, input: UpdateCalendarEventInput): Promise<CalendarEventDto> {
+    const current = await this.getCalendarEvent(actor, id);
+    assertVersion(input.version, current.version, "Calendar event");
+    if (input.calendarId) await this.getCalendar(actor, input.calendarId);
+    if (input.taskId) await this.getTask(actor, input.taskId);
+    const next = { ...current, ...input };
+    this.assertEventSchedule(next);
+    const values: Record<string, unknown> = {};
+    if (input.calendarId !== undefined) values.calendar_id = input.calendarId;
+    if (input.taskId !== undefined) values.task_id = input.taskId;
+    if (input.title !== undefined) values.title = input.title;
+    if (input.details !== undefined) values.details = input.details;
+    if (input.location !== undefined) values.location = input.location;
+    if (input.timezone !== undefined) values.timezone = input.timezone;
+    if (input.recurrence !== undefined) values.recurrence = input.recurrence;
+    if (input.status !== undefined) values.status = input.status;
+    if (input.transparency !== undefined) values.transparency = input.transparency;
+    if (input.color !== undefined) values.color = input.color;
+    if (next.allDay) {
+      values.all_day = true;
+      values.start_date = next.startDate;
+      values.end_date = next.endDate;
+      values.start_at = null;
+      values.end_at = null;
+    } else {
+      values.all_day = false;
+      values.start_at = next.startAt;
+      values.end_at = next.endAt;
+      values.start_date = null;
+      values.end_date = null;
+    }
+    const { data, error } = await this.db.from("calendar_events").update(values)
+      .eq("id", id).eq("user_id", actor.userId).eq("version", input.version).select("*").maybeSingle();
+    throwQuery(error);
+    if (!data) throw conflict("Calendar event changed somewhere else. Refresh and try again.");
+    const event = mapCalendarEventRow(data as DataRow);
+    await this.writeActivity(activity(actor, "calendar_event.updated", event.taskId ?? undefined, undefined, { calendarEventId: id, calendarId: event.calendarId }));
+    return event;
+  }
+
+  async deleteCalendarEvent(actor: ActorContext, id: string): Promise<void> {
+    const event = await this.getCalendarEvent(actor, id);
+    const { error } = await this.db.from("calendar_events").delete().eq("id", id).eq("user_id", actor.userId);
+    throwQuery(error);
+    await this.writeActivity(activity(actor, "calendar_event.deleted", event.taskId ?? undefined, undefined, { deletedCalendarEventId: id, calendarId: event.calendarId }));
+  }
+
+  async timeBlockTask(actor: ActorContext, taskId: string, input: TimeBlockTaskInput): Promise<CalendarEventDto> {
+    const task = await this.getTask(actor, taskId);
+    const endAt = new Date(new Date(input.startAt).getTime() + input.durationMinutes * 60_000).toISOString();
+    return this.createCalendarEvent(actor, {
+      calendarId: input.calendarId,
+      taskId,
+      title: task.title,
+      details: task.details,
+      location: input.location,
+      allDay: false,
+      startAt: input.startAt,
+      endAt,
+      timezone: task.timezone,
+      recurrence: [],
+      status: "confirmed",
+      transparency: "opaque",
+      color: task.color,
+    });
+  }
+
   async snoozeReminder(actor: ActorContext, id: string, version: number, remindAt: string): Promise<ReminderDto> {
     const { data, error } = await this.db.from("task_reminders").update({ remind_at: remindAt, status: "scheduled", workflow_run_id: null })
       .eq("id", id).eq("user_id", actor.userId).eq("version", version).select("*").maybeSingle();
@@ -246,6 +429,19 @@ export class StickyRepository {
     const { data, error } = await query;
     throwQuery(error);
     return Number((data?.[0] as DataRow | undefined)?.sort_order ?? 0) + 1000;
+  }
+
+  private assertEventSchedule(event: {
+    allDay: boolean;
+    startAt?: string | null;
+    endAt?: string | null;
+    startDate?: string | null;
+    endDate?: string | null;
+  }): void {
+    const valid = event.allDay
+      ? Boolean(event.startDate && event.endDate && event.endDate > event.startDate)
+      : Boolean(event.startAt && event.endAt && new Date(event.endAt).getTime() > new Date(event.startAt).getTime());
+    if (!valid) throw new StickyDomainError("validation_error", "Calendar event must end after it starts.", 422);
   }
 
   private async writeActivity(values: Record<string, unknown>): Promise<void> {
