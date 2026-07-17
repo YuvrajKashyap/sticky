@@ -489,7 +489,7 @@ test.describe("Sticky workspace", () => {
       await expect(finder).toBeFocused();
       const expandedBox = await toolbar.boundingBox();
       if (testInfo.project.name === "mobile") {
-        expect(expandedBox?.height ?? 0).toBeGreaterThan((collapsedBox?.height ?? 0) + 30);
+        expect(expandedBox?.width ?? 0).toBeGreaterThan((collapsedBox?.width ?? 0) + 30);
       } else {
         expect(expandedBox?.width ?? 0).toBeGreaterThan((collapsedBox?.width ?? 0) + 40);
       }
