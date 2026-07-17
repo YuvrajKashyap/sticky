@@ -33,6 +33,7 @@ export function mapList(row: DbList): StickyList {
     sortOrder: row.sort_order,
     isVisibleOnBoard: row.is_visible_on_board ?? true,
     archivedAt: row.archived_at ?? null,
+    version: row.version ?? 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -53,6 +54,7 @@ export function mapTask(row: DbTask): StickyTask {
     completedAt: row.completed_at,
     sortOrder: row.sort_order,
     completedSortOrder: row.completed_sort_order,
+    version: row.version ?? 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -67,6 +69,7 @@ export function mapSubtask(row: DbSubtask): StickySubtask {
     isCompleted: row.is_completed,
     completedAt: row.completed_at,
     sortOrder: row.sort_order,
+    version: row.version ?? 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

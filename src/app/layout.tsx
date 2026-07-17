@@ -1,14 +1,17 @@
 import type { Metadata, Viewport } from "next";
-import "@fontsource/nunito/400.css";
-import "@fontsource/nunito/600.css";
-import "@fontsource/nunito/700.css";
-import "@fontsource/kalam/400.css";
-import "@fontsource/kalam/700.css";
+import "@fontsource/rajdhani/500.css";
+import "@fontsource/rajdhani/600.css";
+import "@fontsource/rajdhani/700.css";
+import "@fontsource/orbitron/500.css";
+import "@fontsource/orbitron/700.css";
+import "@fontsource/orbitron/900.css";
+import "@fontsource/share-tech-mono/400.css";
 import "./globals.css";
+import { StickyPlatformProvider } from "@/components/providers/StickyPlatformProvider";
 
 export const metadata: Metadata = {
   title: "Sticky",
-  description: "A premium Google Tasks-style sticky task app.",
+  description: "A private, connected task command center for fast capture and focused follow-through.",
   applicationName: "Sticky",
   metadataBase: new URL("https://sticky.yuvrajkashyap.com"),
   manifest: "/manifest.webmanifest",
@@ -18,7 +21,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "Sticky",
-    description: "Premium sticky tasks for fast capture, lists, subtasks, due dates, and recurrence.",
+    description: "Fast capture, focused planning, recurring work, reminders, and a connected task API.",
     url: "https://sticky.yuvrajkashyap.com",
     siteName: "Sticky",
     type: "website",
@@ -26,7 +29,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Sticky",
-    description: "Premium sticky tasks for fast capture, lists, subtasks, due dates, and recurrence.",
+    description: "Fast capture, focused planning, recurring work, reminders, and a connected task API.",
   },
   icons: {
     icon: "/icon.svg",
@@ -43,7 +46,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#ffce3a",
+  themeColor: "#05070f",
 };
 
 export default function RootLayout({
@@ -53,7 +56,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body><StickyPlatformProvider>{children}</StickyPlatformProvider></body>
     </html>
   );
 }

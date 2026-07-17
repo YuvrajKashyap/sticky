@@ -28,9 +28,13 @@ pnpm-debug.log*
 # tests
 test-results/
 playwright-report/
+.tmp-*
+e2e-*.log
 
 # vercel
 .vercel/
 
 .vercel
 .env*.local
+/.swc
+supabase/.temp/

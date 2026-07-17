@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withWorkflow } from "workflow/next";
 
 function contentSecurityPolicy() {
   const isProduction = process.env.NODE_ENV === "production";
@@ -44,6 +45,7 @@ function contentSecurityPolicy() {
 
 const nextConfig: NextConfig = {
   typedRoutes: true,
+  transpilePackages: ["@sticky/api", "@sticky/contracts", "@sticky/data", "@sticky/domain"],
   async headers() {
     return [
       {
@@ -95,4 +97,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withWorkflow(nextConfig);

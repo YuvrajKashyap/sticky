@@ -21,7 +21,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, MotionConfig, motion, useReducedMotion } from "framer-motion";
 import {
   Archive,
   Bell,
@@ -38,10 +38,10 @@ import {
   LogOut,
   Menu,
   Monitor,
-  Moon,
   Rows3,
   Pencil,
   Plus,
+  PlugZap,
   Repeat2,
   Search,
   Settings2,
@@ -52,16 +52,25 @@ import {
   Undo2,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { createStickyPlatformClient } from "@/lib/sticky/api-client";
 import { listToDb, recurrenceToDb, subtaskToDb, taskToDb } from "@/lib/sticky/mappers";
+import { mapList, mapSubtask, mapTask } from "@/lib/sticky/mappers";
+import type { DbList, DbSubtask, DbTask } from "@/types/sticky";
 import { userFacingStickySaveMessage } from "@/lib/sticky/messages";
 import {
   nextOccurrenceCount,
   nextRecurrenceDate,
   recurrenceCatchUpTarget,
 } from "@/lib/sticky/recurrence";
+import { AccentWheel, DEFAULT_ACCENT_HUE, ListColorWheel, applyAccentHue } from "./AccentWheel";
+import { CaptureScheduler, type CaptureRepeat } from "./CaptureScheduler";
+import { AnimatedNumber, ArcRing, ConfettiBurst, DrawnCheck, springs } from "./motion";
+import { StickyCalendar } from "./StickyCalendar";
+import { StickyConnections } from "./StickyConnections";
+import { StickyOverview } from "./StickyOverview";
+import { TaskReminderControl } from "./TaskReminderControl";
 import type {
   AppMode,
   RecurrenceFrequency,
@@ -110,6 +119,14 @@ type SaveState = {
   lastSavedAt: string | null;
   error: string | null;
 };
+
+function mergeById<T extends { id: string }>(items: T[], next: T): T[] {
+  const index = items.findIndex((item) => item.id === next.id);
+  if (index < 0) return [...items, next];
+  const copy = items.slice();
+  copy[index] = next;
+  return copy;
+}
 
 type WorkspacePulseTask = {
   id: string;
@@ -161,6 +178,13 @@ type PlateTaskGroup = {
   tasks: StickyTask[];
 };
 
+type QuickCaptureDraft = {
+  details: string;
+  dueDate: string;
+  dueTime: string;
+  repeat: CaptureRepeat | null;
+};
+
 type QuickCaptureIntent = {
   title: string;
   dueDate: string | null;
@@ -172,7 +196,20 @@ type QuickCaptureIntent = {
 };
 
 const DEMO_STORAGE_KEY = "sticky.demo.workspace.v2";
-const COLORS: StickyColor[] = ["sun", "coral", "mint", "sky", "violet", "ink"];
+const COLORS: StickyColor[] = [
+  "coral",
+  "ember",
+  "sun",
+  "lime",
+  "mint",
+  "teal",
+  "sky",
+  "azure",
+  "violet",
+  "magenta",
+  "rose",
+  "ink",
+];
 const QUICK_DUE_OPTIONS = [
   { label: "Today", offsetDays: 0 },
   { label: "Tomorrow", offsetDays: 1 },
@@ -397,6 +434,91 @@ function taskFindText(task: StickyTask, subtasks: StickySubtask[], dueLabel: str
   return [task.title, task.details, dueLabel, ...subtasks.map((subtask) => subtask.title)]
     .filter(Boolean)
     .join(" ");
+}
+
+function isPanBlockedTarget(target: EventTarget | null) {
+  return (
+    target instanceof Element &&
+    Boolean(
+      target.closest(
+        "button, input, textarea, select, a, [contenteditable='true'], .task-card, .subtask-row, .quick-schedule-preview, .column-header",
+      ),
+    )
+  );
+}
+
+/**
+ * Grab-and-drag panning for the board: press on any empty patch of desk or
+ * column paper and drag sideways to scroll. Mouse only — touch devices
+ * already pan natively — and real drags swallow the trailing click so the
+ * background-deselect behavior stays intact.
+ */
+function useBoardPan() {
+  const panRef = useRef({
+    panning: false,
+    pointerId: -1,
+    startX: 0,
+    startScrollLeft: 0,
+    moved: false,
+  });
+
+  const onPointerDown = useCallback((event: React.PointerEvent<HTMLElement>) => {
+    if (event.pointerType !== "mouse" || event.button !== 0 || isPanBlockedTarget(event.target)) {
+      return;
+    }
+
+    const pan = panRef.current;
+    pan.panning = true;
+    pan.pointerId = event.pointerId;
+    pan.startX = event.clientX;
+    pan.startScrollLeft = event.currentTarget.scrollLeft;
+    pan.moved = false;
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }, []);
+
+  const onPointerMove = useCallback((event: React.PointerEvent<HTMLElement>) => {
+    const pan = panRef.current;
+    if (!pan.panning || event.pointerId !== pan.pointerId) {
+      return;
+    }
+
+    const delta = event.clientX - pan.startX;
+    if (Math.abs(delta) > 4) {
+      pan.moved = true;
+      event.currentTarget.classList.add("panning");
+    }
+    event.currentTarget.scrollLeft = pan.startScrollLeft - delta;
+  }, []);
+
+  const endPan = useCallback((event: React.PointerEvent<HTMLElement>) => {
+    const pan = panRef.current;
+    if (!pan.panning || event.pointerId !== pan.pointerId) {
+      return;
+    }
+
+    pan.panning = false;
+    event.currentTarget.classList.remove("panning");
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }, []);
+
+  const onClickCapture = useCallback((event: React.MouseEvent<HTMLElement>) => {
+    const pan = panRef.current;
+    if (pan.moved) {
+      pan.moved = false;
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }, []);
+
+  return {
+    onPointerDown,
+    onPointerMove,
+    onPointerUp: endPan,
+    onPointerCancel: endPan,
+    onClickCapture,
+  };
 }
 
 function HighlightText({ text, query }: { text: string; query: string }) {
@@ -750,6 +872,12 @@ function colorLabel(color: StickyColor) {
     sky: "Sky",
     violet: "Violet",
     ink: "Ink",
+    ember: "Ember",
+    rose: "Rose",
+    lime: "Lime",
+    teal: "Teal",
+    azure: "Azure",
+    magenta: "Magenta",
   };
   return labels[color];
 }
@@ -836,7 +964,7 @@ function saveStatus(saveState: SaveState, mode: AppMode, demoReady: boolean) {
     };
   }
 
-  return { tone: "clean", label: "Supabase-backed", shortLabel: "Live" };
+  return { tone: "clean", label: "Connected", shortLabel: "Live" };
 }
 
 export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunchIntent }: StickyWorkspaceProps) {
@@ -854,6 +982,20 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   const [commandQuery, setCommandQuery] = useState("");
   const [commandIndex, setCommandIndex] = useState(0);
   const [searchFocused, setSearchFocused] = useState(false);
+  const [viewMode, setViewMode] = useState<"board" | "calendar">("board");
+  const [connectionsOpen, setConnectionsOpen] = useState(false);
+  const [railCollapsed, setRailCollapsed] = useState(false);
+  const [pulseOpen, setPulseOpen] = useState(false);
+  const [overviewOpen, setOverviewOpen] = useState(false);
+  const [accentHue, setAccentHue] = useState(DEFAULT_ACCENT_HUE);
+  const [captureExpanded, setCaptureExpanded] = useState(false);
+  const [captureDraft, setCaptureDraft] = useState<QuickCaptureDraft>({
+    details: "",
+    dueDate: "",
+    dueTime: "",
+    repeat: null,
+  });
+  const boardPan = useBoardPan();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
   const [listEditor, setListEditor] = useState<StickyList | "new" | null>(null);
@@ -872,10 +1014,79 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   const searchInputRef = useRef<HTMLInputElement>(null);
   const commandInputRef = useRef<HTMLInputElement>(null);
   const commandTriggerRef = useRef<HTMLButtonElement>(null);
+  const googleActivationSyncAtRef = useRef(0);
   const supabase = useMemo(
-    () => (mode === "supabase" ? createSupabaseBrowserClient() : null),
+    () => (mode === "supabase" ? createStickyPlatformClient() : null),
     [mode],
   );
+
+  useEffect(() => {
+    if (mode !== "supabase" || !supabase) return;
+
+    const syncConnectedGoogle = async () => {
+      if (document.visibilityState !== "visible" || Date.now() - googleActivationSyncAtRef.current < 15 * 60_000) return;
+      googleActivationSyncAtRef.current = Date.now();
+      try {
+        const { integrations } = await supabase.request<{
+          integrations: Array<{ provider: string; status: string }>;
+        }>("/api/v1/integrations");
+        if (integrations.some((item) => item.provider === "google_tasks" && item.status === "healthy")) {
+          await supabase.request("/api/v1/integrations/google/sync", { method: "POST", body: "{}" });
+        }
+      } catch {
+        // Connection health is shown in Settings; workspace activation stays quiet.
+      }
+    };
+
+    void syncConnectedGoogle();
+    const onVisibilityChange = () => void syncConnectedGoogle();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [mode, supabase]);
+
+  useEffect(() => {
+    if (mode !== "supabase" || !supabase) return;
+    const channel = supabase.realtime
+      .channel(`sticky:${initialData.user.id}`, { config: { private: true } })
+      .on("broadcast", { event: "*" }, ({ payload }) => {
+        const change = payload as { operation?: string; table?: string; record?: unknown; old_record?: { id?: string } };
+        const operation = change.operation?.toUpperCase();
+        const recordId = (change.record as { id?: string } | undefined)?.id ?? change.old_record?.id;
+        if (!recordId || !change.table) return;
+        setWorkspace((current) => {
+          if (change.table === "lists") {
+            const lists = operation === "DELETE"
+              ? current.lists.filter((item) => item.id !== recordId)
+              : mergeById(current.lists, mapList(change.record as DbList));
+            return { ...current, lists };
+          }
+          if (change.table === "tasks") {
+            const tasks = operation === "DELETE"
+              ? current.tasks.filter((item) => item.id !== recordId)
+              : mergeById(current.tasks, mapTask(change.record as DbTask));
+            return { ...current, tasks };
+          }
+          if (change.table === "subtasks") {
+            const subtasks = operation === "DELETE"
+              ? current.subtasks.filter((item) => item.id !== recordId)
+              : mergeById(current.subtasks, mapSubtask(change.record as DbSubtask));
+            return { ...current, subtasks };
+          }
+          return current;
+        });
+      })
+      .subscribe();
+    return () => { void supabase.realtime.removeChannel(channel); };
+  }, [initialData.user.id, mode, supabase]);
+
+  useEffect(() => {
+    if (!searchFocused) {
+      return;
+    }
+
+    const focusTimer = window.setTimeout(() => searchInputRef.current?.focus({ preventScroll: true }), 0);
+    return () => window.clearTimeout(focusTimer);
+  }, [searchFocused]);
 
   const closeCommandCenter = useCallback((restoreFocus = false) => {
     setCommandOpen(false);
@@ -938,6 +1149,53 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   useEffect(() => {
     workspaceRef.current = workspace;
   }, [workspace]);
+
+  useEffect(() => {
+    if (window.localStorage.getItem("sticky.rail.collapsed") === "true") {
+      setRailCollapsed(true);
+    }
+    const storedHueRaw = window.localStorage.getItem("sticky.accent.hue");
+    if (storedHueRaw !== null) {
+      const storedHue = Number(storedHueRaw);
+      if (Number.isFinite(storedHue) && storedHue >= 0 && storedHue < 360) {
+        setAccentHue(storedHue);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    applyAccentHue(accentHue);
+    window.localStorage.setItem("sticky.accent.hue", String(Math.round(accentHue)));
+  }, [accentHue]);
+
+  useEffect(() => {
+    window.localStorage.setItem("sticky.rail.collapsed", String(railCollapsed));
+  }, [railCollapsed]);
+
+  // Cursor spotlight: the stage carries a soft lamp that follows the pointer.
+  useEffect(() => {
+    const root = document.documentElement;
+    let frame = 0;
+    let x = 0;
+    let y = 0;
+
+    const onMove = (event: PointerEvent) => {
+      x = event.clientX;
+      y = event.clientY;
+      if (frame) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        root.style.setProperty("--spot-x", `${x}px`);
+        root.style.setProperty("--spot-y", `${y}px`);
+      });
+    };
+
+    window.addEventListener("pointermove", onMove, { passive: true });
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, []);
 
   useEffect(() => {
     if (mode !== "demo") {
@@ -1041,6 +1299,10 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       }
 
       if (event.key === "Escape") {
+        if (overviewOpen) {
+          setOverviewOpen(false);
+          return;
+        }
         if (commandOpen) {
           closeCommandCenter(true);
           return;
@@ -1053,8 +1315,13 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           closeListEditor();
           return;
         }
-        if (selectedTaskId) {
+        if (captureExpanded) {
+          setCaptureExpanded(false);
+          return;
+        }
+        if (selectedTaskId || pulseOpen) {
           setSelectedTaskId(null);
+          setPulseOpen(false);
         }
         return;
       }
@@ -1062,6 +1329,12 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       if (!isTyping && (event.key.toLowerCase() === "n" || event.code === "KeyN")) {
         event.preventDefault();
         quickInputRef.current?.focus();
+        return;
+      }
+
+      if (!isTyping && (event.key.toLowerCase() === "o" || event.code === "KeyO")) {
+        event.preventDefault();
+        setOverviewOpen(true);
       }
     }
 
@@ -1073,7 +1346,10 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     closeListEditor,
     commandOpen,
     confirmRequest,
+    captureExpanded,
     listEditor,
+    overviewOpen,
+    pulseOpen,
     selectedTaskId,
   ]);
 
@@ -1139,6 +1415,9 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   );
   const activeListId = useMemo(() => {
     const selected = workspace.userState.selectedListId;
+    if (selected === null) {
+      return null;
+    }
     if (selected && unarchivedLists.some((list) => list.id === selected)) {
       return selected;
     }
@@ -1268,6 +1547,18 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
     return filteredTasks;
   }, [activeListTasks, recurrenceByTask, subtasksByTask, taskSortMode, taskViewFilter]);
+
+  const calendarTasks = useMemo(
+    () =>
+      workspace.tasks
+        .filter((task) => unarchivedListIds.has(task.listId) && Boolean(task.dueDate))
+        .sort((a, b) => {
+          const aSchedule = `${a.dueDate ?? "9999-12-31"}T${a.dueTime ?? "23:59"}`;
+          const bSchedule = `${b.dueDate ?? "9999-12-31"}T${b.dueTime ?? "23:59"}`;
+          return aSchedule.localeCompare(bSchedule) || bySortOrder(a, b);
+        }),
+    [unarchivedListIds, workspace.tasks],
+  );
 
   const searchMatchCount = useMemo(() => {
     if (!searchQuery) {
@@ -1460,9 +1751,6 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   const completedOpen = activeListId
     ? workspace.preferences.completedOpenByList[activeListId] ?? false
     : false;
-  const density = workspace.preferences.density;
-  const colorMode = workspace.preferences.colorMode;
-  const boardStyle = workspace.preferences.boardStyle;
   const currentSaveStatus = saveStatus(saveState, mode, demoReady);
   const quickCaptureIntent = useMemo(
     () => parseQuickCaptureIntent(quickTitle, unarchivedLists),
@@ -1549,6 +1837,14 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       detail: "Highlight tasks, lists, and subtasks",
       keywords: "find search highlight workspace page current list",
       run: () => focusCommandTarget("search"),
+    },
+    {
+      id: "action-overview",
+      kind: "action",
+      title: "Open command deck",
+      detail: "Full-screen workspace overview",
+      keywords: "overview command deck dashboard hud radar stats o",
+      run: () => setOverviewOpen(true),
     },
     {
       id: "action-new-list",
@@ -1650,54 +1946,6 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       detail: taskSortMode === "due" ? "Already active" : "Earliest scheduled tasks first",
       keywords: "sort order due date schedule time",
       run: () => setTaskSortMode("due"),
-    },
-    {
-      id: "preference-comfy",
-      kind: "preference",
-      title: "Use comfy density",
-      detail: density === "comfortable" ? "Already active" : "Roomier task cards",
-      keywords: "comfortable roomy density layout",
-      run: () => setDensity("comfortable"),
-    },
-    {
-      id: "preference-compact",
-      kind: "preference",
-      title: "Use compact density",
-      detail: density === "compact" ? "Already active" : "Denser task scan",
-      keywords: "compact dense density layout",
-      run: () => setDensity("compact"),
-    },
-    {
-      id: "preference-light",
-      kind: "preference",
-      title: "Use light theme",
-      detail: colorMode === "light" ? "Already active" : "Bright workspace",
-      keywords: "theme color mode light sun",
-      run: () => setColorMode("light"),
-    },
-    {
-      id: "preference-dark",
-      kind: "preference",
-      title: "Use dark theme",
-      detail: colorMode === "dark" ? "Already active" : "Low-light workspace",
-      keywords: "theme color mode dark moon",
-      run: () => setColorMode("dark"),
-    },
-    {
-      id: "preference-pad",
-      kind: "preference",
-      title: "Use sticky pads",
-      detail: boardStyle === "pad" ? "Already active" : "Paper pad workspace",
-      keywords: "appearance board style pad sticky pads paper",
-      run: () => setBoardStyle("pad"),
-    },
-    {
-      id: "preference-wood",
-      kind: "preference",
-      title: "Use wood board",
-      detail: boardStyle === "wood" ? "Already active" : "Wood board workspace",
-      keywords: "appearance board style wood board",
-      run: () => setBoardStyle("wood"),
     },
     ...unarchivedLists.map((list) => {
       const stats = listStats.get(list.id) ?? { active: 0, completed: 0 };
@@ -2393,15 +2641,19 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       taskViewFilter === "all"
         ? workspace.preferences
         : { ...workspace.preferences, taskViewFilter: "all" as const };
+    // Composer fields win over parsed ones; a bare time implies today.
+    const draftDueTime = captureDraft.dueTime || intent.dueTime;
+    const draftDueDate =
+      captureDraft.dueDate || intent.dueDate || (draftDueTime ? localDateKey() : null);
     const task: StickyTask = {
       id: createId(),
       userId: workspace.user.id,
       listId: targetListId,
       title,
-      details: "",
+      details: captureDraft.details.trim(),
       color: targetList?.color ?? activeList?.color ?? "sun",
-      dueDate: intent.dueDate,
-      dueTime: intent.dueTime,
+      dueDate: draftDueDate,
+      dueTime: draftDueTime,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago",
       isCompleted: false,
       completedAt: null,
@@ -2410,14 +2662,46 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       createdAt: nowIso(),
       updatedAt: nowIso(),
     };
+    const repeatDraft = captureDraft.repeat;
+    const captureRule: StickyRecurrenceRule | null = !repeatDraft
+      ? null
+      : {
+          id: createId(),
+          userId: workspace.user.id,
+          taskId: task.id,
+          frequency: repeatDraft.frequency,
+          intervalCount: Math.max(1, repeatDraft.interval),
+          daysOfWeek:
+            repeatDraft.frequency === "weekly"
+              ? repeatDraft.daysOfWeek.length
+                ? [...new Set(repeatDraft.daysOfWeek)].sort((a, b) => a - b)
+                : [startDayOfWeek(task.dueDate ?? localDateKey())]
+              : [],
+          monthDay: recurrenceUsesMonthDay(repeatDraft.frequency)
+            ? startMonthDay(task.dueDate ?? localDateKey())
+            : null,
+          startsOn: task.dueDate ?? localDateKey(),
+          endType: "never",
+          endDate: null,
+          occurrenceCount: null,
+          timezone: task.timezone,
+          paused: false,
+          createdAt: nowIso(),
+          updatedAt: nowIso(),
+        };
 
     setQuickTitle("");
+    setCaptureDraft({ details: "", dueDate: "", dueTime: "", repeat: null });
+    setCaptureExpanded(false);
     setTaskViewFilter("all");
     const shouldSelectCreatedTask = !quickCaptureClosedDetailsRef.current;
     quickCaptureClosedDetailsRef.current = false;
     setWorkspace({
       ...workspace,
       tasks: [...workspace.tasks, task],
+      recurrenceRules: captureRule
+        ? [...workspace.recurrenceRules, captureRule]
+        : workspace.recurrenceRules,
       preferences: nextPreferences,
       userState: nextUserState,
     });
@@ -2441,7 +2725,20 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           completed_sort_order: task.completedSortOrder,
         });
 
-        if (taskResult.error || !stateShouldReveal) {
+        if (taskResult.error) {
+          return taskResult;
+        }
+
+        if (captureRule) {
+          const ruleResult = await supabase!
+            .from("task_recurrence_rules")
+            .insert(recurrenceInsertPayload(captureRule));
+          if (ruleResult.error) {
+            return ruleResult;
+          }
+        }
+
+        if (!stateShouldReveal) {
           return taskResult;
         }
 
@@ -3306,30 +3603,6 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     });
   }
 
-  function setDensity(nextDensity: StickyWorkspaceData["preferences"]["density"]) {
-    if (nextDensity === density) {
-      return;
-    }
-
-    updatePreferences({ density: nextDensity });
-  }
-
-  function setColorMode(nextMode: StickyWorkspaceData["preferences"]["colorMode"]) {
-    if (nextMode === colorMode) {
-      return;
-    }
-
-    updatePreferences({ colorMode: nextMode });
-  }
-
-  function setBoardStyle(nextStyle: StickyWorkspaceData["preferences"]["boardStyle"]) {
-    if (nextStyle === boardStyle) {
-      return;
-    }
-
-    updatePreferences({ boardStyle: nextStyle });
-  }
-
   function advanceRecurringCatchUps(targets = recurringCatchUps) {
     if (targets.length === 0) {
       return;
@@ -3401,12 +3674,22 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       return;
     }
 
-    const type = active.data.current?.type as "list" | "task" | "subtask" | undefined;
+    const type = active.data.current?.type as "list" | "board-list" | "task" | "subtask" | undefined;
 
-    if (type === "list") {
+    if (type === "list" || type === "board-list") {
+      const activeListKey = String(active.id).replace(/^board:/, "");
+      let overListKey = String(over.id).replace(/^board:/, "");
+      if (!unarchivedLists.some((list) => list.id === overListKey)) {
+        // The drop can resolve to a card inside the target column; walk up to its list.
+        const overTask = workspace.tasks.find((task) => task.id === overListKey);
+        if (!overTask) {
+          return;
+        }
+        overListKey = overTask.listId;
+      }
       const ordered = unarchivedLists.slice().sort(bySortOrder);
-      const oldIndex = ordered.findIndex((list) => list.id === active.id);
-      const newIndex = ordered.findIndex((list) => list.id === over.id);
+      const oldIndex = ordered.findIndex((list) => list.id === activeListKey);
+      const newIndex = ordered.findIndex((list) => list.id === overListKey);
       if (oldIndex < 0 || newIndex < 0) {
         return;
       }
@@ -3462,10 +3745,11 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   }
 
   return (
+    <MotionConfig reducedMotion="user">
     <main
-      className={`sticky-app density-${density} tone-${colorMode} board-${boardStyle}${
-        selectedTask ? " details-open" : ""
-      }`}
+      className={`sticky-app${
+        selectedTask || pulseOpen ? " details-open" : ""
+      }${railCollapsed ? " rail-collapsed" : ""}`}
     >
       <DndContext
         id="sticky-workspace-dnd"
@@ -3475,8 +3759,14 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       >
         <aside className="list-rail" aria-label="Sticky lists">
           <div className="brand-block">
-            <button className="rail-menu-button" type="button" aria-label="Open workspace menu">
-              <Menu size={21} />
+            <button
+              className="rail-menu-button"
+              type="button"
+              onClick={() => setRailCollapsed((current) => !current)}
+              aria-label={railCollapsed ? "Expand list sidebar" : "Collapse list sidebar"}
+              aria-expanded={!railCollapsed}
+            >
+              <Menu size={20} />
             </button>
             <div className="brand-symbol" aria-hidden="true">
               <span />
@@ -3492,8 +3782,8 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
             onClick={() => openListEditor("new")}
             aria-label="New list"
           >
-            <Plus size={22} />
-            Create
+            <Plus size={20} />
+            <span>Create</span>
           </button>
 
           <nav className="rail-primary-nav" aria-label="Task shortcuts">
@@ -3508,14 +3798,14 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
             >
               <Check size={16} />
               <span>All tasks</span>
-              <strong>{totalActiveTasks}</strong>
+              <AnimatedNumber value={totalActiveTasks} className="rail-count" />
             </button>
           </nav>
 
           <div className="rail-section-heading">
             <span>Lists</span>
             <button type="button" onClick={() => openListEditor("new")} aria-label="Add list">
-              <Plus size={17} />
+              <Plus size={16} />
             </button>
           </div>
 
@@ -3568,7 +3858,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           ) : null}
 
           <button className="rail-add-list-button" type="button" onClick={() => openListEditor("new")} aria-label="Add list">
-            <Plus size={20} />
+            <Plus size={18} />
             Add list
           </button>
 
@@ -3605,34 +3895,68 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           <header className="workspace-topbar">
             <div className="workspace-title">
               <p className="eyebrow">Workspace</p>
-              <h2>All tasks</h2>
+              <h2>{viewMode === "calendar" ? "Calendar" : "All tasks"}</h2>
               <div className="metric-strip">
-                <span>{totalActiveTasks} active</span>
-                <span>{totalCompletedTasks} completed</span>
-                <span>{totalOpenSubtasks} open subtasks</span>
+                <span><AnimatedNumber value={totalActiveTasks} /> active</span>
+                <span><AnimatedNumber value={totalCompletedTasks} /> completed</span>
+                <span><AnimatedNumber value={totalOpenSubtasks} /> open subtasks</span>
+                <span className={`save-status ${currentSaveStatus.tone}`} aria-live="polite">
+                  <span className="save-status-label">{currentSaveStatus.label}</span>
+                  <span className="save-status-short">{currentSaveStatus.shortLabel}</span>
+                </span>
               </div>
             </div>
 
             <div className={`workspace-tools${searchExpanded ? " search-expanded" : ""}`}>
-              <label className={`search-control workspace-find-control${searchExpanded ? " expanded" : ""}`}>
-                <Search size={17} />
+              <div
+                className={`search-control workspace-find-control${searchExpanded ? " expanded" : ""}`}
+                onFocusCapture={() => setSearchFocused(true)}
+                onBlurCapture={(event) => {
+                  if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) {
+                    setSearchFocused(false);
+                  }
+                }}
+              >
+                <button
+                  className="workspace-find-trigger"
+                  type="button"
+                  aria-label="Open workspace search"
+                  onClick={() => setSearchFocused(true)}
+                >
+                  <Search size={17} />
+                </button>
                 <input
                   ref={searchInputRef}
                   value={workspace.userState.searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
-                  onFocus={() => setSearchFocused(true)}
-                  onBlur={() => setSearchFocused(false)}
                   onKeyDown={(event) => {
-                    if (event.key === "Escape" && workspace.userState.searchQuery) {
+                    if (event.key === "Escape") {
                       event.preventDefault();
-                      setSearchQuery("");
+                      if (workspace.userState.searchQuery) {
+                        setSearchQuery("");
+                      } else {
+                        event.currentTarget.blur();
+                      }
                     }
                   }}
                   type="search"
                   placeholder="Find in workspace"
                   aria-label="Find in workspace"
                 />
-                {searchExpanded ? (
+                {searchExpanded && workspace.userState.searchQuery ? (
+                  <button
+                    className="workspace-find-clear"
+                    type="button"
+                    aria-label="Clear workspace search"
+                    onClick={() => {
+                      setSearchQuery("");
+                      searchInputRef.current?.focus();
+                    }}
+                  >
+                    <X size={14} />
+                  </button>
+                ) : null}
+                {searchExpanded && searchQuery ? (
                   <span
                     className={`search-match-count${searchQuery && !searchMatchCount ? " empty" : ""}`}
                     aria-live="polite"
@@ -3640,7 +3964,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                     {searchSummary}
                   </span>
                 ) : null}
-              </label>
+              </div>
               <button
                 ref={commandTriggerRef}
                 className="command-trigger command-trigger-hidden"
@@ -3655,28 +3979,44 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                 Command
               </button>
               <button
-                className="tool-button"
+                className={`tool-button ${overviewOpen ? "active" : ""}`}
                 type="button"
-                aria-label="Open calendar view"
-                onClick={() =>
-                  pushToast({
-                    title: "Calendar view is coming later",
-                    body: "Due dates still show on each task.",
-                  })
-                }
+                aria-label="Open command deck overview"
+                aria-pressed={overviewOpen}
+                onClick={() => setOverviewOpen(true)}
+              >
+                <Monitor size={17} />
+              </button>
+              <button
+                className={`tool-button ${viewMode === "calendar" ? "active" : ""}`}
+                type="button"
+                aria-label={viewMode === "calendar" ? "Show board view" : "Show calendar view"}
+                aria-pressed={viewMode === "calendar"}
+                onClick={() => setViewMode(viewMode === "calendar" ? "board" : "calendar")}
               >
                 <CalendarDays size={17} />
+              </button>
+              <button
+                className={`tool-button ${pulseOpen && !selectedTask ? "active" : ""}`}
+                type="button"
+                aria-label={pulseOpen ? "Close workspace pulse" : "Open workspace pulse"}
+                aria-pressed={pulseOpen}
+                onClick={() => {
+                  if (pulseOpen && !selectedTask) {
+                    setPulseOpen(false);
+                    return;
+                  }
+                  setSelectedTaskId(null);
+                  setPulseOpen(true);
+                }}
+              >
+                <Sparkles size={17} />
               </button>
               <button
                 className="tool-button"
                 type="button"
                 aria-label="Open notifications"
-                onClick={() =>
-                  pushToast({
-                    title: "Notifications are quiet",
-                    body: saveState.error ?? currentSaveStatus.label,
-                  })
-                }
+                onClick={() => setConnectionsOpen(true)}
               >
                 <Bell size={17} />
               </button>
@@ -3685,90 +4025,32 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                   className="appearance-trigger profile-chip profile-appearance-trigger"
                   aria-label="Open appearance settings"
                 >
-                  <span className="profile-avatar">
-                    {(workspace.user.displayName || workspace.user.email || "AR").slice(0, 2).toUpperCase()}
-                  </span>
-                  <Settings2 className="profile-settings-icon" size={15} aria-hidden="true" />
-                  <i className="profile-status-dot" aria-hidden="true" />
+                  <Settings2 className="profile-settings-icon" size={17} aria-hidden="true" />
                 </summary>
                 <div className="preference-controls" aria-label="Workspace appearance">
-                  <div className="appearance-group">
-                    <span className="appearance-group-label">Theme</span>
-                    <div className="segmented-control" aria-label="Theme">
-                      <button
-                        type="button"
-                        className={colorMode === "light" ? "active" : ""}
-                        onClick={() => setColorMode("light")}
-                        aria-pressed={colorMode === "light"}
-                      >
-                        <Sun size={15} />
-                        Light
-                      </button>
-                      <button
-                        type="button"
-                        className={colorMode === "dark" ? "active" : ""}
-                        onClick={() => setColorMode("dark")}
-                        aria-pressed={colorMode === "dark"}
-                      >
-                        <Moon size={15} />
-                        Dark
-                      </button>
-                    </div>
-                  </div>
-                  <div className="appearance-group">
-                    <span className="appearance-group-label">Board style</span>
-                    <div className="segmented-control" aria-label="Board style">
-                      <button
-                        type="button"
-                        className={boardStyle === "pad" ? "active" : ""}
-                        onClick={() => setBoardStyle("pad")}
-                        aria-pressed={boardStyle === "pad"}
-                      >
-                        <Layers3 size={15} />
-                        Sticky pads
-                      </button>
-                      <button
-                        type="button"
-                        className={boardStyle === "wood" ? "active" : ""}
-                        onClick={() => setBoardStyle("wood")}
-                        aria-pressed={boardStyle === "wood"}
-                      >
-                        <Archive size={15} />
-                        Wood board
-                      </button>
-                    </div>
-                  </div>
-                  <div className="appearance-group">
-                    <span className="appearance-group-label">Density</span>
-                    <div className="segmented-control" aria-label="Density">
-                      <button
-                        type="button"
-                        className={density === "comfortable" ? "active" : ""}
-                        onClick={() => setDensity("comfortable")}
-                        aria-pressed={density === "comfortable"}
-                      >
-                        <Rows3 size={15} />
-                        Comfy
-                      </button>
-                      <button
-                        type="button"
-                        className={density === "compact" ? "active" : ""}
-                        onClick={() => setDensity("compact")}
-                        aria-pressed={density === "compact"}
-                      >
-                        <ListChecks size={15} />
-                        Compact
-                      </button>
-                    </div>
-                  </div>
-                  <div className="preference-account-row">
-                    <div>
-                      <span>Signed in as</span>
+                  <div className="profile-card">
+                    <span className="profile-card-avatar" aria-hidden="true">
+                      {(workspace.user.displayName || workspace.user.email || "AR").slice(0, 2).toUpperCase()}
+                      <i className="profile-card-status" />
+                    </span>
+                    <div className="profile-card-identity">
                       <strong title={workspace.user.email}>
                         {workspace.user.displayName || workspace.user.email}
                       </strong>
+                      <span>{workspace.user.email}</span>
+                      <small>Operator online</small>
                     </div>
-                    <button type="button" onClick={signOut}>
+                  </div>
+                  <div className="appearance-group">
+                    <span className="appearance-group-label">Accent</span>
+                    <AccentWheel hue={accentHue} onChange={setAccentHue} />
+                  </div>
+                  <div className="preference-actions">
+                    <button className="preference-connections-button" type="button" onClick={() => setConnectionsOpen(true)}>
+                      <PlugZap size={16} aria-hidden="true" />
+                      Connections
+                    </button>
+                    <button className="preference-signout-button" type="button" onClick={signOut}>
                       <LogOut size={16} aria-hidden="true" />
                       Sign out
                     </button>
@@ -3778,6 +4060,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
             </div>
           </header>
 
+          {viewMode === "board" ? <>
           <div className="task-filter-bar" aria-label="Task views">
             {TASK_VIEW_ORDER.map((filter) => {
               const active = taskViewFilter === filter;
@@ -3792,6 +4075,14 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                   aria-label={taskViewButtonLabel(TASK_VIEW_LABELS[filter], count, active)}
                   onClick={() => setTaskViewFilter(filter)}
                 >
+                  {active ? (
+                    <motion.span
+                      className="filter-active-pill"
+                      layoutId="filter-active-pill"
+                      transition={springs.snappy}
+                      aria-hidden="true"
+                    />
+                  ) : null}
                   {filter === "all" ? <Layers3 size={15} /> : null}
                   {filter === "today" ? <Sun size={15} /> : null}
                   {filter === "due" ? <CalendarDays size={15} /> : null}
@@ -3852,63 +4143,94 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
               </button>
             </div>
           ) : null}
+          </> : null}
 
-          <section className="board-scroll" aria-label="Active tasks">
-            {boardColumns.length ? (
-              boardColumns.map((column, index) => (
-                <StickyBoardColumn
-                  key={column.list.id}
-                  column={column}
-                  columnIndex={index}
-                  active={column.list.id === activeListId}
-                  renderImmediately={
-                    Boolean(searchQuery) || column.list.id === activeListId || index < 3
-                  }
-                  quickTitle={quickTitle}
-                  quickCaptureIntent={quickCaptureIntent}
-                  quickInputRef={quickInputRef}
-                  searchQuery={searchQuery}
-                  taskViewFiltered={taskViewFiltered}
-                  taskViewFilter={taskViewFilter}
-                  reorderLocked={reorderLocked}
-                  selectedTaskId={selectedTaskId}
-                  subtasksByTask={subtasksByTask}
-                  recurrenceByTask={recurrenceByTask}
-                  onActivate={() => switchList(column.list.id)}
-                  onActivateQuickAdd={() => {
-                    if (selectedTaskId) {
-                      quickCaptureClosedDetailsRef.current = true;
+          {viewMode === "calendar" ? (
+            <StickyCalendar
+              tasks={calendarTasks}
+              lists={unarchivedLists}
+              onTaskSelect={(taskId) => {
+                setSelectedTaskId(taskId);
+              }}
+            />
+          ) : (
+            <section
+              className="board-scroll"
+              aria-label="Active tasks"
+              {...boardPan}
+              onClick={(event) => {
+                if (event.target !== event.currentTarget) {
+                  return;
+                }
+                updateUserState({ selectedListId: null });
+                setSelectedTaskId(null);
+              }}
+            >
+              {boardColumns.length ? (
+                <SortableContext
+                  items={boardColumns.map((column) => `board:${column.list.id}`)}
+                  strategy={horizontalListSortingStrategy}
+                >
+                {boardColumns.map((column, index) => (
+                  <StickyBoardColumn
+                    key={column.list.id}
+                    column={column}
+                    columnIndex={index}
+                    active={column.list.id === activeListId}
+                    renderImmediately={
+                      Boolean(searchQuery) || column.list.id === activeListId || index < 3
                     }
-                    switchList(column.list.id);
-                    window.setTimeout(() => quickInputRef.current?.focus(), 0);
-                  }}
-                  onPrepareQuickAdd={() => {
-                    if (selectedTaskId) {
-                      quickCaptureClosedDetailsRef.current = true;
-                    }
-                    setSelectedTaskId(null);
-                  }}
-                  onQuickTitleChange={setQuickTitle}
-                  onSubmitQuickTask={createTask}
-                  onRenameList={() => openListEditor(column.list)}
-                  onDeleteList={() => requestDeleteList(column.list)}
-                  onOpenTask={(task) => openTaskInContext(task.id)}
-                  onCompleteTask={completeTask}
-                  onDeleteTask={requestDeleteTask}
-                  onMoveTask={moveTaskInOrder}
-                  onToggleCompleted={() => toggleCompletedPile(column.list.id)}
-                  onRestoreTask={restoreTask}
-                  onClearCompleted={requestClearCompleted}
-                />
-              ))
-            ) : (
-              <div className="board-empty-state" role="status">
-                <Layers3 size={24} />
-                <strong>No lists shown</strong>
-                <span>Check a list in the sidebar to put it back on the All tasks board.</span>
-              </div>
-            )}
-          </section>
+                    quickTitle={quickTitle}
+                    quickCaptureIntent={quickCaptureIntent}
+                    quickInputRef={quickInputRef}
+                    captureDraft={captureDraft}
+                    captureExpanded={captureExpanded}
+                    onCaptureDraftChange={setCaptureDraft}
+                    onCaptureExpandedChange={setCaptureExpanded}
+                    searchQuery={searchQuery}
+                    taskViewFiltered={taskViewFiltered}
+                    taskViewFilter={taskViewFilter}
+                    reorderLocked={reorderLocked}
+                    selectedTaskId={selectedTaskId}
+                    subtasksByTask={subtasksByTask}
+                    recurrenceByTask={recurrenceByTask}
+                    onActivate={() => switchList(column.list.id)}
+                    onActivateQuickAdd={() => {
+                      if (selectedTaskId) {
+                        quickCaptureClosedDetailsRef.current = true;
+                      }
+                      switchList(column.list.id);
+                      window.setTimeout(() => quickInputRef.current?.focus(), 0);
+                    }}
+                    onPrepareQuickAdd={() => {
+                      if (selectedTaskId) {
+                        quickCaptureClosedDetailsRef.current = true;
+                      }
+                      setSelectedTaskId(null);
+                    }}
+                    onQuickTitleChange={setQuickTitle}
+                    onSubmitQuickTask={createTask}
+                    onRenameList={() => openListEditor(column.list)}
+                    onDeleteList={() => requestDeleteList(column.list)}
+                    onOpenTask={(task) => openTaskInContext(task.id)}
+                    onCompleteTask={completeTask}
+                    onDeleteTask={requestDeleteTask}
+                    onMoveTask={moveTaskInOrder}
+                    onToggleCompleted={() => toggleCompletedPile(column.list.id)}
+                    onRestoreTask={restoreTask}
+                    onClearCompleted={requestClearCompleted}
+                  />
+                ))}
+                </SortableContext>
+              ) : (
+                <div className="board-empty-state" role="status">
+                  <Layers3 size={24} />
+                  <strong>No lists shown</strong>
+                  <span>Check a list in the sidebar to put it back on the All tasks board.</span>
+                </div>
+              )}
+            </section>
+          )}
         </section>
 
         <TaskDetailsPanel
@@ -3918,7 +4240,10 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           recurrenceRule={selectedTaskRecurrence}
           catchUpTarget={selectedTaskCatchUp}
           pulse={workspacePulse}
-          onClose={() => setSelectedTaskId(null)}
+          onClose={() => {
+            setSelectedTaskId(null);
+            setPulseOpen(false);
+          }}
           onOpenTask={openTaskInContext}
           onSavePatch={(patch) => selectedTask && updateTask(selectedTask.id, patch)}
           onMove={(listId) => selectedTask && moveTask(selectedTask, listId)}
@@ -3978,9 +4303,42 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           />
         ) : null}
 
+        <AnimatePresence>
+          {overviewOpen ? (
+            <StickyOverview
+              lists={unarchivedLists}
+              tasks={workspace.tasks}
+              subtasks={workspace.subtasks}
+              recurrenceByTask={recurrenceByTask}
+              onClose={() => setOverviewOpen(false)}
+              onOpenTask={(taskId) => {
+                setOverviewOpen(false);
+                openTaskInContext(taskId);
+              }}
+              onSelectList={(listId) => {
+                setOverviewOpen(false);
+                setViewMode("board");
+                switchList(listId);
+              }}
+              onShowFilter={(filter) => {
+                setOverviewOpen(false);
+                setViewMode("board");
+                setTaskViewFilter(filter);
+              }}
+              onOpenCalendar={() => {
+                setOverviewOpen(false);
+                setViewMode("calendar");
+              }}
+            />
+          ) : null}
+        </AnimatePresence>
+
+        <StickyConnections open={connectionsOpen} onClose={() => setConnectionsOpen(false)} />
+
         <ToastStack toasts={toasts} onDismiss={(id) => setToasts((items) => items.filter((item) => item.id !== id))} />
       </DndContext>
     </main>
+    </MotionConfig>
   );
 }
 
@@ -3992,6 +4350,10 @@ function StickyBoardColumn({
   quickTitle,
   quickCaptureIntent,
   quickInputRef,
+  captureDraft,
+  captureExpanded,
+  onCaptureDraftChange,
+  onCaptureExpandedChange,
   searchQuery,
   taskViewFiltered,
   taskViewFilter,
@@ -4021,6 +4383,10 @@ function StickyBoardColumn({
   quickTitle: string;
   quickCaptureIntent: QuickCaptureIntent;
   quickInputRef: React.RefObject<HTMLInputElement | null>;
+  captureDraft: QuickCaptureDraft;
+  captureExpanded: boolean;
+  onCaptureDraftChange: (draft: QuickCaptureDraft) => void;
+  onCaptureExpandedChange: (expanded: boolean) => void;
   searchQuery: string;
   taskViewFiltered: boolean;
   taskViewFilter: StickyTaskViewFilter;
@@ -4053,14 +4419,7 @@ function StickyBoardColumn({
   const paperDepth = (columnIndex % 3) + 1;
   const emptyTitle = taskViewFiltered ? `No ${TASK_VIEW_LABELS[taskViewFilter].toLowerCase()} tasks` : "No tasks yet";
   const emptyBody = taskViewFiltered ? "Switch back to All to see this saved order." : "Add a task to start this list.";
-  const renderedTaskCount = contentReady ? visibleTasks.length : 0;
-  const completedRowsOpen = contentReady && completedOpen ? completedTasks.length : 0;
-  const columnSizingStyle = {
-    "--pad-task-space": `${renderedTaskCount * 34}px`,
-    "--pad-completed-space": `${completedRowsOpen * 34}px`,
-    "--wood-task-space": `${renderedTaskCount * 72}px`,
-    "--wood-completed-space": `${completedRowsOpen * 42}px`,
-  } as CSSProperties;
+  const sortable = useSortable({ id: `board:${list.id}`, data: { type: "board-list" } });
 
   useEffect(() => {
     if (renderImmediately) {
@@ -4091,19 +4450,39 @@ function StickyBoardColumn({
 
   return (
     <section
-      ref={columnRef}
-      className={`board-column color-${list.color} paper-depth-${paperDepth}${active ? " active" : ""}`}
+      ref={(node) => {
+        columnRef.current = node;
+        sortable.setNodeRef(node);
+      }}
+      className={`board-column color-${list.color} paper-depth-${paperDepth}${active ? " active" : ""}${
+        sortable.isDragging ? " dragging-column" : ""
+      }`}
       aria-label={`List ${list.name}`}
       data-list-id={list.id}
       data-list-slug={listSlug(list.name)}
       data-paper-depth={paperDepth}
-      style={columnSizingStyle}
+      style={{
+        transform: CSS.Transform.toString(sortable.transform),
+        transition: sortable.transition,
+        ["--col-delay" as string]: `${Math.min(columnIndex * 55, 500)}ms`,
+      }}
     >
       <span className="column-paper-stack" aria-hidden="true" />
-      <span className="column-pin" aria-hidden="true" />
+      <motion.span
+        className="column-pin"
+        aria-hidden="true"
+        initial={{ y: -16, opacity: 0, scale: 1.25 }}
+        animate={{ y: 0, opacity: 1, scale: 1 }}
+        transition={{ ...springs.bouncy, delay: Math.min(columnIndex * 0.055, 0.5) + 0.16 }}
+      />
       {list.color === "violet" ? <span className="column-paperclip" aria-hidden="true" /> : null}
 
-      <header className="column-header">
+      <header
+        className="column-header"
+        {...sortable.attributes}
+        {...sortable.listeners}
+        aria-label={`Reorder list ${list.name}`}
+      >
         <button className="column-title-button" type="button" onClick={onActivate}>
           <h2>
             <HighlightText text={list.name} query={searchQuery} />
@@ -4137,42 +4516,96 @@ function StickyBoardColumn({
       </header>
 
       {active ? (
-        <form className="quick-capture board-quick-capture" onSubmit={onSubmitQuickTask}>
-          <div className="capture-icon">
-            <Plus size={18} />
-          </div>
-          <input
-            ref={quickInputRef}
-            value={quickTitle}
-            onChange={(event) => onQuickTitleChange(event.target.value)}
-            onFocus={onPrepareQuickAdd}
-            placeholder="Add a task"
-            aria-label="Quick add task"
-          />
-          <button
-            type="submit"
-            disabled={!quickCaptureIntent.title.trim()}
-            aria-label={`Add task to ${quickCaptureIntent.listName ?? list.name}`}
-          >
-            Add
-          </button>
-          {quickCaptureIntent.dueDate || quickCaptureIntent.dueTime || quickCaptureIntent.listName ? (
-            <div className="quick-schedule-preview" aria-live="polite">
-              {quickCaptureIntent.dueDate || quickCaptureIntent.dueTime ? (
-                <CalendarDays size={14} />
-              ) : (
-                <Layers3 size={14} />
-              )}
-              {quickCaptureIntent.listName ? <span>{quickCaptureIntent.listName}</span> : null}
-              {quickCaptureIntent.dateLabel ? <span>{quickCaptureIntent.dateLabel}</span> : null}
-              {quickCaptureIntent.timeLabel ? <span>{quickCaptureIntent.timeLabel}</span> : null}
+        <form
+          className={`quick-capture board-quick-capture${captureExpanded ? " expanded" : ""}`}
+          onSubmit={onSubmitQuickTask}
+        >
+          <div className="capture-main">
+            <div className="capture-icon">
+              <Plus size={17} />
             </div>
-          ) : null}
+            <input
+              ref={quickInputRef}
+              value={quickTitle}
+              onChange={(event) => onQuickTitleChange(event.target.value)}
+              onFocus={() => {
+                onPrepareQuickAdd();
+                onCaptureExpandedChange(true);
+              }}
+              placeholder="Add a task"
+              aria-label="Quick add task"
+            />
+            <button
+              type="submit"
+              disabled={!quickCaptureIntent.title.trim()}
+              aria-label={`Add task to ${quickCaptureIntent.listName ?? list.name}`}
+            >
+              Add
+            </button>
+          </div>
+          <AnimatePresence initial={false}>
+            {captureExpanded ? (
+              <motion.div
+                className="capture-composer"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ type: "spring", stiffness: 420, damping: 38 }}
+              >
+                <textarea
+                  value={captureDraft.details}
+                  onChange={(event) => onCaptureDraftChange({ ...captureDraft, details: event.target.value })}
+                  placeholder="Details"
+                  rows={2}
+                  aria-label="New task details"
+                />
+                <div className="capture-composer-row">
+                  <CaptureScheduler
+                    schedule={{
+                      dueDate: captureDraft.dueDate,
+                      dueTime: captureDraft.dueTime,
+                      repeat: captureDraft.repeat,
+                    }}
+                    onChange={(next) => onCaptureDraftChange({ ...captureDraft, ...next })}
+                  />
+                  <button
+                    type="button"
+                    className="capture-collapse"
+                    onClick={() => onCaptureExpandedChange(false)}
+                    aria-label="Collapse task composer"
+                  >
+                    <ChevronUp size={15} />
+                  </button>
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+          <AnimatePresence>
+            {quickCaptureIntent.dueDate || quickCaptureIntent.dueTime || quickCaptureIntent.listName ? (
+              <motion.div
+                className="quick-schedule-preview"
+                aria-live="polite"
+                initial={{ opacity: 0, y: -6, scale: 0.94 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -6, scale: 0.94 }}
+                transition={springs.snappy}
+              >
+                {quickCaptureIntent.dueDate || quickCaptureIntent.dueTime ? (
+                  <CalendarDays size={14} />
+                ) : (
+                  <Layers3 size={14} />
+                )}
+                {quickCaptureIntent.listName ? <span>{quickCaptureIntent.listName}</span> : null}
+                {quickCaptureIntent.dateLabel ? <span>{quickCaptureIntent.dateLabel}</span> : null}
+                {quickCaptureIntent.timeLabel ? <span>{quickCaptureIntent.timeLabel}</span> : null}
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
         </form>
       ) : (
         <button className="board-add-task" type="button" onClick={onActivateQuickAdd}>
           <span>
-            <Plus size={18} />
+            <Plus size={17} />
           </span>
           Add a task
         </button>
@@ -4247,9 +4680,17 @@ function StickyBoardColumn({
           aria-expanded={completedOpen}
           aria-controls={completedListId}
         >
-          {completedOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+          <motion.span
+            className="completed-chevron"
+            aria-hidden="true"
+            initial={false}
+            animate={{ rotate: completedOpen ? 90 : 0 }}
+            transition={springs.snappy}
+          >
+            <ChevronRight size={17} />
+          </motion.span>
           <span>Completed</span>
-          <strong>{completedTasks.length}</strong>
+          <AnimatedNumber value={completedTasks.length} className="completed-count" />
         </button>
 
         <AnimatePresence initial={false}>
@@ -4260,6 +4701,7 @@ function StickyBoardColumn({
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 380, damping: 38 }}
             >
               {completedTasks.map((task) => (
                 <CompletedTaskRow
@@ -4276,9 +4718,6 @@ function StickyBoardColumn({
                   <Archive size={15} />
                   Clear completed
                 </button>
-              ) : null}
-              {!completedTasks.length ? (
-                <p className="completed-empty">Completed tasks land here.</p>
               ) : null}
             </motion.div>
           ) : null}
@@ -4316,7 +4755,7 @@ function PlateTaskGroups({
             role="listitem"
             >
               <header className="plate-group-title">
-                {collapsed ? <ChevronRight size={17} aria-hidden="true" /> : <ChevronDown size={17} aria-hidden="true" />}
+                {collapsed ? <ChevronRight size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}
                 <span>
                   <HighlightText text={group.name} query={searchQuery} />
                 </span>
@@ -4336,7 +4775,7 @@ function PlateTaskGroups({
                       onClick={() => onCompleteTask(task)}
                       aria-label={`Complete ${task.title}`}
                     >
-                      <Check size={18} />
+                      <Check size={16} />
                     </button>
                     <button className="plate-task-title" type="button" onClick={() => onOpenTask(task)}>
                       <HighlightText text={task.title} query={searchQuery} />
@@ -4423,14 +4862,23 @@ function SortableListItem({
           onClick={onSelect}
           aria-label={listTabLabel}
         >
+          {active ? (
+            <motion.span
+              className="list-tab-active-glow"
+              layoutId="list-tab-active-glow"
+              transition={springs.snappy}
+              aria-hidden="true"
+            />
+          ) : null}
           <span
             className="drag-handle"
             {...sortable.attributes}
             {...sortable.listeners}
             aria-label={`Drag list named ${list.name}`}
           >
-            <GripVertical size={16} />
+            <GripVertical size={15} />
           </span>
+          <span className="list-tab-dot" aria-hidden="true" />
           <span className="list-tab-name">
             <HighlightText text={list.name} query={searchQuery} />
           </span>
@@ -4538,6 +4986,9 @@ function SortableTaskCard({
     data: { type: "task" },
     disabled: reorderDisabled,
   });
+  const reduceMotion = useReducedMotion();
+  const [completing, setCompleting] = useState(false);
+  const completeTimerRef = useRef<number | null>(null);
   const openSubtasks = subtasks.filter((subtask) => !subtask.isCompleted).length;
   const recurrenceLabel = recurrenceRule
     ? recurrenceRule.paused
@@ -4549,19 +5000,49 @@ function SortableTaskCard({
     transition: sortable.transition,
   };
 
+  useEffect(() => {
+    return () => {
+      if (completeTimerRef.current) {
+        window.clearTimeout(completeTimerRef.current);
+      }
+    };
+  }, []);
+
+  function handleComplete() {
+    if (completing) {
+      return;
+    }
+
+    if (reduceMotion) {
+      onComplete();
+      return;
+    }
+
+    setCompleting(true);
+    completeTimerRef.current = window.setTimeout(onComplete, 520);
+  }
+
   return (
     <motion.article
       ref={sortable.setNodeRef}
       layout
-      initial={{ opacity: 0, y: 14, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, x: -20, scale: 0.98 }}
-      transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.75 }}
+      initial={{ opacity: 0, y: 14, scale: 0.97 }}
+      animate={
+        completing
+          ? { opacity: 1, y: 0, scale: 0.98, rotate: -1.1 }
+          : { opacity: 1, y: 0, scale: 1, rotate: 0 }
+      }
+      exit={
+        completing
+          ? { opacity: 0, y: 44, scale: 0.86, rotate: 2.2, transition: { duration: 0.3, ease: [0.5, 0, 0.75, 0.4] } }
+          : { opacity: 0, x: -22, scale: 0.96 }
+      }
+      transition={springs.paper}
       style={style}
       data-task-id={task.id}
       data-paper-variant={visualVariant(task.id, 3)}
       data-tape-variant={visualVariant(`${task.id}:tape`, 3)}
-      className={`task-card color-${task.color}${active ? " selected" : ""}${sortable.isDragging ? " dragging" : ""}`}
+      className={`task-card color-${task.color}${active ? " selected" : ""}${sortable.isDragging ? " dragging" : ""}${completing ? " completing" : ""}`}
       onClick={(event) => {
         if ((event.target as HTMLElement).closest("button")) {
           return;
@@ -4569,13 +5050,16 @@ function SortableTaskCard({
         onOpen();
       }}
     >
+      <span className="task-card-tape" aria-hidden="true" />
       <button
         className="task-check"
         type="button"
-        onClick={onComplete}
+        onClick={handleComplete}
         aria-label={`Complete ${task.title}`}
       >
-        <Check size={18} />
+        <Check size={15} className="task-check-hint" aria-hidden="true" />
+        <DrawnCheck checked={completing} size={16} />
+        {completing ? <ConfettiBurst /> : null}
       </button>
       <button className="task-body-button" type="button" onClick={onOpen}>
         <span className="task-title">
@@ -4586,19 +5070,21 @@ function SortableTaskCard({
             <HighlightText text={task.details} query={searchQuery} />
           </span>
         ) : null}
-        <span className="task-meta-row">
-          {dueLabel ? (
-            <span>
-              <CalendarDays size={14} /> <HighlightText text={dueLabel} query={searchQuery} />
-            </span>
-          ) : null}
-          {openSubtasks ? <span><ListChecks size={14} /> {openSubtasks} subtasks</span> : null}
-          {recurrenceLabel ? (
-            <span>
-              <Repeat2 size={14} /> <HighlightText text={recurrenceLabel} query={searchQuery} />
-            </span>
-          ) : null}
-        </span>
+        {dueLabel || openSubtasks || recurrenceLabel ? (
+          <span className="task-meta-row">
+            {dueLabel ? (
+              <span className={task.dueDate && task.dueDate < localDateKey() ? "meta-chip overdue" : "meta-chip"}>
+                <CalendarDays size={13} /> <HighlightText text={dueLabel} query={searchQuery} />
+              </span>
+            ) : null}
+            {openSubtasks ? <span className="meta-chip"><ListChecks size={13} /> {openSubtasks} subtasks</span> : null}
+            {recurrenceLabel ? (
+              <span className="meta-chip">
+                <Repeat2 size={13} /> <HighlightText text={recurrenceLabel} query={searchQuery} />
+              </span>
+            ) : null}
+          </span>
+        ) : null}
       </button>
       <div className="task-actions">
         <button
@@ -4608,7 +5094,7 @@ function SortableTaskCard({
           disabled={!canMoveUp}
           aria-label={`Move ${task.title} up`}
         >
-          <ChevronUp size={16} />
+          <ChevronUp size={15} />
         </button>
         <button
           className="task-move"
@@ -4617,7 +5103,7 @@ function SortableTaskCard({
           disabled={!canMoveDown}
           aria-label={`Move ${task.title} down`}
         >
-          <ChevronDown size={16} />
+          <ChevronDown size={15} />
         </button>
         <button
           className="task-drag"
@@ -4626,10 +5112,10 @@ function SortableTaskCard({
           {...sortable.listeners}
           aria-label={`Reorder ${task.title}`}
         >
-          <GripVertical size={17} />
+          <GripVertical size={16} />
         </button>
         <button className="task-more" type="button" onClick={onDelete} aria-label={`Delete ${task.title}`}>
-          <Trash2 size={16} />
+          <Trash2 size={15} />
         </button>
       </div>
     </motion.article>
@@ -4650,9 +5136,16 @@ function CompletedTaskRow({
   onDelete: () => void;
 }) {
   return (
-    <div className="completed-row">
+    <motion.div
+      className="completed-row"
+      layout
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: 18 }}
+      transition={springs.snappy}
+    >
       <button type="button" className="completed-check" onClick={onRestore} aria-label={`Restore ${task.title}`}>
-        <Undo2 size={15} />
+        <Undo2 size={14} />
       </button>
       <button type="button" className="completed-title" onClick={onOpen}>
         <HighlightText text={task.title} query={searchQuery} />
@@ -4660,7 +5153,7 @@ function CompletedTaskRow({
       <button type="button" className="icon-chip subtle" onClick={onDelete} aria-label={`Delete ${task.title}`}>
         <Trash2 size={14} />
       </button>
-    </div>
+    </motion.div>
   );
 }
 
@@ -4730,7 +5223,13 @@ function TaskDetailsPanel({
   if (!task) {
     return (
       <aside className="details-panel empty-details" aria-label="Task details">
-        <div className="pulse-panel">
+        <motion.div
+          className="pulse-panel details-scroll"
+          key="pulse"
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={springs.drawer}
+        >
           <div className="pulse-head">
             <div className="pulse-mark">
               <Sparkles size={20} />
@@ -4739,24 +5238,32 @@ function TaskDetailsPanel({
               <p className="eyebrow">Details</p>
               <h3>Select a task</h3>
             </div>
+            <button
+              className="icon-chip pulse-close"
+              type="button"
+              onClick={onClose}
+              aria-label="Close workspace pulse"
+            >
+              <X size={18} />
+            </button>
           </div>
 
           <div className="pulse-scoreboard">
             <div>
               <span>Active</span>
-              <strong>{pulse.activeCount}</strong>
+              <AnimatedNumber value={pulse.activeCount} className="pulse-number" />
             </div>
             <div>
               <span>Due today</span>
-              <strong>{pulse.dueTodayCount}</strong>
+              <AnimatedNumber value={pulse.dueTodayCount} className="pulse-number" />
             </div>
             <div className={pulse.overdueCount ? "needs-attention" : ""}>
               <span>Overdue</span>
-              <strong>{pulse.overdueCount}</strong>
+              <AnimatedNumber value={pulse.overdueCount} className="pulse-number" />
             </div>
-            <div>
+            <div className="pulse-arc-tile">
               <span>Done</span>
-              <strong>{pulse.completionRate}%</strong>
+              <ArcRing value={pulse.completionRate} size={84} />
             </div>
           </div>
 
@@ -4812,7 +5319,7 @@ function TaskDetailsPanel({
               <strong>{pulse.completedCount} completed</strong>
             </div>
           ) : null}
-        </div>
+        </motion.div>
       </aside>
     );
   }
@@ -4919,423 +5426,435 @@ function TaskDetailsPanel({
 
   return (
     <aside className="details-panel" aria-label="Task details">
-      <div className="details-head">
-        <div>
-          <p className="eyebrow">Task details</p>
-          <h3>{task.isCompleted ? "Completed task" : "Task details"}</h3>
+      <motion.div
+        className="details-scroll"
+        key={task.id}
+        initial={{ opacity: 0, x: 26 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={springs.drawer}
+      >
+        <div className="details-head">
+          <div>
+            <p className="eyebrow">Task details</p>
+            <h3>{task.isCompleted ? "Completed task" : "Task details"}</h3>
+          </div>
+          <button className="icon-chip" type="button" onClick={onClose} aria-label="Close details">
+            <X size={18} />
+          </button>
         </div>
-        <button className="icon-chip" type="button" onClick={onClose} aria-label="Close details">
-          <X size={18} />
-        </button>
-      </div>
 
-      <label className="detail-field title-field">
-        <span>Title</span>
-        <input
-          value={titleDraft}
-          onChange={(event) => setTitleDraft(event.target.value)}
-          onBlur={saveTitleDraft}
-        />
-      </label>
-
-      <label className="detail-field">
-        <span>Details</span>
-        <textarea
-          value={detailsDraft}
-          onChange={(event) => setDetailsDraft(event.target.value)}
-          onBlur={saveDetailsDraft}
-          placeholder="Add context, links, or a note to future you."
-        />
-      </label>
-
-      <div className="details-grid">
-        <label className="detail-field">
-          <span>List</span>
-          <select value={task.listId} onChange={(event) => onMove(event.target.value)}>
-            {lists.map((list) => (
-              <option key={list.id} value={list.id}>
-                {list.name}
-              </option>
-            ))}
-          </select>
+        <label className="detail-field title-field">
+          <span>Title</span>
+          <input
+            value={titleDraft}
+            onChange={(event) => setTitleDraft(event.target.value)}
+            onBlur={saveTitleDraft}
+          />
         </label>
 
         <label className="detail-field">
-          <span>Color</span>
-          <select
-            value={task.color}
-            onChange={(event) => onSavePatch({ color: event.target.value as StickyColor })}
-          >
-            {COLORS.map((color) => (
-              <option key={color} value={color}>
-                {colorLabel(color)}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <section className="due-card" aria-label="Due date and time">
-        <div className="mini-section-title">
-          <CalendarDays size={16} />
-          Due
-          {task.dueDate ? <strong>{humanDue(task)}</strong> : <strong>No date</strong>}
-        </div>
-        <div className="due-chip-row" aria-label="Quick due dates">
-          {QUICK_DUE_OPTIONS.map((option) => {
-            const dueDate = localDateKey(option.offsetDays);
-            const active = task.dueDate === dueDate;
-
-            return (
-              <button
-                key={option.label}
-                type="button"
-                className={active ? "active" : ""}
-                aria-pressed={active}
-                onClick={() => setQuickDueDate(dueDate)}
-              >
-                {option.label}
-              </button>
-            );
-          })}
-          <button
-            type="button"
-            className={!task.dueDate ? "active" : ""}
-            aria-pressed={!task.dueDate}
-            onClick={() => setQuickDueDate(null)}
-          >
-            No date
-          </button>
-        </div>
-        <div className="due-controls">
-          <input
-            type="date"
-            value={task.dueDate ?? ""}
-            onChange={(event) =>
-              onSavePatch(
-                event.target.value
-                  ? { dueDate: event.target.value }
-                  : { dueDate: null, dueTime: null },
-              )
-            }
-            aria-label="Due date"
+          <span>Details</span>
+          <textarea
+            value={detailsDraft}
+            onChange={(event) => setDetailsDraft(event.target.value)}
+            onBlur={saveDetailsDraft}
+            placeholder="Add context, links, or a note to future you."
           />
-          <input
-            type="time"
-            value={task.dueTime ?? ""}
-            onChange={(event) => onSavePatch({ dueTime: event.target.value || null })}
-            aria-label="Due time"
-            disabled={dueTimeNeedsDate}
-            aria-describedby={dueTimeNeedsDate ? dueTimeRestrictionId : undefined}
-          />
-          <button
-            type="button"
-            onClick={() => onSavePatch({ dueDate: null, dueTime: null })}
-            disabled={!hasDueSchedule}
-            aria-label="Remove due date and time"
-          >
-            Remove
-          </button>
-        </div>
-        {dueTimeNeedsDate ? (
-          <p className="helper-copy" id={dueTimeRestrictionId}>
-            Choose a due date before adding a time.
-          </p>
-        ) : null}
-        <div className="due-chip-row time-chip-row" aria-label="Quick due times">
-          {QUICK_TIME_OPTIONS.map((option) => {
-            const active = task.dueTime === option.value;
-
-            return (
-              <button
-                key={option.value}
-                type="button"
-                className={active ? "active" : ""}
-                aria-pressed={active}
-                onClick={() => setQuickDueTime(option.value)}
-              >
-                {option.label}
-              </button>
-            );
-          })}
-          <button
-            type="button"
-            className={task.dueDate && !task.dueTime ? "active" : ""}
-            aria-pressed={Boolean(task.dueDate && !task.dueTime)}
-            onClick={() => setQuickDueTime(null)}
-          >
-            Any time
-          </button>
-        </div>
-      </section>
-
-      <section className="recurrence-card" aria-label="Recurrence">
-        <div className="mini-section-title">
-          <Repeat2 size={16} />
-          Repeat
-        </div>
-        <label className="toggle-line">
-          <input
-            type="checkbox"
-            checked={Boolean(recurrenceRule)}
-            disabled={recurrenceBlockedBySubtasks}
-            aria-describedby={recurrenceBlockedBySubtasks ? recurrenceRestrictionId : undefined}
-            onChange={(event) => onToggleRecurrence(event.target.checked)}
-          />
-          <span>{recurrenceRule ? "Repeating" : "Not repeating"}</span>
         </label>
 
-        {recurrenceBlockedBySubtasks ? (
-          <p className="helper-copy" id={recurrenceRestrictionId}>
-            Repeating tasks cannot have subtasks. Remove subtasks first.
-          </p>
-        ) : null}
+        <div className="details-grid">
+          <label className="detail-field">
+            <span>List</span>
+            <select value={task.listId} onChange={(event) => onMove(event.target.value)}>
+              {lists.map((list) => (
+                <option key={list.id} value={list.id}>
+                  {list.name}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        {recurrenceRule ? (
-          <div className="recurrence-grid">
-            <div className={`recurrence-preview${recurrenceRule.paused ? " paused" : ""}`}>
-              <strong>{recurrenceRule.paused ? "Repeat paused" : recurrenceCadence(recurrenceRule)}</strong>
-              <span>
-                {recurrenceRule.paused
-                  ? "New occurrences are held until this repeat is resumed."
-                  : recurrenceBoundary(recurrenceRule)}
-              </span>
-            </div>
-            <label className="toggle-line recurrence-state-toggle">
-              <input
-                type="checkbox"
-                checked={recurrenceRule.paused}
-                onChange={(event) =>
-                  onUpdateRecurrence(recurrenceRule.id, {
-                    paused: event.target.checked,
-                  })
-                }
-              />
-              <span>Pause repeat</span>
-            </label>
-            {catchUpTarget ? (
-              <div className="recurrence-inline-catchup">
-                <span>Behind schedule - next is {humanDate(catchUpTarget.dueDate)}</span>
-                <button type="button" onClick={onAdvanceRecurrence}>
-                  Advance repeat
+          <label className="detail-field">
+            <span>Color</span>
+            <select
+              value={task.color}
+              onChange={(event) => onSavePatch({ color: event.target.value as StickyColor })}
+            >
+              {COLORS.map((color) => (
+                <option key={color} value={color}>
+                  {colorLabel(color)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <section className="due-card" aria-label="Due date and time">
+          <div className="mini-section-title">
+            <CalendarDays size={16} />
+            Due
+            {task.dueDate ? <strong>{humanDue(task)}</strong> : <strong>No date</strong>}
+          </div>
+          <div className="due-chip-row" aria-label="Quick due dates">
+            {QUICK_DUE_OPTIONS.map((option) => {
+              const dueDate = localDateKey(option.offsetDays);
+              const active = task.dueDate === dueDate;
+
+              return (
+                <button
+                  key={option.label}
+                  type="button"
+                  className={active ? "active" : ""}
+                  aria-pressed={active}
+                  onClick={() => setQuickDueDate(dueDate)}
+                >
+                  {option.label}
                 </button>
+              );
+            })}
+            <button
+              type="button"
+              className={!task.dueDate ? "active" : ""}
+              aria-pressed={!task.dueDate}
+              onClick={() => setQuickDueDate(null)}
+            >
+              No date
+            </button>
+          </div>
+          <div className="due-controls">
+            <input
+              type="date"
+              value={task.dueDate ?? ""}
+              onChange={(event) =>
+                onSavePatch(
+                  event.target.value
+                    ? { dueDate: event.target.value }
+                    : { dueDate: null, dueTime: null },
+                )
+              }
+              aria-label="Due date"
+            />
+            <input
+              type="time"
+              value={task.dueTime ?? ""}
+              onChange={(event) => onSavePatch({ dueTime: event.target.value || null })}
+              aria-label="Due time"
+              disabled={dueTimeNeedsDate}
+              aria-describedby={dueTimeNeedsDate ? dueTimeRestrictionId : undefined}
+            />
+            <button
+              type="button"
+              onClick={() => onSavePatch({ dueDate: null, dueTime: null })}
+              disabled={!hasDueSchedule}
+              aria-label="Remove due date and time"
+            >
+              Remove
+            </button>
+          </div>
+          {dueTimeNeedsDate ? (
+            <p className="helper-copy" id={dueTimeRestrictionId}>
+              Choose a due date before adding a time.
+            </p>
+          ) : null}
+          <div className="due-chip-row time-chip-row" aria-label="Quick due times">
+            {QUICK_TIME_OPTIONS.map((option) => {
+              const active = task.dueTime === option.value;
+
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={active ? "active" : ""}
+                  aria-pressed={active}
+                  onClick={() => setQuickDueTime(option.value)}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              className={task.dueDate && !task.dueTime ? "active" : ""}
+              aria-pressed={Boolean(task.dueDate && !task.dueTime)}
+              onClick={() => setQuickDueTime(null)}
+            >
+              Any time
+            </button>
+          </div>
+        </section>
+
+        <TaskReminderControl task={task} />
+
+        <section className="recurrence-card" aria-label="Recurrence">
+          <div className="mini-section-title">
+            <Repeat2 size={16} />
+            Repeat
+          </div>
+          <label className="toggle-line">
+            <input
+              type="checkbox"
+              checked={Boolean(recurrenceRule)}
+              disabled={recurrenceBlockedBySubtasks}
+              aria-describedby={recurrenceBlockedBySubtasks ? recurrenceRestrictionId : undefined}
+              onChange={(event) => onToggleRecurrence(event.target.checked)}
+            />
+            <span>{recurrenceRule ? "Repeating" : "Not repeating"}</span>
+          </label>
+
+          {recurrenceBlockedBySubtasks ? (
+            <p className="helper-copy" id={recurrenceRestrictionId}>
+              Repeating tasks cannot have subtasks. Remove subtasks first.
+            </p>
+          ) : null}
+
+          {recurrenceRule ? (
+            <div className="recurrence-grid">
+              <div className={`recurrence-preview${recurrenceRule.paused ? " paused" : ""}`}>
+                <strong>{recurrenceRule.paused ? "Repeat paused" : recurrenceCadence(recurrenceRule)}</strong>
+                <span>
+                  {recurrenceRule.paused
+                    ? "New occurrences are held until this repeat is resumed."
+                    : recurrenceBoundary(recurrenceRule)}
+                </span>
               </div>
-            ) : null}
-            <label className="detail-field">
-              <span>Every</span>
-              <input
-                type="number"
-                min={1}
-                max={365}
-                value={recurrenceRule.intervalCount}
-                onChange={(event) =>
-                  onUpdateRecurrence(recurrenceRule.id, {
-                    intervalCount: Number(event.target.value) || 1,
-                  })
-                }
-              />
-            </label>
-            <label className="detail-field">
-              <span>Frequency</span>
-              <select
-                value={recurrenceRule.frequency}
-                onChange={(event) => updateFrequency(event.target.value as RecurrenceFrequency)}
-              >
-                <option value="daily">Days</option>
-                <option value="weekly">Weeks</option>
-                <option value="monthly">Months</option>
-                <option value="yearly">Years</option>
-                <option value="custom">Custom</option>
-              </select>
-            </label>
-            <label className="detail-field">
-              <span>Starts</span>
-              <input
-                type="date"
-                value={recurrenceRule.startsOn}
-                onChange={(event) =>
-                  onUpdateRecurrence(recurrenceRule.id, {
-                    startsOn: event.target.value,
-                  })
-                }
-              />
-            </label>
-            {recurrenceUsesDays(recurrenceRule.frequency) ? (
-              <div className="repeat-days" aria-label="Repeat days">
-                {WEEKDAYS.map((day) => {
-                  const active = recurrenceRule.daysOfWeek.includes(day.value);
-                  return (
-                    <button
-                      key={day.value}
-                      type="button"
-                      className={active ? "active" : ""}
-                      aria-pressed={active}
-                      aria-label={day.name}
-                      onClick={() => toggleRepeatDay(day.value)}
-                    >
-                      {day.label}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
-            {recurrenceUsesMonthDay(recurrenceRule.frequency) ? (
+              <label className="toggle-line recurrence-state-toggle">
+                <input
+                  type="checkbox"
+                  checked={recurrenceRule.paused}
+                  onChange={(event) =>
+                    onUpdateRecurrence(recurrenceRule.id, {
+                      paused: event.target.checked,
+                    })
+                  }
+                />
+                <span>Pause repeat</span>
+              </label>
+              {catchUpTarget ? (
+                <div className="recurrence-inline-catchup">
+                  <span>Behind schedule - next is {humanDate(catchUpTarget.dueDate)}</span>
+                  <button type="button" onClick={onAdvanceRecurrence}>
+                    Advance repeat
+                  </button>
+                </div>
+              ) : null}
               <label className="detail-field">
-                <span>Month day</span>
+                <span>Every</span>
                 <input
                   type="number"
                   min={1}
-                  max={31}
-                  value={recurrenceRule.monthDay ?? startMonthDay(recurrenceRule.startsOn)}
+                  max={365}
+                  value={recurrenceRule.intervalCount}
                   onChange={(event) =>
                     onUpdateRecurrence(recurrenceRule.id, {
-                      monthDay: clampMonthDay(Number(event.target.value)),
+                      intervalCount: Number(event.target.value) || 1,
                     })
                   }
                 />
               </label>
-            ) : null}
-            <label className="detail-field">
-              <span>Ends</span>
-              <select
-                value={recurrenceRule.endType}
-                onChange={(event) => updateEndType(event.target.value as StickyRecurrenceRule["endType"])}
-              >
-                <option value="never">Never</option>
-                <option value="on_date">On date</option>
-                <option value="after_count">After count</option>
-              </select>
-            </label>
-            {recurrenceRule.endType === "on_date" ? (
               <label className="detail-field">
-                <span>End date</span>
+                <span>Frequency</span>
+                <select
+                  value={recurrenceRule.frequency}
+                  onChange={(event) => updateFrequency(event.target.value as RecurrenceFrequency)}
+                >
+                  <option value="daily">Days</option>
+                  <option value="weekly">Weeks</option>
+                  <option value="monthly">Months</option>
+                  <option value="yearly">Years</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </label>
+              <label className="detail-field">
+                <span>Starts</span>
                 <input
                   type="date"
-                  value={recurrenceRule.endDate ?? ""}
+                  value={recurrenceRule.startsOn}
                   onChange={(event) =>
                     onUpdateRecurrence(recurrenceRule.id, {
-                      endDate: event.target.value || recurrenceRule.startsOn,
+                      startsOn: event.target.value,
                     })
                   }
                 />
               </label>
-            ) : null}
-            {recurrenceRule.endType === "after_count" ? (
+              {recurrenceUsesDays(recurrenceRule.frequency) ? (
+                <div className="repeat-days" aria-label="Repeat days">
+                  {WEEKDAYS.map((day) => {
+                    const active = recurrenceRule.daysOfWeek.includes(day.value);
+                    return (
+                      <button
+                        key={day.value}
+                        type="button"
+                        className={active ? "active" : ""}
+                        aria-pressed={active}
+                        aria-label={day.name}
+                        onClick={() => toggleRepeatDay(day.value)}
+                      >
+                        {day.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+              {recurrenceUsesMonthDay(recurrenceRule.frequency) ? (
+                <label className="detail-field">
+                  <span>Month day</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={recurrenceRule.monthDay ?? startMonthDay(recurrenceRule.startsOn)}
+                    onChange={(event) =>
+                      onUpdateRecurrence(recurrenceRule.id, {
+                        monthDay: clampMonthDay(Number(event.target.value)),
+                      })
+                    }
+                  />
+                </label>
+              ) : null}
               <label className="detail-field">
-                <span>Count</span>
-                <input
-                  type="number"
-                  min={1}
-                  value={recurrenceRule.occurrenceCount ?? 5}
-                  onChange={(event) =>
-                    onUpdateRecurrence(recurrenceRule.id, {
-                      occurrenceCount: Number(event.target.value) || 1,
-                    })
-                  }
-                />
+                <span>Ends</span>
+                <select
+                  value={recurrenceRule.endType}
+                  onChange={(event) => updateEndType(event.target.value as StickyRecurrenceRule["endType"])}
+                >
+                  <option value="never">Never</option>
+                  <option value="on_date">On date</option>
+                  <option value="after_count">After count</option>
+                </select>
               </label>
-            ) : null}
+              {recurrenceRule.endType === "on_date" ? (
+                <label className="detail-field">
+                  <span>End date</span>
+                  <input
+                    type="date"
+                    value={recurrenceRule.endDate ?? ""}
+                    onChange={(event) =>
+                      onUpdateRecurrence(recurrenceRule.id, {
+                        endDate: event.target.value || recurrenceRule.startsOn,
+                      })
+                    }
+                  />
+                </label>
+              ) : null}
+              {recurrenceRule.endType === "after_count" ? (
+                <label className="detail-field">
+                  <span>Count</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={recurrenceRule.occurrenceCount ?? 5}
+                    onChange={(event) =>
+                      onUpdateRecurrence(recurrenceRule.id, {
+                        occurrenceCount: Number(event.target.value) || 1,
+                      })
+                    }
+                  />
+                </label>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+
+        <section className="subtask-card" aria-label="Subtasks">
+          <div className="mini-section-title">
+            <ListChecks size={16} />
+            Subtasks
+            <strong>{subtasks.filter((subtask) => !subtask.isCompleted).length}</strong>
           </div>
-        ) : null}
-      </section>
 
-      <section className="subtask-card" aria-label="Subtasks">
-        <div className="mini-section-title">
-          <ListChecks size={16} />
-          Subtasks
-          <strong>{subtasks.filter((subtask) => !subtask.isCompleted).length}</strong>
-        </div>
+          <form className="subtask-form" onSubmit={submitSubtask}>
+            <label className="sr-only" htmlFor={subtaskTitleId}>
+              New subtask title
+            </label>
+            <input
+              id={subtaskTitleId}
+              value={newSubtaskTitle}
+              onChange={(event) => setNewSubtaskTitle(event.target.value)}
+              placeholder={canHaveSubtasks ? "Add subtask" : "Subtasks are disabled for repeats"}
+              disabled={subtasksBlockedByRepeat}
+              aria-describedby={subtasksBlockedByRepeat ? subtaskRestrictionId : undefined}
+            />
+            <button
+              type="submit"
+              disabled={!newSubtaskTitle.trim() || subtasksBlockedByRepeat}
+              aria-label="Add subtask"
+              aria-describedby={subtasksBlockedByRepeat ? subtaskRestrictionId : undefined}
+            >
+              <Plus size={16} />
+            </button>
+          </form>
 
-        <form className="subtask-form" onSubmit={submitSubtask}>
-          <label className="sr-only" htmlFor={subtaskTitleId}>
-            New subtask title
-          </label>
-          <input
-            id={subtaskTitleId}
-            value={newSubtaskTitle}
-            onChange={(event) => setNewSubtaskTitle(event.target.value)}
-            placeholder={canHaveSubtasks ? "Add subtask" : "Subtasks are disabled for repeats"}
-            disabled={subtasksBlockedByRepeat}
-            aria-describedby={subtasksBlockedByRepeat ? subtaskRestrictionId : undefined}
-          />
-          <button
-            type="submit"
-            disabled={!newSubtaskTitle.trim() || subtasksBlockedByRepeat}
-            aria-label="Add subtask"
-            aria-describedby={subtasksBlockedByRepeat ? subtaskRestrictionId : undefined}
+          {subtasksBlockedByRepeat ? (
+            <p className="helper-copy" id={subtaskRestrictionId}>
+              Repeating tasks do not support subtasks. Remove repeat to add subtasks.
+            </p>
+          ) : null}
+
+          <SortableContext
+            items={subtasks.map((subtask) => subtask.id)}
+            strategy={verticalListSortingStrategy}
           >
-            <Plus size={16} />
-          </button>
-        </form>
+            <div className="subtask-list">
+              <AnimatePresence initial={false}>
+                {subtasks.map((subtask, index) => (
+                  <SortableSubtaskRow
+                    key={subtask.id}
+                    subtask={subtask}
+                    canMoveUp={index > 0}
+                    canMoveDown={index < subtasks.length - 1}
+                    onUpdate={(patch) => onUpdateSubtask(subtask.id, patch)}
+                    onMoveUp={() => onMoveSubtask(subtask.id, -1)}
+                    onMoveDown={() => onMoveSubtask(subtask.id, 1)}
+                    onDelete={() => onDeleteSubtask(subtask.id)}
+                  />
+                ))}
+              </AnimatePresence>
+            </div>
+          </SortableContext>
+        </section>
 
-        {subtasksBlockedByRepeat ? (
-          <p className="helper-copy" id={subtaskRestrictionId}>
-            Repeating tasks do not support subtasks. Remove repeat to add subtasks.
-          </p>
-        ) : null}
-
-        <SortableContext
-          items={subtasks.map((subtask) => subtask.id)}
-          strategy={verticalListSortingStrategy}
-        >
-          <div className="subtask-list">
-            {subtasks.map((subtask, index) => (
-              <SortableSubtaskRow
-                key={subtask.id}
-                subtask={subtask}
-                canMoveUp={index > 0}
-                canMoveDown={index < subtasks.length - 1}
-                onUpdate={(patch) => onUpdateSubtask(subtask.id, patch)}
-                onMoveUp={() => onMoveSubtask(subtask.id, -1)}
-                onMoveDown={() => onMoveSubtask(subtask.id, 1)}
-                onDelete={() => onDeleteSubtask(subtask.id)}
-              />
-            ))}
-          </div>
-        </SortableContext>
-      </section>
-
-      <div className="details-actions">
-        <button
-          className="secondary-action compact"
-          type="button"
-          onClick={onDuplicate}
-          aria-label={`Duplicate ${task.title}`}
-        >
-          <Copy size={16} />
-          Duplicate
-        </button>
-        {task.isCompleted ? (
+        <div className="details-actions">
           <button
             className="secondary-action compact"
             type="button"
-            onClick={onRestore}
-            aria-label={`Restore ${task.title}`}
+            onClick={onDuplicate}
+            aria-label={`Duplicate ${task.title}`}
           >
-            <Undo2 size={16} />
-            Restore
+            <Copy size={16} />
+            Duplicate
           </button>
-        ) : (
+          {task.isCompleted ? (
+            <button
+              className="secondary-action compact"
+              type="button"
+              onClick={onRestore}
+              aria-label={`Restore ${task.title}`}
+            >
+              <Undo2 size={16} />
+              Restore
+            </button>
+          ) : (
+            <button
+              className="primary-action compact"
+              type="button"
+              onClick={onComplete}
+              aria-label={`Complete ${task.title}`}
+            >
+              <Check size={16} />
+              Complete
+            </button>
+          )}
           <button
-            className="primary-action compact"
+            className="danger-action"
             type="button"
-            onClick={onComplete}
-            aria-label={`Complete ${task.title}`}
+            onClick={onDelete}
+            aria-label={`Delete ${task.title}`}
           >
-            <Check size={16} />
-            Complete
+            <Trash2 size={16} />
+            Delete
           </button>
-        )}
-        <button
-          className="danger-action"
-          type="button"
-          onClick={onDelete}
-          aria-label={`Delete ${task.title}`}
-        >
-          <Trash2 size={16} />
-          Delete
-        </button>
-      </div>
+        </div>
+      </motion.div>
     </aside>
   );
 }
@@ -5381,7 +5900,16 @@ function SortableSubtaskRow({
   }
 
   return (
-    <div ref={sortable.setNodeRef} style={style} className={`subtask-row ${sortable.isDragging ? "dragging" : ""}`}>
+    <motion.div
+      ref={sortable.setNodeRef}
+      style={style}
+      className={`subtask-row ${sortable.isDragging ? "dragging" : ""}`}
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -14 }}
+      transition={springs.snappy}
+    >
       <button
         className={`subtask-check${subtask.isCompleted ? " done" : ""}`}
         type="button"
@@ -5393,7 +5921,7 @@ function SortableSubtaskRow({
         }
         aria-label={`${subtask.isCompleted ? "Restore" : "Complete"} subtask: ${subtask.title}`}
       >
-        <Check size={13} />
+        <DrawnCheck checked={subtask.isCompleted} size={13} />
       </button>
       <input
         value={titleDraft}
@@ -5449,7 +5977,7 @@ function SortableSubtaskRow({
       >
         <X size={14} />
       </button>
-    </div>
+    </motion.div>
   );
 }
 
@@ -5472,13 +6000,16 @@ function ListEditorDialog({
 
   return (
     <div className="dialog-backdrop" role="presentation">
-      <form
+      <motion.form
         className="sticky-dialog"
         onSubmit={submit}
         onKeyDown={trapDialogFocus}
         role="dialog"
         aria-modal="true"
         aria-label={list === "new" ? "New list" : "Rename list"}
+        initial={{ opacity: 0, y: 22, scale: 0.95, rotate: -0.6 }}
+        animate={{ opacity: 1, y: 0, scale: 1, rotate: 0 }}
+        transition={springs.paper}
       >
         <div className="details-head">
           <div>
@@ -5493,19 +6024,22 @@ function ListEditorDialog({
           <span>Name</span>
           <input value={name} onChange={(event) => setName(event.target.value)} autoFocus />
         </label>
-        <div className="color-grid" aria-label="List color">
-          {COLORS.map((item) => (
-            <label key={item} className={`color-choice color-${item}`}>
-              <input
-                type="radio"
-                name="list-color"
-                value={item}
-                checked={color === item}
-                onChange={() => setColor(item)}
-              />
-              <span>{colorLabel(item)}</span>
-            </label>
-          ))}
+        <div className="color-picker-row">
+          <ListColorWheel value={color} onChange={(next) => setColor(next as StickyColor)} />
+          <div className="color-grid" aria-label="List color">
+            {COLORS.map((item) => (
+              <label key={item} className={`color-choice color-${item}`}>
+                <input
+                  type="radio"
+                  name="list-color"
+                  value={item}
+                  checked={color === item}
+                  onChange={() => setColor(item)}
+                />
+                <span>{colorLabel(item)}</span>
+              </label>
+            ))}
+          </div>
         </div>
         <div className="dialog-actions">
           <button className="secondary-action compact" type="button" onClick={onClose}>
@@ -5515,7 +6049,7 @@ function ListEditorDialog({
             Save list
           </button>
         </div>
-      </form>
+      </motion.form>
     </div>
   );
 }
@@ -5529,12 +6063,15 @@ function ConfirmDialog({
 }) {
   return (
     <div className="dialog-backdrop" role="presentation">
-      <div
+      <motion.div
         className="sticky-dialog confirm-dialog"
         role="dialog"
         aria-modal="true"
         aria-label={request.title}
         onKeyDown={trapDialogFocus}
+        initial={{ opacity: 0, y: 22, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={springs.paper}
       >
         <div className="dialog-icon danger">
           <Trash2 size={24} />
@@ -5553,7 +6090,7 @@ function ConfirmDialog({
             {request.actionLabel}
           </button>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }
@@ -5606,9 +6143,10 @@ function CommandCenter({
         aria-modal="true"
         aria-label="Command center"
         onKeyDown={trapDialogFocus}
-        initial={{ opacity: 0, y: 18, scale: 0.98 }}
+        initial={{ opacity: 0, y: 20, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 12, scale: 0.98 }}
+        exit={{ opacity: 0, y: 12, scale: 0.97 }}
+        transition={springs.paper}
       >
         <div className="command-head">
           <div>
@@ -5657,12 +6195,13 @@ function CommandCenter({
             aria-activedescendant={selectedOptionId}
             aria-autocomplete="list"
           />
+          <kbd className="command-kbd" aria-hidden="true">Esc</kbd>
         </label>
 
         <div id={listboxId} className="command-list" role="listbox" aria-label="Command results">
           {items.length ? (
             items.map((item, index) => (
-              <button
+              <motion.button
                 key={item.id}
                 id={`sticky-command-option-${index}`}
                 className={`command-item ${index === selectedIndex ? "active" : ""}`}
@@ -5671,7 +6210,18 @@ function CommandCenter({
                 aria-selected={index === selectedIndex}
                 onMouseEnter={() => onSelectIndex(index)}
                 onClick={() => onRun(item)}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ ...springs.snappy, delay: Math.min(index * 0.022, 0.2) }}
               >
+                {index === selectedIndex ? (
+                  <motion.span
+                    className="command-active-pill"
+                    layoutId="command-active-pill"
+                    transition={springs.snappy}
+                    aria-hidden="true"
+                  />
+                ) : null}
                 <span className={`command-item-icon ${item.color ? `color-${item.color}` : ""}`}>
                   {iconFor(item)}
                 </span>
@@ -5680,7 +6230,7 @@ function CommandCenter({
                   <small>{item.detail}</small>
                 </span>
                 <ChevronRight size={16} />
-              </button>
+              </motion.button>
             ))
           ) : (
             <div className="command-empty">
@@ -5714,9 +6264,11 @@ function ToastStack({
             key={toast.id}
             role="group"
             aria-label={toastAccessibleName(toast)}
-            initial={{ opacity: 0, y: 16, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 12, scale: 0.98 }}
+            layout
+            initial={{ opacity: 0, y: 22, scale: 0.95, rotate: -1.2 }}
+            animate={{ opacity: 1, y: 0, scale: 1, rotate: 0 }}
+            exit={{ opacity: 0, y: 14, scale: 0.96, rotate: 0.8 }}
+            transition={springs.paper}
           >
             <div>
               <strong>{toast.title}</strong>

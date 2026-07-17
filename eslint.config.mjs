@@ -12,6 +12,7 @@ const eslintConfig = [
       "dist/**",
       "test-results/**",
       "playwright-report/**",
+      "src/app/.well-known/workflow/**",
       "*.tsbuildinfo",
     ],
   },

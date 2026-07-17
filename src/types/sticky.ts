@@ -1,4 +1,16 @@
-export type StickyColor = "sun" | "coral" | "mint" | "sky" | "violet" | "ink";
+export type StickyColor =
+  | "sun"
+  | "coral"
+  | "mint"
+  | "sky"
+  | "violet"
+  | "ink"
+  | "ember"
+  | "rose"
+  | "lime"
+  | "teal"
+  | "azure"
+  | "magenta";
 
 export type RecurrenceFrequency = "daily" | "weekly" | "monthly" | "yearly" | "custom";
 
@@ -31,6 +43,7 @@ export type StickyList = {
   sortOrder: number;
   isVisibleOnBoard: boolean;
   archivedAt: string | null;
+  version?: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -49,6 +62,7 @@ export type StickyTask = {
   completedAt: string | null;
   sortOrder: number;
   completedSortOrder: number | null;
+  version?: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -61,6 +75,7 @@ export type StickySubtask = {
   isCompleted: boolean;
   completedAt: string | null;
   sortOrder: number;
+  version?: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -115,6 +130,7 @@ export type DbList = {
   sort_order: number;
   is_visible_on_board?: boolean | null;
   archived_at?: string | null;
+  version?: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -133,6 +149,7 @@ export type DbTask = {
   completed_at: string | null;
   sort_order: number;
   completed_sort_order: number | null;
+  version?: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -145,6 +162,7 @@ export type DbSubtask = {
   is_completed: boolean;
   completed_at: string | null;
   sort_order: number;
+  version?: number | null;
   created_at: string;
   updated_at: string;
 };

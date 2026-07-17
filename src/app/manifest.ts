@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Sticky",
     short_name: "Sticky",
-    description: "Premium sticky tasks for fast capture, lists, subtasks, due dates, and recurrence.",
+    description: "Fast capture, focused planning, recurring work, reminders, and a connected task API.",
     id: "https://sticky.yuvrajkashyap.com/",
     start_url: "/",
     scope: "/",

@@ -631,42 +631,61 @@ async function checkVercelCronConfig() {
   }
 }
 
-function hasProductionEnv(output, key) {
-  return output
-    .split(/\r?\n/)
-    .some((line) => line.trim().startsWith(`${key} `) && /\bProduction\b/.test(line));
-}
-
 async function checkVercelEnv() {
   const requiredProductionEnv = [
     "NEXT_PUBLIC_SUPABASE_URL",
     "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
     "NEXT_PUBLIC_STICKY_DEMO_MODE",
+    "NEXT_PUBLIC_SITE_URL",
     "CRON_SECRET",
     "SUPABASE_SECRET_KEY",
-    "NEXT_PUBLIC_SITE_URL",
+    "WORKFLOW_ENABLED",
+    "INTEGRATION_ENCRYPTION_KEY",
+    "NEXT_PUBLIC_VAPID_PUBLIC_KEY",
+    "VAPID_PRIVATE_KEY",
+    "VAPID_SUBJECT",
+  ];
+  const optionalProviderEnv = [
+    ["POKE_API_KEY", "Poke reminder delivery is disconnected"],
+    ["GOOGLE_CLIENT_ID", "Google Tasks sync is disconnected"],
+    ["GOOGLE_CLIENT_SECRET", "Google Tasks sync is disconnected"],
+    ["GOOGLE_REDIRECT_URI", "Google Tasks sync is disconnected"],
   ];
 
   try {
-    const { stdout, stderr } = await runVercel(["env", "ls", "--scope", vercelScope]);
-    const output = `${stdout}\n${stderr}`;
+    const { stdout } = await runVercel([
+      "api",
+      `/v10/projects/${vercelProjectId}/env`,
+      "--scope",
+      vercelScope,
+      "--raw",
+    ]);
+    const payload = JSON.parse(stdout);
+    const productionKeys = new Set(
+      (Array.isArray(payload.envs) ? payload.envs : [])
+        .filter((entry) => Array.isArray(entry.target) && entry.target.includes("production"))
+        .map((entry) => entry.key),
+    );
 
     for (const key of requiredProductionEnv) {
-      if (hasProductionEnv(output, key)) {
+      if (productionKeys.has(key)) {
         pass("Vercel production env", `${key} is present`);
-      } else if (key === "NEXT_PUBLIC_SITE_URL") {
-        fail(
-          "Vercel production env",
-          `${key} is missing; set it after DNS and Supabase Auth callbacks are ready`,
-        );
       } else {
         fail("Vercel production env", `${key} is missing`);
+      }
+    }
+
+    for (const [key, consequence] of optionalProviderEnv) {
+      if (productionKeys.has(key)) {
+        pass("Vercel provider env", `${key} is present`);
+      } else {
+        warn("Vercel provider env", `${key} is missing; ${consequence}`);
       }
     }
   } catch (error) {
     warn(
       "Vercel production env",
-      `could not run vercel env ls; install/login to Vercel CLI to verify env names (${error instanceof Error ? error.message : String(error)})`,
+      `could not inspect project environment names (${error instanceof Error ? error.message : String(error)})`,
     );
   }
 }

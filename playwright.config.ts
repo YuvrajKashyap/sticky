@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3100";
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3199";
 const parsedBaseURL = new URL(baseURL);
 const shouldStartLocalServer = ["localhost", "127.0.0.1"].includes(parsedBaseURL.hostname);
 const shouldRunProductionSmoke = process.env.STICKY_RUN_PRODUCTION_SMOKE === "true";
@@ -23,7 +23,10 @@ export default defineConfig({
     ? {
         command: `npm run dev -- --port ${devServerPort}`,
         url: baseURL,
-        reuseExistingServer: true,
+        // A stale authenticated dev server can expose real workspace data to
+        // demo-mode tests. Reuse is opt-in so the default verification run is
+        // always isolated and deterministic.
+        reuseExistingServer: process.env.PLAYWRIGHT_REUSE_EXISTING_SERVER === "true",
         timeout: 120_000,
         env: {
           CRON_SECRET: process.env.CRON_SECRET ?? "test-cron-secret",
