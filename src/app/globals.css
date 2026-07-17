@@ -6335,6 +6335,11 @@ mark.find-highlight {
     padding-top: calc(var(--safe-t) + 26px);
     padding-bottom: calc(28px + var(--safe-b));
   }
+
+  /* Full-screen overlays (overview, pulse, calendar sheets) dodge the notch */
+  .calendar-layout {
+    padding-bottom: calc(var(--dock-h) + var(--safe-b) + 24px);
+  }
 }
 
 /* ----------------------------------------------------------------------
