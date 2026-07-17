@@ -6178,6 +6178,15 @@ mark.find-highlight {
        so the dock, search bar, and settings popover pin to the viewport. */
     animation: none;
   }
+
+  .workspace-title h2 {
+    font-size: 1.32rem;
+  }
+
+  .metric-strip {
+    gap: 10px;
+    margin-top: 6px;
+  }
 }
 
 /* ----------------------------------------------------------------------
