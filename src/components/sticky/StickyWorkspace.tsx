@@ -4466,6 +4466,13 @@ function StickyBoardColumn({
         transition: sortable.transition,
         ["--col-delay" as string]: `${Math.min(columnIndex * 55, 500)}ms`,
       }}
+      onPointerMove={(event) => {
+        const node = columnRef.current;
+        if (!node) return;
+        const rect = node.getBoundingClientRect();
+        node.style.setProperty("--mx", `${event.clientX - rect.left}px`);
+        node.style.setProperty("--my", `${event.clientY - rect.top}px`);
+      }}
     >
       <span className="column-paper-stack" aria-hidden="true" />
       <motion.span
