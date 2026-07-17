@@ -6083,6 +6083,20 @@ mark.find-highlight {
 }
 
 /* ----------------------------------------------------------------------
+   17b · Mobile console — thumb-first Arc Aurora (≤860px)
+   Phone-only refinements. Desktop layout above is untouched: this block
+   comes later in source order and only overrides at the same specificity.
+   ---------------------------------------------------------------------- */
+
+@media (max-width: 860px) {
+  :root {
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --safe-t: env(safe-area-inset-top, 0px);
+    --dock-h: 56px;
+  }
+}
+
+/* ----------------------------------------------------------------------
    18 · Reduced motion
    ---------------------------------------------------------------------- */
 
