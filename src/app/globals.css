@@ -2006,7 +2006,30 @@ mark.find-highlight {
   transition: opacity 0.35s var(--ease-out);
 }
 
-.board-column:hover .column-paper-stack::before {
+/* Lit arc of the frame that travels along the border with the cursor */
+.column-paper-stack::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px;
+  background: radial-gradient(
+    260px circle at var(--mx, 50%) var(--my, 40%),
+    var(--panel-glow, var(--accent)) 0%,
+    color-mix(in srgb, var(--panel-glow, var(--accent)) 55%, transparent) 45%,
+    transparent 75%
+  );
+  filter: drop-shadow(0 0 9px color-mix(in srgb, var(--panel-glow, var(--accent)) 65%, transparent));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.35s var(--ease-out);
+}
+
+.board-column:hover .column-paper-stack::before,
+.board-column:hover .column-paper-stack::after {
   opacity: 1;
 }
 
