@@ -6249,6 +6249,18 @@ mark.find-highlight {
   .workspace-find-control.expanded input {
     font-size: 1rem;
   }
+
+  /* Appearance / accent popover opens upward off the dock */
+  .preference-controls {
+    position: fixed;
+    top: auto;
+    right: 10px;
+    left: 10px;
+    bottom: calc(var(--safe-b) + var(--dock-h) + 16px);
+    width: auto;
+    max-height: 72dvh;
+    overflow-y: auto;
+  }
 }
 
 /* ----------------------------------------------------------------------
