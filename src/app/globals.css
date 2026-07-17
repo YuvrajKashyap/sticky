@@ -2059,11 +2059,18 @@ mark.find-highlight {
   z-index: 3;
   pointer-events: none;
   animation: status-blink 3.2s ease-in-out infinite;
+  transition: transform var(--speed-fast) var(--ease-out);
 }
 
 @keyframes status-blink {
   0%, 88%, 100% { opacity: 1; }
   94% { opacity: 0.35; }
+}
+
+/* Hover wakes the panel: the status light sits up and blinks urgently */
+.board-column:hover .column-pin {
+  transform: scale(1.4) rotate(45deg);
+  animation-duration: 1.1s;
 }
 
 .board-column.color-sun .column-pin { background: var(--sun-edge); box-shadow: 0 0 10px var(--sun-edge); }
