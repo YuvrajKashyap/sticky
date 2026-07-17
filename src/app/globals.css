@@ -2033,6 +2033,19 @@ mark.find-highlight {
   opacity: 1;
 }
 
+.board-column.color-sun { --panel-glow: var(--sun-edge); }
+.board-column.color-coral { --panel-glow: var(--coral-edge); }
+.board-column.color-mint { --panel-glow: var(--mint-edge); }
+.board-column.color-sky { --panel-glow: var(--sky-edge); }
+.board-column.color-violet { --panel-glow: var(--violet-edge); }
+.board-column.color-ink { --panel-glow: var(--ink-edge); }
+.board-column.color-ember { --panel-glow: var(--ember-edge); }
+.board-column.color-rose { --panel-glow: var(--rose-edge); }
+.board-column.color-lime { --panel-glow: var(--lime-edge); }
+.board-column.color-teal { --panel-glow: var(--teal-edge); }
+.board-column.color-azure { --panel-glow: var(--azure-edge); }
+.board-column.color-magenta { --panel-glow: var(--magenta-edge); }
+
 /* Status light — each panel reports its channel color */
 .column-pin {
   position: absolute;
