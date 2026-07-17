@@ -6343,6 +6343,54 @@ mark.find-highlight {
 }
 
 /* ----------------------------------------------------------------------
+   17c · Touch feedback — tap ignites the aurora (no hover on phones)
+   Scoped to coarse pointers so desktop mouse behaviour never changes.
+   ---------------------------------------------------------------------- */
+
+@media (hover: none) and (pointer: coarse) {
+  /* Pressing a list panel lights its aurora, centered under the touch */
+  .board-column:active .column-paper-stack::before,
+  .board-column:active .column-paper-stack::after {
+    opacity: 1;
+  }
+
+  .task-card {
+    transition: box-shadow 0.24s var(--ease-out), background var(--speed-fast) var(--ease-out),
+      transform 0.14s var(--ease-out);
+  }
+
+  .task-card:active {
+    transform: scale(0.985);
+  }
+
+  .task-card:active::before {
+    width: 4px;
+    box-shadow: 0 0 12px 0 currentColor;
+  }
+
+  .list-tab {
+    transition: color var(--speed-fast) var(--ease-out), transform 0.12s var(--ease-out);
+  }
+
+  .list-tab:active {
+    transform: scale(0.95);
+  }
+
+  .new-list-button:active {
+    transform: scale(0.93);
+  }
+
+  .board-add-task {
+    transition: border-color var(--speed-fast) var(--ease-out), transform 0.12s var(--ease-out);
+  }
+
+  .board-add-task:active {
+    transform: scale(0.99);
+    border-color: var(--accent);
+  }
+}
+
+/* ----------------------------------------------------------------------
    18 · Reduced motion
    ---------------------------------------------------------------------- */
 
