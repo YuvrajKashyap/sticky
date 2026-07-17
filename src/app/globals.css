@@ -6187,6 +6187,47 @@ mark.find-highlight {
     gap: 10px;
     margin-top: 6px;
   }
+
+  /* ---- Floating console dock: the tools become a thumb bar ---- */
+  .workspace-tools {
+    position: fixed;
+    left: 50%;
+    bottom: calc(var(--safe-b) + 10px);
+    transform: translateX(-50%);
+    z-index: 48;
+    align-self: auto;
+    justify-content: center;
+    flex-wrap: nowrap;
+    gap: 5px;
+    padding: 7px 10px;
+    max-width: calc(100vw - 16px);
+    background: color-mix(in srgb, var(--surface) 93%, transparent);
+    box-shadow: var(--paper-ring), 0 20px 44px -14px rgba(0, 0, 0, 0.8);
+    animation: dock-rise 0.5s 0.1s var(--ease-out) both;
+  }
+
+  .workspace-tools.search-expanded {
+    flex-wrap: nowrap;
+  }
+
+  @keyframes dock-rise {
+    from {
+      opacity: 0;
+      transform: translate(-50%, 24px);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+  }
+
+  .tool-button,
+  .profile-appearance-trigger,
+  .workspace-find-trigger,
+  .workspace-find-control:not(.expanded) {
+    width: 40px;
+    height: 40px;
+  }
 }
 
 /* ----------------------------------------------------------------------
