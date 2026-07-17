@@ -229,7 +229,10 @@ const app = new Hono<Env>();
       const db = getRuntime().db;
       if (body.kind === "rpc") {
         await authorizeWebRpc(body.args, actor.userId);
-        const result = await db.rpc(body.name, body.args);
+        const result = await db.rpc(body.name, {
+          ...body.args,
+          p_request_user_id: actor.userId,
+        });
         if (result.error) throw new StickyDomainError("internal_error", result.error.message, 500, { databaseCode: result.error.code });
         await getRuntime().db.from("task_activity").insert({
           user_id: actor.userId,
