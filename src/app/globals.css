@@ -6169,6 +6169,15 @@ mark.find-highlight {
   .list-tab-active-glow {
     border-radius: 11px;
   }
+
+  /* ---- Workspace title: tighter so content wins the fold ---- */
+  .workspace-topbar {
+    padding: 16px 16px 8px;
+    /* The fade-down animation's `both` fill leaves an identity transform,
+       which would trap the fixed dock inside this header. Drop it on mobile
+       so the dock, search bar, and settings popover pin to the viewport. */
+    animation: none;
+  }
 }
 
 /* ----------------------------------------------------------------------
