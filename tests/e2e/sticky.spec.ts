@@ -357,7 +357,7 @@ test.describe("Sticky workspace", () => {
     });
   });
 
-  test("columns keep their HUD frame and corner brackets on hover", async ({ page }, testInfo) => {
+  test("columns light a cursor-tracking aurora tracer on hover", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "hover frame is a desktop pointer state");
 
     await expectNoConsoleErrors(page, async () => {
@@ -367,14 +367,20 @@ test.describe("Sticky workspace", () => {
       const sampleFrame = () =>
         column.evaluate((node) => {
           const style = window.getComputedStyle(node);
-          const brackets = node.querySelector(".column-paper-stack");
-          const bracketStyle = brackets ? window.getComputedStyle(brackets) : null;
+          const tracer = node.querySelector(".column-paper-stack");
+          const glowStyle = tracer ? window.getComputedStyle(tracer, "::before") : null;
+          const arcStyle = tracer ? window.getComputedStyle(tracer, "::after") : null;
+          const pin = node.querySelector(".column-pin");
+          const pinStyle = pin ? window.getComputedStyle(pin) : null;
 
           return {
             borderWidth: Number.parseFloat(style.borderLeftWidth),
             borderColorVisible: style.borderLeftColor !== "rgba(0, 0, 0, 0)",
             boxShadow: style.boxShadow,
-            bracketsPresent: Boolean(bracketStyle && bracketStyle.display !== "none" && bracketStyle.backgroundImage !== "none"),
+            glowOpacity: glowStyle ? Number.parseFloat(glowStyle.opacity) : -1,
+            arcOpacity: arcStyle ? Number.parseFloat(arcStyle.opacity) : -1,
+            cursorX: node.style.getPropertyValue("--mx"),
+            pinTransform: pinStyle ? pinStyle.transform : "",
           };
         });
 
@@ -382,15 +388,31 @@ test.describe("Sticky workspace", () => {
       expect(base.borderWidth).toBeGreaterThanOrEqual(1);
       expect(base.borderColorVisible).toBe(true);
       expect(base.boxShadow).not.toBe("none");
-      expect(base.bracketsPresent).toBe(true);
+      expect(base.glowOpacity).toBe(0);
+      expect(base.arcOpacity).toBe(0);
 
       await column.hover();
+      await page.waitForTimeout(500);
 
       const hover = await sampleFrame();
       expect(hover.borderWidth).toBeGreaterThanOrEqual(1);
       expect(hover.borderColorVisible).toBe(true);
       expect(hover.boxShadow).not.toBe("none");
-      expect(hover.bracketsPresent).toBe(true);
+      expect(hover.glowOpacity).toBe(1);
+      expect(hover.arcOpacity).toBe(1);
+      expect(hover.pinTransform).not.toBe(base.pinTransform);
+
+      // The tracer follows the pointer and stays lit while hovering
+      const box = await column.boundingBox();
+      if (!box) throw new Error("column has no bounding box");
+      await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.7);
+      await page.waitForTimeout(120);
+
+      const moved = await sampleFrame();
+      expect(moved.glowOpacity).toBe(1);
+      expect(moved.arcOpacity).toBe(1);
+      expect(moved.cursorX).not.toBe("");
+      expect(moved.cursorX).not.toBe(hover.cursorX);
     });
   });
 
