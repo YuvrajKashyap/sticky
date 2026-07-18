@@ -159,7 +159,7 @@ const panelRow = {
   show: { opacity: 1, y: 0, transition: springs.snappy },
 };
 
-function SchedulerChip({
+export function SchedulerChip({
   icon,
   label,
   open,
@@ -235,7 +235,7 @@ function PanelHead({
   );
 }
 
-function DatePanel({
+export function DatePanel({
   value,
   onPick,
   onClear,
@@ -384,7 +384,7 @@ const TIME_PRESETS = [
 
 const MINUTE_OPTIONS = [0, 15, 30, 45];
 
-function TimePanel({
+export function TimePanel({
   value,
   onPick,
   onClear,
