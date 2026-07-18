@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { createMcpApp } from "./mcp";
+import { createMcpApp, resolveMcpIdempotencyKey } from "./mcp";
 import { hashCredential, setRuntimeForTests } from "./runtime";
 import { pushOutboxEvent } from "./services/google";
 
@@ -75,6 +75,24 @@ describe("Sticky MCP source isolation", () => {
 
     expect(response.status).toBe(405);
     expect(response.headers.get("allow")).toBe("POST");
+  });
+
+  it("does not reuse a JSON-RPC id as an idempotency key across HTTP requests", () => {
+    const credentialId = "4d1cc3fa-546d-4618-8c6f-2191f29e0fc9";
+    const first = resolveMcpIdempotencyKey(null, credentialId, "http-request-1");
+    const second = resolveMcpIdempotencyKey(null, credentialId, "http-request-2");
+
+    expect(first).toBe(`mcp:${credentialId}:http-request-1`);
+    expect(second).toBe(`mcp:${credentialId}:http-request-2`);
+    expect(second).not.toBe(first);
+  });
+
+  it("preserves a client-provided idempotency key for explicit mutation retries", () => {
+    expect(resolveMcpIdempotencyKey(
+      "poke-retry-42",
+      "4d1cc3fa-546d-4618-8c6f-2191f29e0fc9",
+      "http-request-2",
+    )).toBe("poke-retry-42");
   });
 
   it("keeps the legacy Google mirror pipeline inert by default", async () => {

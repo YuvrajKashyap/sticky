@@ -300,13 +300,11 @@ export function createMcpApp() {
     const requestId = c.req.header("x-request-id")?.slice(0, 120) || crypto.randomUUID();
     const currentActor = await authenticateRequest(c.req.raw, requestId);
     if (currentActor.actorType !== "agent") throw new StickyDomainError("forbidden", "MCP requires an agent credential.", 403);
-    if (!currentActor.idempotencyKey) {
-      const parsedBody = (c as unknown as { get(key: string): unknown }).get("parsedBody");
-      const rpcId = parsedBody && typeof parsedBody === "object" && "id" in parsedBody
-        ? String((parsedBody as { id: unknown }).id)
-        : requestId;
-      currentActor.idempotencyKey = `mcp:${currentActor.credentialId}:${rpcId}`;
-    }
+    currentActor.idempotencyKey = resolveMcpIdempotencyKey(
+      currentActor.idempotencyKey,
+      currentActor.credentialId,
+      requestId,
+    );
     await actorStorage.run(currentActor, next);
   });
   app.onError((error, c) => {
@@ -333,4 +331,13 @@ export function createMcpApp() {
     return transport.handleRequest(c.req.raw, { parsedBody });
   });
   return app;
+}
+
+export function resolveMcpIdempotencyKey(
+  explicitKey: string | null,
+  credentialId: string | null,
+  requestId: string,
+): string {
+  if (explicitKey) return explicitKey;
+  return `mcp:${credentialId}:${requestId}`;
 }
