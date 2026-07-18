@@ -176,9 +176,10 @@ export async function deleteGoogleTaskList(actor: ActorContext, taskListId: stri
   return { deleted: true, taskListId };
 }
 
-function directGoogleTask(task: tasks_v1.Schema$Task) {
+function directGoogleTask(taskListId: string, task: tasks_v1.Schema$Task) {
   return {
     id: task.id,
+    taskListId,
     title: task.title || "Untitled task",
     notes: task.notes || "",
     status: task.status || "needsAction",
@@ -213,7 +214,7 @@ export async function listGoogleTasks(actor: ActorContext, input: {
     result.push(...(response.data.items ?? []));
     pageToken = response.data.nextPageToken ?? undefined;
   } while (pageToken);
-  return result.map(directGoogleTask);
+  return result.map((task) => directGoogleTask(input.taskListId, task));
 }
 
 /** Create a task only in Google Tasks. */
@@ -237,7 +238,7 @@ export async function createGoogleTask(actor: ActorContext, input: {
       due: input.dueDate ? `${input.dueDate}T00:00:00.000Z` : undefined,
     },
   });
-  return directGoogleTask(response.data);
+  return directGoogleTask(input.taskListId, response.data);
 }
 
 /** Update a task only in Google Tasks. */
@@ -257,7 +258,7 @@ export async function updateGoogleTask(actor: ActorContext, input: {
   if (input.dueDate !== undefined) requestBody.due = input.dueDate ? `${input.dueDate}T00:00:00.000Z` : null;
   if (input.completed !== undefined) requestBody.status = input.completed ? "completed" : "needsAction";
   const response = await tasksApi.tasks.patch({ tasklist: input.taskListId, task: input.taskId, requestBody });
-  return directGoogleTask(response.data);
+  return directGoogleTask(input.taskListId, response.data);
 }
 
 /** Delete a task only from Google Tasks. */

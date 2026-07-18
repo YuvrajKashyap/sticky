@@ -78,18 +78,32 @@ function zonedMidnight(date: string, timeZone: string) {
 async function mutationResult<T>(tool: string, input: unknown, operation: (current: ActorContext) => Promise<T>, scope: StickyScope = "tasks:write") {
   const current = actor();
   requireScope(current, scope);
-  const execution = await idempotent(current, `mcp:${tool}`, input, () => operation(current));
-  if (!execution.replayed && process.env.WORKFLOW_ENABLED !== "false") {
-    await start(outboxWorkflow, [current.userId]);
+  console.info("Sticky MCP mutation started", { tool, actorId: current.actorId, requestId: current.requestId });
+  try {
+    const execution = await idempotent(current, `mcp:${tool}`, input, () => operation(current));
+    if (!execution.replayed && process.env.WORKFLOW_ENABLED !== "false") {
+      await start(outboxWorkflow, [current.userId]);
+    }
+    console.info("Sticky MCP mutation completed", { tool, actorId: current.actorId, requestId: current.requestId, replayed: execution.replayed });
+    return result(execution.value);
+  } catch (error) {
+    console.error("Sticky MCP mutation failed", { tool, actorId: current.actorId, requestId: current.requestId, error: error instanceof Error ? error.message : String(error) });
+    throw error;
   }
-  return result(execution.value);
 }
 
 async function externalMutationResult<T>(tool: string, input: unknown, operation: (current: ActorContext) => Promise<T>, scope: StickyScope) {
   const current = actor();
   requireScope(current, scope);
-  const execution = await idempotent(current, `mcp:${tool}`, input, () => operation(current));
-  return result(execution.value);
+  console.info("Sticky MCP external mutation started", { tool, actorId: current.actorId, requestId: current.requestId });
+  try {
+    const execution = await idempotent(current, `mcp:${tool}`, input, () => operation(current));
+    console.info("Sticky MCP external mutation completed", { tool, actorId: current.actorId, requestId: current.requestId, replayed: execution.replayed });
+    return result(execution.value);
+  } catch (error) {
+    console.error("Sticky MCP external mutation failed", { tool, actorId: current.actorId, requestId: current.requestId, error: error instanceof Error ? error.message : String(error) });
+    throw error;
+  }
 }
 
 async function scheduleReminderWorkflow(reminder: { id: string; remindAt: string }) {
@@ -176,6 +190,12 @@ function registerTools(server: McpServer) {
   server.registerTool("update_google_task", { description: "Update or complete a task directly in Google Tasks. This never changes a Sticky task.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), taskId: z.string().min(1).max(1_000), title: z.string().trim().min(1).max(1_000).optional(), notes: z.string().max(20_000).optional(), dueDate: z.iso.date().nullable().optional(), completed: z.boolean().optional() }) },
     async (input) => externalMutationResult("update_google_task", input, async (current) => ({ task: await updateGoogleTask(current, input), source: "google_tasks" }), "tasks:write"));
 
+  server.registerTool("complete_google_task", { description: "Mark one live Google Task complete. This never changes or creates a Sticky task.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), taskId: z.string().min(1).max(1_000) }) },
+    async (input) => externalMutationResult("complete_google_task", input, async (current) => ({ task: await updateGoogleTask(current, { ...input, completed: true }), source: "google_tasks" }), "tasks:write"));
+
+  server.registerTool("restore_google_task", { description: "Restore one completed Google Task to active. This never changes or creates a Sticky task.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), taskId: z.string().min(1).max(1_000) }) },
+    async (input) => externalMutationResult("restore_google_task", input, async (current) => ({ task: await updateGoogleTask(current, { ...input, completed: false }), source: "google_tasks" }), "tasks:write"));
+
   server.registerTool("delete_google_task", { description: "Permanently delete a Google task. Requires explicit confirmation and never touches Sticky.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), taskId: z.string().min(1).max(1_000), confirmation: destructive }), annotations: { destructiveHint: true } },
     async (input) => { const current = actor(); requireDestructiveConfirmation(current, input.confirmation, ["delete", "Google", input.taskId]); return externalMutationResult("delete_google_task", input, async () => deleteGoogleTask(current, input.taskListId, input.taskId), "tasks:write"); });
 
@@ -209,11 +229,17 @@ function registerTools(server: McpServer) {
   server.registerTool("move_task", { description: "Move a task to another Sticky list.", inputSchema: z.object({ taskId: id, targetListId: id, version }) },
     async (input) => mutationResult("move_task", input, async (current) => ({ task: await getRuntime().repository.moveTask(current, input.taskId, input.targetListId, input.version) })));
 
-  server.registerTool("complete_task", { description: "Mark a Sticky task complete.", inputSchema: z.object({ taskId: id, version }) },
-    async (input) => mutationResult("complete_task", input, async (current) => ({ task: await getRuntime().repository.setTaskCompleted(current, input.taskId, true, input.version) })));
+  server.registerTool("complete_task", { description: "Mark a Sticky task complete. The record version is optional; when omitted, Sticky safely uses the current version.", inputSchema: z.object({ taskId: id, version: version.optional() }) },
+    async (input) => mutationResult("complete_task", input, async (current) => {
+      const currentVersion = input.version ?? (await getRuntime().repository.getTask(current, input.taskId)).version;
+      return { task: await getRuntime().repository.setTaskCompleted(current, input.taskId, true, currentVersion) };
+    }));
 
-  server.registerTool("restore_task", { description: "Restore a completed Sticky task.", inputSchema: z.object({ taskId: id, version }) },
-    async (input) => mutationResult("restore_task", input, async (current) => ({ task: await getRuntime().repository.setTaskCompleted(current, input.taskId, false, input.version) })));
+  server.registerTool("restore_task", { description: "Restore a completed Sticky task. The record version is optional; when omitted, Sticky safely uses the current version.", inputSchema: z.object({ taskId: id, version: version.optional() }) },
+    async (input) => mutationResult("restore_task", input, async (current) => {
+      const currentVersion = input.version ?? (await getRuntime().repository.getTask(current, input.taskId)).version;
+      return { task: await getRuntime().repository.setTaskCompleted(current, input.taskId, false, currentVersion) };
+    }));
 
   server.registerTool("add_subtask", { description: "Add a subtask to a non-recurring Sticky task.", inputSchema: z.object({ taskId: id, title: z.string().trim().min(1).max(160) }) },
     async (input) => mutationResult("add_subtask", input, async (current) => ({ subtask: await getRuntime().repository.createSubtask(current, input.taskId, { title: input.title }) })));
@@ -277,11 +303,12 @@ export function createMcpApp() {
     const code = status === 401 ? -32001 : status === 403 ? -32003 : -32603;
     return c.json({ jsonrpc: "2.0", error: { code, message: error instanceof Error ? error.message : "MCP request failed" }, id: null }, status as 401);
   });
+  app.get("/", (c) => c.body(null, 405, { Allow: "POST" }));
   app.all("/", async (c) => {
     const server = new McpServer(
       { name: "Sticky", version: "1.0.0" },
       {
-        instructions: "Sticky is the user's canonical focused task and planning system. The server also exposes live Google Tasks and Google Calendar tools. Sticky and Google are separate systems: never sync, import, mirror, or copy between them unless the user explicitly asks for a specific transfer and names the destination. Use Sticky tools for Sticky data and google-prefixed tools for Google data. Tasks and calendar events are distinct: due dates describe deadlines, while events reserve time. Read the relevant source before changing it and request explicit confirmation before destructive actions.",
+        instructions: "Sticky is the user's canonical focused task and planning system. The server also exposes live Google Tasks and Google Calendar tools. Sticky and Google are separate systems: never sync, import, mirror, or copy between them unless the user explicitly asks for a specific transfer and names the destination. Use Sticky tools for Sticky data and google-prefixed tools for Google data. If a requested task source is ambiguous, identify it from the prior read result or ask whether the user means Sticky or Google. Prefer complete_task for Sticky completion and complete_google_task for Google completion. Tasks and calendar events are distinct: due dates describe deadlines, while events reserve time. Read the relevant source before changing it and request explicit confirmation before destructive actions.",
       },
     );
     registerTools(server);

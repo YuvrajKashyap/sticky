@@ -111,7 +111,10 @@ async function authenticateCredential(token: string, request: Request, requestId
       throw new StickyDomainError("forbidden", "This Sticky key is connected to another Poke account.", 403);
     }
   }
-  void db.from("api_credentials").update({ last_used_at: new Date().toISOString() }).eq("id", data.id);
+  const { error: lastUsedError } = await db.from("api_credentials").update({ last_used_at: new Date().toISOString() }).eq("id", data.id);
+  if (lastUsedError) {
+    console.warn("Sticky could not record agent credential usage", { credentialId: data.id, code: lastUsedError.code });
+  }
   return {
     userId: data.user_id,
     actorType: "agent",
