@@ -176,7 +176,7 @@ export class StickyRepository {
     const current = await this.getTask(actor, id);
     assertVersion(version, current.version, "Task");
     const values = completed
-      ? { is_completed: true, completed_at: new Date().toISOString(), completed_sort_order: Date.now() }
+      ? { is_completed: true, completed_at: new Date().toISOString(), completed_sort_order: await this.nextCompletedOrder(actor.userId, current.listId) }
       : { is_completed: false, completed_at: null, completed_sort_order: null, sort_order: await this.nextOrder("tasks", actor.userId, current.listId) };
     const { data, error } = await this.db.from("tasks").update(values)
       .eq("id", id).eq("user_id", actor.userId).eq("version", version).select("*").maybeSingle();
@@ -429,6 +429,14 @@ export class StickyRepository {
     const { data, error } = await query;
     throwQuery(error);
     return Number((data?.[0] as DataRow | undefined)?.sort_order ?? 0) + 1000;
+  }
+
+  private async nextCompletedOrder(userId: string, listId: string): Promise<number> {
+    const { data, error } = await this.db.from("tasks").select("completed_sort_order")
+      .eq("user_id", userId).eq("list_id", listId).eq("is_completed", true)
+      .order("completed_sort_order", { ascending: false }).limit(1);
+    throwQuery(error);
+    return Number((data?.[0] as DataRow | undefined)?.completed_sort_order ?? 0) + 1000;
   }
 
   private assertEventSchedule(event: {

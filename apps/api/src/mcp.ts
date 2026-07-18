@@ -87,7 +87,13 @@ async function mutationResult<T>(tool: string, input: unknown, operation: (curre
     console.info("Sticky MCP mutation completed", { tool, actorId: current.actorId, requestId: current.requestId, replayed: execution.replayed });
     return result(execution.value);
   } catch (error) {
-    console.error("Sticky MCP mutation failed", { tool, actorId: current.actorId, requestId: current.requestId, error: error instanceof Error ? error.message : String(error) });
+    console.error("Sticky MCP mutation failed", {
+      tool,
+      actorId: current.actorId,
+      requestId: current.requestId,
+      error: error instanceof Error ? error.message : String(error),
+      details: error instanceof StickyDomainError ? error.details : undefined,
+    });
     throw error;
   }
 }
@@ -101,7 +107,13 @@ async function externalMutationResult<T>(tool: string, input: unknown, operation
     console.info("Sticky MCP external mutation completed", { tool, actorId: current.actorId, requestId: current.requestId, replayed: execution.replayed });
     return result(execution.value);
   } catch (error) {
-    console.error("Sticky MCP external mutation failed", { tool, actorId: current.actorId, requestId: current.requestId, error: error instanceof Error ? error.message : String(error) });
+    console.error("Sticky MCP external mutation failed", {
+      tool,
+      actorId: current.actorId,
+      requestId: current.requestId,
+      error: error instanceof Error ? error.message : String(error),
+      details: error instanceof StickyDomainError ? error.details : undefined,
+    });
     throw error;
   }
 }
