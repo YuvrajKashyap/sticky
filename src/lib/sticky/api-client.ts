@@ -73,6 +73,12 @@ export function createStickyPlatformClient() {
   return {
     auth: supabase.auth,
     realtime: supabase,
+    async authenticateRealtime() {
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+      if (!accessToken) throw new Error("Your Sticky session has expired. Sign in again.");
+      await supabase.realtime.setAuth(accessToken);
+    },
     from(table: string) {
       return new ApiTableCommand(supabase, table);
     },

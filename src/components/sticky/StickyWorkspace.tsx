@@ -92,6 +92,11 @@ type StickyWorkspaceProps = {
   initialLaunchIntent?: StickyLaunchIntent;
 };
 
+type WorkspaceSyncSnapshot = {
+  lists: StickyList[];
+  tasks: StickyTask[];
+};
+
 type Toast = {
   id: string;
   title: string;
@@ -1021,37 +1026,91 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
   useEffect(() => {
     if (mode !== "supabase" || !supabase) return;
-    const channel = supabase.realtime
-      .channel(`sticky:${initialData.user.id}`, { config: { private: true } })
-      .on("broadcast", { event: "*" }, ({ payload }) => {
-        const change = payload as { operation?: string; table?: string; record?: unknown; old_record?: { id?: string } };
-        const operation = change.operation?.toUpperCase();
-        const recordId = (change.record as { id?: string } | undefined)?.id ?? change.old_record?.id;
-        if (!recordId || !change.table) return;
-        setWorkspace((current) => {
-          if (change.table === "lists") {
-            const lists = operation === "DELETE"
-              ? current.lists.filter((item) => item.id !== recordId)
-              : mergeById(current.lists, mapList(change.record as DbList));
-            return { ...current, lists };
-          }
-          if (change.table === "tasks") {
-            const tasks = operation === "DELETE"
-              ? current.tasks.filter((item) => item.id !== recordId)
-              : mergeById(current.tasks, mapTask(change.record as DbTask));
-            return { ...current, tasks };
-          }
-          if (change.table === "subtasks") {
-            const subtasks = operation === "DELETE"
-              ? current.subtasks.filter((item) => item.id !== recordId)
-              : mergeById(current.subtasks, mapSubtask(change.record as DbSubtask));
-            return { ...current, subtasks };
-          }
-          return current;
-        });
-      })
-      .subscribe();
-    return () => { void supabase.realtime.removeChannel(channel); };
+    const platform = supabase;
+    let disposed = false;
+    let reconciliationInFlight = false;
+    let channel: ReturnType<typeof platform.realtime.channel> | null = null;
+
+    async function reconcileWorkspace() {
+      if (disposed || reconciliationInFlight) return;
+      reconciliationInFlight = true;
+      try {
+        const snapshot = await platform.request<WorkspaceSyncSnapshot>("/api/v1/workspace");
+        if (disposed) return;
+        setWorkspace((current) => ({
+          ...current,
+          lists: snapshot.lists,
+          tasks: snapshot.tasks,
+        }));
+      } catch (error) {
+        console.warn("Sticky workspace reconciliation failed", error);
+      } finally {
+        reconciliationInFlight = false;
+      }
+    }
+
+    function applyBroadcast(payload: unknown) {
+      const change = payload as { operation?: string; table?: string; record?: unknown; old_record?: { id?: string } };
+      const operation = change.operation?.toUpperCase();
+      const recordId = (change.record as { id?: string } | undefined)?.id ?? change.old_record?.id;
+      if (!recordId || !change.table) return;
+      setWorkspace((current) => {
+        if (change.table === "lists") {
+          const lists = operation === "DELETE"
+            ? current.lists.filter((item) => item.id !== recordId)
+            : mergeById(current.lists, mapList(change.record as DbList));
+          return { ...current, lists };
+        }
+        if (change.table === "tasks") {
+          const tasks = operation === "DELETE"
+            ? current.tasks.filter((item) => item.id !== recordId)
+            : mergeById(current.tasks, mapTask(change.record as DbTask));
+          return { ...current, tasks };
+        }
+        if (change.table === "subtasks") {
+          const subtasks = operation === "DELETE"
+            ? current.subtasks.filter((item) => item.id !== recordId)
+            : mergeById(current.subtasks, mapSubtask(change.record as DbSubtask));
+          return { ...current, subtasks };
+        }
+        return current;
+      });
+    }
+
+    async function connectRealtime() {
+      try {
+        await platform.authenticateRealtime();
+        if (disposed) return;
+        channel = platform.realtime
+          .channel(`sticky:${initialData.user.id}`, { config: { private: true } })
+          .on("broadcast", { event: "*" }, ({ payload }) => applyBroadcast(payload))
+          .subscribe((status) => {
+            if (status === "SUBSCRIBED") {
+              void reconcileWorkspace();
+            }
+          });
+      } catch (error) {
+        console.warn("Sticky realtime connection failed", error);
+        void reconcileWorkspace();
+      }
+    }
+
+    function reconcileVisibleWorkspace() {
+      if (document.visibilityState === "visible") {
+        void reconcileWorkspace();
+      }
+    }
+
+    window.addEventListener("focus", reconcileVisibleWorkspace);
+    document.addEventListener("visibilitychange", reconcileVisibleWorkspace);
+    void connectRealtime();
+
+    return () => {
+      disposed = true;
+      window.removeEventListener("focus", reconcileVisibleWorkspace);
+      document.removeEventListener("visibilitychange", reconcileVisibleWorkspace);
+      if (channel) void platform.realtime.removeChannel(channel);
+    };
   }, [initialData.user.id, mode, supabase]);
 
   useEffect(() => {
