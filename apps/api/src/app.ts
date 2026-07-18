@@ -9,8 +9,6 @@ import {
   createSubtaskSchema,
   createTaskSchema,
   destructiveConfirmationSchema,
-  googleCalendarSelectionSchema,
-  googleListSelectionSchema,
   moveTaskSchema,
   snoozeReminderSchema,
   updateListSchema,
@@ -34,14 +32,10 @@ import {
   listGoogleCalendars,
   listGoogleTaskLists,
   pushOutboxEvent,
-  selectGoogleCalendars,
-  selectGoogleLists,
-  syncGoogle,
 } from "./services/google";
 import { deliverReminder } from "./services/notifications";
 import { reminderWorkflow } from "./workflows/reminder";
 import { outboxWorkflow } from "./workflows/outbox";
-import { googleSyncWorkflow } from "./workflows/google-sync";
 
 type Env = { Variables: ApiVariables };
 
@@ -452,31 +446,9 @@ const app = new Hono<Env>();
     const actor = c.get("actor"); requireScope(actor, "integrations:read");
     return success(c, { lists: await listGoogleTaskLists(actor) });
   });
-  app.post("/api/v1/integrations/google/lists", async (c) => {
-    const actor = c.get("actor"); requireScope(actor, "integrations:write");
-    const body = await parseJson(c, googleListSelectionSchema);
-    return mutate(c, body, async () => {
-      const selection = await selectGoogleLists(actor, body.externalListIds);
-      const run = process.env.WORKFLOW_ENABLED === "false" ? null : await start(googleSyncWorkflow, [actor.userId]);
-      return { ...selection, workflowRunId: run?.runId ?? null };
-    });
-  });
   app.get("/api/v1/integrations/google/calendars", async (c) => {
     const actor = c.get("actor"); requireScope(actor, "integrations:read");
     return success(c, { calendars: await listGoogleCalendars(actor) });
-  });
-  app.post("/api/v1/integrations/google/calendars", async (c) => {
-    const actor = c.get("actor"); requireScope(actor, "integrations:write");
-    const body = await parseJson(c, googleCalendarSelectionSchema);
-    return mutate(c, body, async () => {
-      const selection = await selectGoogleCalendars(actor, body.calendars);
-      const run = process.env.WORKFLOW_ENABLED === "false" ? null : await start(googleSyncWorkflow, [actor.userId]);
-      return { ...selection, workflowRunId: run?.runId ?? null };
-    });
-  });
-  app.post("/api/v1/integrations/google/sync", async (c) => {
-    const actor = c.get("actor"); requireScope(actor, "integrations:write");
-    return mutate(c, {}, () => syncGoogle(actor));
   });
   app.delete("/api/v1/integrations/google", async (c) => {
     const actor = c.get("actor"); requireScope(actor, "integrations:write");

@@ -1,15 +1,13 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BellRing, Bird, CalendarSync, Check, Copy, ExternalLink, KeyRound, RefreshCw, Send, Smartphone, Unplug, X } from "lucide-react";
+import { BellRing, Bird, CalendarSync, Check, Copy, ExternalLink, KeyRound, Send, Smartphone, Unplug, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { createStickyPlatformClient } from "@/lib/sticky/api-client";
 
 type Credential = { id: string; name: string; provider: string; provider_user_id: string | null; token_prefix: string; last_used_at: string | null; revoked_at: string | null };
 type McpConnection = { token: string; mcpUrl: string };
 type Integration = { id: string; provider: string; provider_email: string | null; status: string };
-type GoogleTaskList = { id: string; title: string };
-type GoogleCalendar = { id: string; name: string; timezone: string; primary: boolean; accessRole: string | null };
 
 const AGENT_SCOPES = ["tasks:read", "tasks:write", "tasks:destructive", "calendar:read", "calendar:write", "calendar:destructive"];
 
@@ -102,35 +100,10 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
     onSuccess: ({ authorizationUrl }) => window.location.assign(authorizationUrl),
     onError: (error) => setStatusMessage(error.message),
   });
-  const syncGoogle = useMutation({
-    mutationFn: async () => {
-      if (!client) throw new Error("Sticky is not signed in.");
-      const [taskLists, calendars] = await Promise.all([
-        client.request<{ lists: GoogleTaskList[] }>("/api/v1/integrations/google/lists"),
-        client.request<{ calendars: GoogleCalendar[] }>("/api/v1/integrations/google/calendars"),
-      ]);
-      await client.request("/api/v1/integrations/google/lists", {
-        method: "POST",
-        body: JSON.stringify({ externalListIds: taskLists.lists.map((list) => list.id) }),
-      });
-      await client.request("/api/v1/integrations/google/calendars", {
-        method: "POST",
-        body: JSON.stringify({ calendars: calendars.calendars.map((calendar) => ({
-          externalCalendarId: calendar.id,
-          name: calendar.name,
-          syncDirection: calendar.accessRole === "reader" || calendar.accessRole === "freeBusyReader" ? "import_only" : "two_way",
-          isDefaultTarget: calendar.primary,
-        })) }),
-      });
-      return client.request<{ syncedLists: number; syncedCalendars: number }>("/api/v1/integrations/google/sync", { method: "POST", body: "{}" });
-    },
-    onSuccess: (result) => setStatusMessage(`Google is synced: ${result.syncedLists} task lists and ${result.syncedCalendars} calendars.`),
-    onError: (error) => setStatusMessage(error.message),
-  });
   const disconnectGoogle = useMutation({
     mutationFn: () => client!.request("/api/v1/integrations/google", { method: "DELETE", body: "{}" }),
     onSuccess: () => {
-      setStatusMessage("Google disconnected. Your Sticky data was preserved.");
+      setStatusMessage("Google disconnected. Sticky remained unchanged.");
       void queryClient.invalidateQueries({ queryKey: ["integrations"] });
     },
     onError: (error) => setStatusMessage(error.message),
@@ -157,7 +130,7 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
 
         <div className="connection-row">
           <span className="connection-icon poke"><Send size={20} /></span>
-          <div className="connection-copy"><strong>Poke</strong><small>{pokeConnected ? "Connected and ready" : pokeCredential ? "Connection key created" : "Add and manage tasks by message"}</small></div>
+          <div className="connection-copy"><strong>Poke</strong><small>{pokeConnected ? "Connected to separate Sticky and Google tools" : pokeCredential ? "Connection key created" : "Use Sticky and Google independently by message"}</small></div>
           {pokeCredential ? <button type="button" className="connection-icon-button" onClick={() => disconnectPoke.mutate(pokeCredential.id)} aria-label="Disconnect Poke"><Unplug size={16} /></button> : null}
         </div>
         {!pokeCredential ? <div className="connection-inline-form"><button type="button" className="connection-primary" disabled={createPokeCredential.isPending} onClick={() => createPokeCredential.mutate()}><KeyRound size={15} />{createPokeCredential.isPending ? "Creating..." : "Create private connection"}</button></div> : null}
@@ -174,7 +147,7 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
 
         <div className="connection-row">
           <span className="connection-icon push"><Bird size={20} /></span>
-          <div className="connection-copy"><strong>Littlebird</strong><small>{littlebirdConnected ? "Connected and ready" : littlebirdCredential ? "Connection key created" : "Give your memory assistant access to Sticky"}</small></div>
+          <div className="connection-copy"><strong>Littlebird</strong><small>{littlebirdConnected ? "Connected to separate Sticky and Google tools" : littlebirdCredential ? "Connection key created" : "Give your memory assistant separate access to both"}</small></div>
           {littlebirdCredential ? <button type="button" className="connection-icon-button" onClick={() => disconnectLittlebird.mutate(littlebirdCredential.id)} aria-label="Disconnect Littlebird"><Unplug size={16} /></button> : null}
         </div>
         {!littlebirdCredential ? <div className="connection-inline-form"><button type="button" className="connection-primary" disabled={createLittlebirdCredential.isPending} onClick={() => createLittlebirdCredential.mutate()}><KeyRound size={15} />{createLittlebirdCredential.isPending ? "Creating..." : "Create Littlebird connection"}</button></div> : null}
@@ -192,12 +165,10 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
 
         <div className="connection-row">
           <span className="connection-icon push"><CalendarSync size={20} /></span>
-          <div className="connection-copy"><strong>Google Workspace</strong><small>{googleAccount ? `${googleAccount.provider_email || "Connected"} · Tasks + Calendar` : googleConfigured ? "Mirror Google Tasks and Calendar" : "OAuth keys need to be added in Vercel"}</small></div>
+          <div className="connection-copy"><strong>Google Workspace</strong><small>{googleAccount ? `${googleAccount.provider_email || "Connected"} · live assistant access · never imported` : googleConfigured ? "Connect as a separate Tasks and Calendar source" : "OAuth keys need to be added in Vercel"}</small></div>
           {googleAccount ? <button type="button" className="connection-icon-button" onClick={() => disconnectGoogle.mutate()} aria-label="Disconnect Google"><Unplug size={16} /></button> : null}
         </div>
-        <div className="connection-inline-form">
-          {googleAccount ? <button type="button" className="connection-primary" disabled={syncGoogle.isPending} onClick={() => syncGoogle.mutate()}><RefreshCw size={15} />{syncGoogle.isPending ? "Syncing…" : "Sync all Google lists + calendars"}</button> : <button type="button" className="connection-primary" disabled={!googleConfigured || connectGoogle.isPending} onClick={() => connectGoogle.mutate()}><ExternalLink size={15} />{connectGoogle.isPending ? "Opening…" : "Connect Google"}</button>}
-        </div>
+        {!googleAccount ? <div className="connection-inline-form"><button type="button" className="connection-primary" disabled={!googleConfigured || connectGoogle.isPending} onClick={() => connectGoogle.mutate()}><ExternalLink size={15} />{connectGoogle.isPending ? "Opening…" : "Connect Google"}</button></div> : null}
 
         <div className="connection-row">
           <span className="connection-icon push"><Smartphone size={20} /></span>

@@ -145,7 +145,127 @@ export async function listGoogleTaskLists(actor: ActorContext) {
     result.push(...(response.data.items ?? []));
     pageToken = response.data.nextPageToken ?? undefined;
   } while (pageToken);
-  return result.map((list) => ({ id: list.id, title: list.title, updated: list.updated }));
+  return result.map(directGoogleTaskList);
+}
+
+function directGoogleTaskList(list: tasks_v1.Schema$TaskList) {
+  return { id: list.id, title: list.title || "Untitled list", updatedAt: list.updated ?? null };
+}
+
+/** Create a list only in Google Tasks. */
+export async function createGoogleTaskList(actor: ActorContext, title: string) {
+  const account = await getGoogleAccount(actor.userId);
+  const tasksApi = await googleTasksForAccount(account);
+  const response = await tasksApi.tasklists.insert({ requestBody: { title } });
+  return directGoogleTaskList(response.data);
+}
+
+/** Rename a list only in Google Tasks. */
+export async function updateGoogleTaskList(actor: ActorContext, taskListId: string, title: string) {
+  const account = await getGoogleAccount(actor.userId);
+  const tasksApi = await googleTasksForAccount(account);
+  const response = await tasksApi.tasklists.patch({ tasklist: taskListId, requestBody: { title } });
+  return directGoogleTaskList(response.data);
+}
+
+/** Delete a list only from Google Tasks. */
+export async function deleteGoogleTaskList(actor: ActorContext, taskListId: string) {
+  const account = await getGoogleAccount(actor.userId);
+  const tasksApi = await googleTasksForAccount(account);
+  await tasksApi.tasklists.delete({ tasklist: taskListId });
+  return { deleted: true, taskListId };
+}
+
+function directGoogleTask(task: tasks_v1.Schema$Task) {
+  return {
+    id: task.id,
+    title: task.title || "Untitled task",
+    notes: task.notes || "",
+    status: task.status || "needsAction",
+    completed: task.status === "completed",
+    dueDate: task.due?.slice(0, 10) ?? null,
+    completedAt: task.completed ?? null,
+    updatedAt: task.updated ?? null,
+    parentId: task.parent ?? null,
+    position: task.position ?? null,
+    webViewLink: task.webViewLink ?? null,
+  };
+}
+
+/** Read Google Tasks live. This deliberately does not create or update Sticky records. */
+export async function listGoogleTasks(actor: ActorContext, input: {
+  taskListId: string;
+  includeCompleted?: boolean;
+  includeHidden?: boolean;
+}) {
+  const account = await getGoogleAccount(actor.userId);
+  const tasksApi = await googleTasksForAccount(account);
+  const result: tasks_v1.Schema$Task[] = [];
+  let pageToken: string | undefined;
+  do {
+    const response = await tasksApi.tasks.list({
+      tasklist: input.taskListId,
+      maxResults: 100,
+      pageToken,
+      showCompleted: input.includeCompleted ?? false,
+      showHidden: input.includeHidden ?? false,
+    });
+    result.push(...(response.data.items ?? []));
+    pageToken = response.data.nextPageToken ?? undefined;
+  } while (pageToken);
+  return result.map(directGoogleTask);
+}
+
+/** Create a task only in Google Tasks. */
+export async function createGoogleTask(actor: ActorContext, input: {
+  taskListId: string;
+  title: string;
+  notes?: string;
+  dueDate?: string | null;
+  parentId?: string;
+  previousId?: string;
+}) {
+  const account = await getGoogleAccount(actor.userId);
+  const tasksApi = await googleTasksForAccount(account);
+  const response = await tasksApi.tasks.insert({
+    tasklist: input.taskListId,
+    parent: input.parentId,
+    previous: input.previousId,
+    requestBody: {
+      title: input.title,
+      notes: input.notes || undefined,
+      due: input.dueDate ? `${input.dueDate}T00:00:00.000Z` : undefined,
+    },
+  });
+  return directGoogleTask(response.data);
+}
+
+/** Update a task only in Google Tasks. */
+export async function updateGoogleTask(actor: ActorContext, input: {
+  taskListId: string;
+  taskId: string;
+  title?: string;
+  notes?: string;
+  dueDate?: string | null;
+  completed?: boolean;
+}) {
+  const account = await getGoogleAccount(actor.userId);
+  const tasksApi = await googleTasksForAccount(account);
+  const requestBody: tasks_v1.Schema$Task = {};
+  if (input.title !== undefined) requestBody.title = input.title;
+  if (input.notes !== undefined) requestBody.notes = input.notes;
+  if (input.dueDate !== undefined) requestBody.due = input.dueDate ? `${input.dueDate}T00:00:00.000Z` : null;
+  if (input.completed !== undefined) requestBody.status = input.completed ? "completed" : "needsAction";
+  const response = await tasksApi.tasks.patch({ tasklist: input.taskListId, task: input.taskId, requestBody });
+  return directGoogleTask(response.data);
+}
+
+/** Delete a task only from Google Tasks. */
+export async function deleteGoogleTask(actor: ActorContext, taskListId: string, taskId: string) {
+  const account = await getGoogleAccount(actor.userId);
+  const tasksApi = await googleTasksForAccount(account);
+  await tasksApi.tasks.delete({ tasklist: taskListId, task: taskId });
+  return { deleted: true, taskListId, taskId };
 }
 
 export async function selectGoogleLists(actor: ActorContext, externalListIds: string[]) {
@@ -168,7 +288,7 @@ export async function selectGoogleLists(actor: ActorContext, externalListIds: st
       list_id: list.id,
       external_list_id: externalList.id,
       sync_enabled: true,
-      external_updated_at: externalList.updated,
+      external_updated_at: externalList.updatedAt,
     }, { onConflict: "integration_account_id,external_list_id" });
     await pullGoogleList(actor, account, tasksApi, externalList.id, list.id);
   }
@@ -203,6 +323,128 @@ export async function listGoogleCalendars(actor: ActorContext) {
     backgroundColor: item.backgroundColor,
     selected: item.selected !== false,
   }));
+}
+
+function directGoogleCalendarEvent(calendarId: string, event: calendar_v3.Schema$Event) {
+  return {
+    id: event.id,
+    calendarId,
+    title: event.summary || "Untitled event",
+    details: event.description || "",
+    location: event.location || "",
+    status: event.status || "confirmed",
+    allDay: Boolean(event.start?.date),
+    startAt: event.start?.dateTime ?? null,
+    endAt: event.end?.dateTime ?? null,
+    startDate: event.start?.date ?? null,
+    endDate: event.end?.date ?? null,
+    timezone: event.start?.timeZone ?? event.end?.timeZone ?? null,
+    attendees: (event.attendees ?? []).map((attendee) => ({
+      email: attendee.email ?? null,
+      displayName: attendee.displayName ?? null,
+      responseStatus: attendee.responseStatus ?? null,
+    })),
+    recurringEventId: event.recurringEventId ?? null,
+    recurrence: event.recurrence ?? [],
+    htmlLink: event.htmlLink ?? null,
+    updatedAt: event.updated ?? null,
+  };
+}
+
+/** Read Google Calendar live. This deliberately does not create Sticky Calendar records. */
+export async function listGoogleCalendarEvents(actor: ActorContext, input: {
+  calendarId: string;
+  from: string;
+  to: string;
+  query?: string;
+}) {
+  const account = await getGoogleAccount(actor.userId);
+  if (!hasGoogleCalendarScopes(account)) throw new Error("Reconnect Google to grant Calendar access.");
+  const calendarApi = await googleCalendarForAccount(account);
+  const result: calendar_v3.Schema$Event[] = [];
+  let pageToken: string | undefined;
+  do {
+    const response = await calendarApi.events.list({
+      calendarId: input.calendarId,
+      timeMin: input.from,
+      timeMax: input.to,
+      q: input.query,
+      maxResults: 250,
+      orderBy: "startTime",
+      pageToken,
+      showDeleted: false,
+      singleEvents: true,
+    });
+    result.push(...(response.data.items ?? []));
+    pageToken = response.data.nextPageToken ?? undefined;
+  } while (pageToken);
+  return result.map((event) => directGoogleCalendarEvent(input.calendarId, event));
+}
+
+type DirectGoogleCalendarEvent = {
+  title: string;
+  details?: string;
+  location?: string;
+  timezone: string;
+  attendeeEmails?: string[];
+  recurrence?: string[];
+  transparency?: "opaque" | "transparent";
+} & ({ allDay: false; startAt: string; endAt: string } | { allDay: true; startDate: string; endDate: string });
+
+type DirectGoogleCalendarEventInput = {
+  calendarId: string;
+  sendUpdates?: "all" | "externalOnly" | "none";
+} & DirectGoogleCalendarEvent;
+
+function directGoogleCalendarEventBody(input: DirectGoogleCalendarEvent): calendar_v3.Schema$Event {
+  return {
+    summary: input.title,
+    description: input.details || undefined,
+    location: input.location || undefined,
+    attendees: input.attendeeEmails?.map((email) => ({ email })),
+    recurrence: input.recurrence?.length ? input.recurrence : undefined,
+    transparency: input.transparency,
+    start: input.allDay ? { date: input.startDate } : { dateTime: input.startAt, timeZone: input.timezone },
+    end: input.allDay ? { date: input.endDate } : { dateTime: input.endAt, timeZone: input.timezone },
+  };
+}
+
+/** Create an event only in Google Calendar. */
+export async function createGoogleCalendarEvent(actor: ActorContext, input: DirectGoogleCalendarEventInput) {
+  const account = await getGoogleAccount(actor.userId);
+  if (!hasGoogleCalendarScopes(account)) throw new Error("Reconnect Google to grant Calendar access.");
+  const calendarApi = await googleCalendarForAccount(account);
+  const { calendarId, sendUpdates = "none", ...event } = input;
+  const response = await calendarApi.events.insert({
+    calendarId,
+    requestBody: directGoogleCalendarEventBody(event),
+    sendUpdates,
+  });
+  return directGoogleCalendarEvent(calendarId, response.data);
+}
+
+/** Update an event only in Google Calendar. The current schedule is required to keep the mutation explicit. */
+export async function updateGoogleCalendarEvent(actor: ActorContext, input: DirectGoogleCalendarEventInput & { eventId: string }) {
+  const account = await getGoogleAccount(actor.userId);
+  if (!hasGoogleCalendarScopes(account)) throw new Error("Reconnect Google to grant Calendar access.");
+  const calendarApi = await googleCalendarForAccount(account);
+  const { calendarId, eventId, sendUpdates = "none", ...event } = input;
+  const response = await calendarApi.events.patch({
+    calendarId,
+    eventId,
+    requestBody: directGoogleCalendarEventBody(event),
+    sendUpdates,
+  });
+  return directGoogleCalendarEvent(calendarId, response.data);
+}
+
+/** Delete an event only from Google Calendar. */
+export async function deleteGoogleCalendarEvent(actor: ActorContext, calendarId: string, eventId: string) {
+  const account = await getGoogleAccount(actor.userId);
+  if (!hasGoogleCalendarScopes(account)) throw new Error("Reconnect Google to grant Calendar access.");
+  const calendarApi = await googleCalendarForAccount(account);
+  await calendarApi.events.delete({ calendarId, eventId, sendUpdates: "none" });
+  return { deleted: true, calendarId, eventId };
 }
 
 type GoogleCalendarSelection = {
@@ -654,6 +896,9 @@ async function pushCalendarOutboxEvent(event: Record<string, unknown>) {
 }
 
 export async function pushOutboxEvent(event: Record<string, unknown>) {
+  // Google and Sticky are separate by default. Legacy mirror links remain inert
+  // unless a future, explicit opt-in product mode enables them.
+  if (process.env.GOOGLE_SYNC_ENABLED !== "true") return;
   const { db } = getRuntime();
   if (event.aggregate_type === "calendar_event") return pushCalendarOutboxEvent(event);
   if (event.aggregate_type !== "task") return;
