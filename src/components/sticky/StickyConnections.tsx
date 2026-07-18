@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BellRing, Bird, CalendarSync, Check, Copy, ExternalLink, KeyRound, Send, Smartphone, Unplug, X } from "lucide-react";
+import { AlertTriangle, BellRing, Bird, CalendarSync, Check, Copy, ExternalLink, KeyRound, Send, Smartphone, Unplug, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { createStickyPlatformClient } from "@/lib/sticky/api-client";
 
@@ -23,6 +23,7 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
   const [pokeConnection, setPokeConnection] = useState<McpConnection | null>(null);
   const [littlebirdConnection, setLittlebirdConnection] = useState<McpConnection | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [googleSyncStep, setGoogleSyncStep] = useState<0 | 1 | 2>(0);
 
   const credentials = useQuery({
     queryKey: ["credentials"],
@@ -108,6 +109,21 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
     },
     onError: (error) => setStatusMessage(error.message),
   });
+  const syncAllGoogle = useMutation({
+    mutationFn: () => client!.request<{ importedLists: number; importedCalendars: number; automaticBackgroundSync: false }>("/api/v1/integrations/google/sync-all", {
+      method: "POST",
+      body: JSON.stringify({
+        acknowledgedSeparationPreference: true,
+        confirmedBulkCopy: true,
+        confirmationPhrase: "SYNC GOOGLE INTO STICKY",
+      }),
+    }),
+    onSuccess: ({ importedLists, importedCalendars }) => {
+      setGoogleSyncStep(0);
+      setStatusMessage(`Imported ${importedLists} Google list${importedLists === 1 ? "" : "s"} and ${importedCalendars} calendar${importedCalendars === 1 ? "" : "s"}. Automatic syncing remains off.`);
+    },
+    onError: (error) => setStatusMessage(error.message),
+  });
 
   if (!open) return null;
   const pokeCredential = credentials.data?.credentials.find((item) => item.provider === "poke" && !item.revoked_at);
@@ -169,6 +185,38 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
           {googleAccount ? <button type="button" className="connection-icon-button" onClick={() => disconnectGoogle.mutate()} aria-label="Disconnect Google"><Unplug size={16} /></button> : null}
         </div>
         {!googleAccount ? <div className="connection-inline-form"><button type="button" className="connection-primary" disabled={!googleConfigured || connectGoogle.isPending} onClick={() => connectGoogle.mutate()}><ExternalLink size={15} />{connectGoogle.isPending ? "Opening…" : "Connect Google"}</button></div> : null}
+        {googleAccount ? (
+          <div className="connection-setup">
+            {googleSyncStep === 0 ? (
+              <>
+                <p>Because you said you wanted Google and Sticky kept separate, this action is intentionally guarded. Nothing is copied unless you approve two more warnings.</p>
+                <div className="connection-setup-actions">
+                  <button type="button" className="connection-secondary" onClick={() => { setStatusMessage(null); setGoogleSyncStep(1); }}>
+                    <CalendarSync size={15} />Sync all Google lists + calendars
+                  </button>
+                </div>
+              </>
+            ) : googleSyncStep === 1 ? (
+              <div role="alert">
+                <p><AlertTriangle size={15} aria-hidden="true" /> First confirmation: this will copy every current Google Task list and Google Calendar into Sticky and create integration links. Google will still remain a separate source.</p>
+                <div className="connection-setup-actions">
+                  <button type="button" className="connection-secondary" onClick={() => setGoogleSyncStep(0)}>Cancel</button>
+                  <button type="button" className="connection-primary" onClick={() => setGoogleSyncStep(2)}>Yes, continue</button>
+                </div>
+              </div>
+            ) : (
+              <div role="alert">
+                <p><AlertTriangle size={15} aria-hidden="true" /> Final confirmation: copy all Google lists and calendars into Sticky now? Automatic background mirroring will remain off.</p>
+                <div className="connection-setup-actions">
+                  <button type="button" className="connection-secondary" disabled={syncAllGoogle.isPending} onClick={() => setGoogleSyncStep(0)}>Cancel</button>
+                  <button type="button" className="connection-primary" disabled={syncAllGoogle.isPending} onClick={() => syncAllGoogle.mutate()}>
+                    {syncAllGoogle.isPending ? "Syncing…" : "Yes, sync all now"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
 
         <div className="connection-row">
           <span className="connection-icon push"><Smartphone size={20} /></span>

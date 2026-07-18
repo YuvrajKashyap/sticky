@@ -319,6 +319,16 @@ Search and organization:
 - allow sorting by custom order and date if included
 - do not let search/reorder corrupt persisted order
 
+Google source isolation (locked product rule):
+
+- Google Tasks and Google Calendar remain separate from Sticky tasks and Sticky Calendar by default.
+- Connecting Google OAuth grants live Google API access; it must not automatically import, copy, link, or mirror Google data into Sticky.
+- Assistant tools whose names start with `google_` operate only on live Google data. Generic Sticky task and calendar tools operate only on Sticky data.
+- Poke, Littlebird, MCP clients, workflows, and future agents must never call or expose a bulk Google-to-Sticky sync automatically.
+- The bulk sync override is owner-only: its server route must reject non-human actors and require the exact final confirmation payload after two explicit UI confirmations.
+- Cross-system transfers require an explicit user request naming both the source and destination. Never infer a transfer from a request to create, update, complete, or delete an item.
+- Automatic background Google mirroring stays off unless Yuvraj explicitly changes this locked product decision.
+
 State and UX:
 
 - optimistic UI for common actions

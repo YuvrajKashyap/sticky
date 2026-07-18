@@ -1014,35 +1014,10 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   const searchInputRef = useRef<HTMLInputElement>(null);
   const commandInputRef = useRef<HTMLInputElement>(null);
   const commandTriggerRef = useRef<HTMLButtonElement>(null);
-  const googleActivationSyncAtRef = useRef(0);
   const supabase = useMemo(
     () => (mode === "supabase" ? createStickyPlatformClient() : null),
     [mode],
   );
-
-  useEffect(() => {
-    if (mode !== "supabase" || !supabase) return;
-
-    const syncConnectedGoogle = async () => {
-      if (document.visibilityState !== "visible" || Date.now() - googleActivationSyncAtRef.current < 15 * 60_000) return;
-      googleActivationSyncAtRef.current = Date.now();
-      try {
-        const { integrations } = await supabase.request<{
-          integrations: Array<{ provider: string; status: string }>;
-        }>("/api/v1/integrations");
-        if (integrations.some((item) => item.provider === "google_tasks" && item.status === "healthy")) {
-          await supabase.request("/api/v1/integrations/google/sync", { method: "POST", body: "{}" });
-        }
-      } catch {
-        // Connection health is shown in Settings; workspace activation stays quiet.
-      }
-    };
-
-    void syncConnectedGoogle();
-    const onVisibilityChange = () => void syncConnectedGoogle();
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
-  }, [mode, supabase]);
 
   useEffect(() => {
     if (mode !== "supabase" || !supabase) return;

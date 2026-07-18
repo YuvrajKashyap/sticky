@@ -32,12 +32,20 @@ import {
   listGoogleCalendars,
   listGoogleTaskLists,
   pushOutboxEvent,
+  selectGoogleCalendars,
+  selectGoogleLists,
 } from "./services/google";
 import { deliverReminder } from "./services/notifications";
 import { reminderWorkflow } from "./workflows/reminder";
 import { outboxWorkflow } from "./workflows/outbox";
 
 type Env = { Variables: ApiVariables };
+
+const googleBulkSyncConfirmationSchema = z.object({
+  acknowledgedSeparationPreference: z.literal(true),
+  confirmedBulkCopy: z.literal(true),
+  confirmationPhrase: z.literal("SYNC GOOGLE INTO STICKY"),
+});
 
 function success<T>(c: Context<Env>, data: T, replayed = false) {
   return c.json<ApiSuccess<T>>({
@@ -449,6 +457,32 @@ const app = new Hono<Env>();
   app.get("/api/v1/integrations/google/calendars", async (c) => {
     const actor = c.get("actor"); requireScope(actor, "integrations:read");
     return success(c, { calendars: await listGoogleCalendars(actor) });
+  });
+  app.post("/api/v1/integrations/google/sync-all", async (c) => {
+    const actor = c.get("actor");
+    if (actor.actorType !== "human" || !actor.accessToken) {
+      throw new StickyDomainError("forbidden", "Only the signed-in Sticky owner can start a Google-to-Sticky sync.", 403);
+    }
+    requireScope(actor, "integrations:write");
+    const body = await parseJson(c, googleBulkSyncConfirmationSchema);
+    return mutate(c, body, async () => {
+      const [taskLists, calendars] = await Promise.all([
+        listGoogleTaskLists(actor),
+        listGoogleCalendars(actor),
+      ]);
+      const selectedLists = await selectGoogleLists(actor, taskLists.flatMap((list) => list.id ? [list.id] : []));
+      const selectedCalendars = await selectGoogleCalendars(actor, calendars.flatMap((calendar) => calendar.id ? [{
+        externalCalendarId: calendar.id,
+        name: calendar.name,
+        syncDirection: "import_only" as const,
+        isDefaultTarget: calendar.primary,
+      }] : []));
+      return {
+        importedLists: selectedLists.selected,
+        importedCalendars: selectedCalendars.selected,
+        automaticBackgroundSync: false,
+      };
+    });
   });
   app.delete("/api/v1/integrations/google", async (c) => {
     const actor = c.get("actor"); requireScope(actor, "integrations:write");
