@@ -1,6 +1,56 @@
 <svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect x="14" y="22" width="58" height="58" rx="14" fill="#FFCE3A" stroke="#1E2538" stroke-width="5"/>
-  <path d="M72 52v28H44c16-4 24-13 28-28Z" fill="#FF9F66" stroke="#1E2538" stroke-width="5" stroke-linejoin="round"/>
-  <rect x="30" y="12" width="42" height="42" rx="12" fill="#74E6FF" stroke="#1E2538" stroke-width="5"/>
-  <path d="M40 36h22M40 48h14" stroke="#1E2538" stroke-width="5" stroke-linecap="round"/>
+  <defs>
+    <radialGradient id="bg" cx="38%" cy="26%" r="90%">
+      <stop offset="0%" stop-color="#0E1B3E"/>
+      <stop offset="55%" stop-color="#071026"/>
+      <stop offset="100%" stop-color="#03050E"/>
+    </radialGradient>
+    <linearGradient id="noteStroke" x1="28" y1="26" x2="68" y2="72" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#59E7FF"/>
+      <stop offset="60%" stop-color="#4FC7FF"/>
+      <stop offset="100%" stop-color="#7A6BFF"/>
+    </linearGradient>
+    <linearGradient id="noteFill" x1="28" y1="26" x2="68" y2="72" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#59E7FF" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#7A6BFF" stop-opacity="0.10"/>
+    </linearGradient>
+    <filter id="cyanGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="0" stdDeviation="2.6" flood-color="#3FD6FF" flood-opacity="0.85"/>
+    </filter>
+    <filter id="magentaGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feDropShadow dx="0" dy="0" stdDeviation="2.2" flood-color="#FF5CF0" flood-opacity="0.9"/>
+    </filter>
+  </defs>
+
+  <!-- Deep-space tile -->
+  <rect width="96" height="96" rx="22" fill="url(#bg)"/>
+  <rect x="1.5" y="1.5" width="93" height="93" rx="20.5" stroke="#3FD6FF" stroke-opacity="0.22" stroke-width="1.5"/>
+
+  <!-- Tron corner brackets -->
+  <g stroke="#4FD9FF" stroke-opacity="0.6" stroke-width="3" stroke-linecap="round" fill="none">
+    <path d="M12 24v-6a6 6 0 0 1 6-6h6"/>
+    <path d="M84 24v-6a6 6 0 0 0-6-6h-6"/>
+    <path d="M12 72v6a6 6 0 0 0 6 6h6"/>
+    <path d="M84 72v6a6 6 0 0 1-6 6h-6"/>
+  </g>
+
+  <!-- Targeting ring: faint orbit + one lit arc -->
+  <circle cx="48" cy="49" r="31" stroke="#59E7FF" stroke-opacity="0.16" stroke-width="2"/>
+  <circle cx="48" cy="49" r="31" stroke="#4FD9FF" stroke-width="2.5" stroke-linecap="round"
+    stroke-dasharray="34 161" transform="rotate(-64 48 49)" filter="url(#cyanGlow)"/>
+  <circle cx="48" cy="49" r="31" stroke="#7A6BFF" stroke-width="2.5" stroke-linecap="round"
+    stroke-dasharray="14 181" transform="rotate(118 48 49)"/>
+
+  <!-- Holographic note with folded corner -->
+  <g transform="rotate(-7 48 49)">
+    <path d="M34 27h22l12 12v25a7 7 0 0 1-7 7H34a7 7 0 0 1-7-7V34a7 7 0 0 1 7-7Z"
+      fill="url(#noteFill)" stroke="url(#noteStroke)" stroke-width="3" stroke-linejoin="round" filter="url(#cyanGlow)"/>
+    <path d="M56 27v8a4 4 0 0 0 4 4h8" fill="none" stroke="url(#noteStroke)" stroke-width="3" stroke-linejoin="round"/>
+
+    <!-- Task readout lines -->
+    <path d="M35 46h18M35 54h11" stroke="#AFF2FF" stroke-width="3.5" stroke-linecap="round"/>
+
+    <!-- The done-tick, hot magenta -->
+    <path d="M35 62l4 4 8-9" stroke="#FF5CF0" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#magentaGlow)"/>
+  </g>
 </svg>
