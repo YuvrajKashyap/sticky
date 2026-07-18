@@ -669,7 +669,7 @@ test.describe("Sticky workspace", () => {
     });
   });
 
-  test("all tasks is the default board and list checkboxes control visibility", async ({ page }) => {
+  test("all tasks is the default board and list checkboxes control visibility", async ({ page }, testInfo) => {
     await expectNoConsoleErrors(page, async () => {
       await expect(page.getByRole("heading", { name: "All tasks" })).toBeVisible();
       await expect(page.getByRole("button", { name: /Show all tasks/ })).toBeVisible();
@@ -677,6 +677,13 @@ test.describe("Sticky workspace", () => {
 
       await expect(page.locator(".board-column")).toHaveCount(6);
       await expect(page.locator('.board-column[data-list-slug="product"]')).toBeVisible();
+
+      if (testInfo.project.name === "mobile") {
+        // The phone strip keeps chips to a dot and a name; board visibility
+        // stays a desktop control.
+        await expect(page.locator(".list-board-toggle").first()).toBeHidden();
+        return;
+      }
 
       await page.getByRole("checkbox", { name: "Hide bring from All tasks" }).click();
       await expect(page.locator('.board-column[data-list-slug="bring"]')).toHaveCount(0);
@@ -981,32 +988,30 @@ test.describe("Sticky workspace", () => {
       await details.getByRole("textbox", { name: "Details" }).fill("Covers edits, dates, movement, subtasks, and completion.");
       await details.getByRole("textbox", { name: "Details" }).blur();
       const tomorrow = localDateKey(1);
-      await details.getByRole("button", { name: "Tomorrow" }).click();
-      await expect(details.locator('input[aria-label="Due date"]')).toHaveValue(tomorrow);
-      await expect(details.getByText(shortDateLabel(tomorrow), { exact: true })).toBeVisible();
-      await details.getByRole("button", { name: "Afternoon" }).click();
-      await expect(details.locator('input[aria-label="Due time"]')).toHaveValue("14:00");
-      await expect(details.getByText(`${shortDateLabel(tomorrow)} at 14:00`, { exact: true })).toBeVisible();
-      await details.getByRole("button", { name: "No date" }).click();
-      const removeDueButton = details.getByRole("button", { name: "Remove due date and time", exact: true });
-      await expect(details.locator('input[aria-label="Due date"]')).toHaveValue("");
-      await expect(details.locator('input[aria-label="Due time"]')).toBeDisabled();
-      await expect(details.locator('input[aria-label="Due time"]')).toHaveAccessibleDescription(
-        "Choose a due date before adding a time.",
-      );
-      await expect(removeDueButton).toBeDisabled();
-      await expect(details.getByText(`${shortDateLabel(tomorrow)} at 14:00`)).toHaveCount(0);
-      await details.locator('input[aria-label="Due date"]').fill("2026-06-15");
-      await expect(details.getByText("Choose a due date before adding a time.")).toHaveCount(0);
-      await details.locator('input[aria-label="Due time"]').fill("14:30");
-      await expect(details.getByText("Jun 15 at 14:30", { exact: true })).toBeVisible();
-      await expect(removeDueButton).toBeEnabled();
-      await removeDueButton.click();
-      await expect(page.getByText("Jun 15 at 14:30")).toHaveCount(0);
-      await expect(removeDueButton).toBeDisabled();
-      await details.locator('input[aria-label="Due date"]').fill("2026-06-15");
-      await details.locator('input[aria-label="Due time"]').fill("14:30");
-      await expect(details.getByText("Jun 15 at 14:30", { exact: true })).toBeVisible();
+      const polishedCard = page.locator(".task-card", { hasText: "Verification sticky polished" });
+
+      // Due date via the glass calendar quick pick
+      await details.getByRole("button", { name: "Set a due date" }).click();
+      await details.getByRole("button", { name: "Tomorrow", exact: true }).click();
+      await expect(details.getByRole("button", { name: /^Due date:/ })).toBeVisible();
+      await expect(polishedCard).toContainText(shortDateLabel(tomorrow));
+
+      // Due time via the time grid preset
+      await details.getByRole("button", { name: "Set a due time" }).click();
+      await details.getByRole("button", { name: "Afternoon", exact: true }).click();
+      await expect(polishedCard).toContainText(`${shortDateLabel(tomorrow)} at 14:00`);
+
+      // Clear both with the × chip and confirm the pickers reset
+      await details.getByRole("button", { name: "Remove due date and time", exact: true }).click();
+      await expect(polishedCard).not.toContainText(`${shortDateLabel(tomorrow)} at 14:00`);
+      await expect(details.getByRole("button", { name: "Set a due date" })).toBeVisible();
+
+      // Re-arm a concrete past-due schedule via exact entry so the Today filter
+      // and due-date sort checks below stay meaningful.
+      const overdue = localDateKey(-2);
+      await details.locator('input[aria-label="Due date"]').fill(overdue);
+      await details.locator('input[aria-label="Due time"]').fill("09:00");
+      await expect(polishedCard).toContainText(`${shortDateLabel(overdue)} at 09:00`);
       const filteredActiveRegion = page.getByRole("region", { name: "Active tasks" });
       const taskViews = page.locator(".task-filter-bar");
       await runCommand(page, "show today tasks");
@@ -1260,7 +1265,7 @@ test.describe("Sticky workspace", () => {
       }
       const mobileDetails = page.getByRole("complementary", { name: "Task details", exact: true });
       await expect(mobileDetails).toBeVisible();
-      await expect(mobileDetails.locator('input[type="date"]')).toBeVisible();
+      await expect(mobileDetails.getByRole("button", { name: "Set a due date" })).toBeVisible();
       const mobileSubtaskTitle = mobileDetails.getByLabel("New subtask title");
       const mobileAddSubtask = mobileDetails.getByRole("button", { name: "Add subtask" });
       await expect(mobileAddSubtask).toBeDisabled();
@@ -1517,8 +1522,8 @@ test.describe("Sticky workspace", () => {
     });
   });
 
-  test("quick due chips cover today, next week, common times, and persistence", async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== "desktop", "quick due chip coverage runs in the desktop project");
+  test("the due picker covers today, next week, common times, and persistence", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "due picker coverage runs in the desktop project");
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
@@ -1533,36 +1538,32 @@ test.describe("Sticky workspace", () => {
       await card.click();
 
       const details = page.getByRole("complementary", { name: "Task details", exact: true });
-      const dueDate = details.locator('input[aria-label="Due date"]');
-      const dueTime = details.locator('input[aria-label="Due time"]');
+      // Today from the calendar quick pick
+      await details.getByRole("button", { name: "Set a due date" }).click();
+      await details.getByRole("button", { name: "Today", exact: true }).click();
+      await expect(details.getByRole("button", { name: /^Due date:/ })).toBeVisible();
 
-      await details.getByRole("button", { name: "Today" }).click();
-      await expect(dueDate).toHaveValue(today);
-      await expect(details.getByRole("button", { name: "Today" })).toHaveAttribute("aria-pressed", "true");
-
-      await details.getByRole("button", { name: "Morning" }).click();
-      await expect(dueTime).toHaveValue("09:00");
-      await expect(details.getByRole("button", { name: "Morning" })).toHaveAttribute("aria-pressed", "true");
+      // Morning preset from the time grid
+      await details.getByRole("button", { name: "Set a due time" }).click();
+      await details.getByRole("button", { name: "Morning", exact: true }).click();
       await expect(card).toContainText(`${shortDateLabel(today)} at 09:00`);
 
-      await details.getByRole("button", { name: "Next week" }).click();
-      await expect(dueDate).toHaveValue(nextWeek);
-      await expect(details.getByRole("button", { name: "Next week" })).toHaveAttribute("aria-pressed", "true");
+      // Roll the date a week forward
+      await details.getByRole("button", { name: /^Due date:/ }).click();
+      await details.getByRole("button", { name: "Next week", exact: true }).click();
       await expect(card).toContainText(`${shortDateLabel(nextWeek)} at 09:00`);
 
-      await details.getByRole("button", { name: "Evening" }).click();
-      await expect(dueTime).toHaveValue("17:00");
-      await expect(details.getByRole("button", { name: "Evening" })).toHaveAttribute("aria-pressed", "true");
+      // Evening preset
+      await details.getByRole("button", { name: /^Due time:/ }).click();
+      await details.getByRole("button", { name: "Evening", exact: true }).click();
       await expect(card).toContainText(`${shortDateLabel(nextWeek)} at 17:00`);
 
-      await details.getByRole("button", { name: "Any time" }).click();
-      await expect(dueDate).toHaveValue(nextWeek);
-      await expect(dueTime).toHaveValue("");
-      await expect(details.getByRole("button", { name: "Any time" })).toHaveAttribute("aria-pressed", "true");
+      // Clear just the time from the panel, then re-add it (panel stays open)
+      await details.getByRole("button", { name: /^Due time:/ }).click();
+      await details.getByRole("button", { name: "Clear", exact: true }).click();
       await expect(card).toContainText(shortDateLabel(nextWeek));
       await expect(card).not.toContainText("17:00");
-
-      await details.getByRole("button", { name: "Evening" }).click();
+      await details.getByRole("button", { name: "Evening", exact: true }).click();
       await expect(card).toContainText(`${shortDateLabel(nextWeek)} at 17:00`);
 
       await page.reload();
@@ -1570,8 +1571,8 @@ test.describe("Sticky workspace", () => {
       await expect(persistedCard).toBeVisible();
       await expect(persistedCard).toContainText(`${shortDateLabel(nextWeek)} at 17:00`);
       await persistedCard.click();
-      await expect(dueDate).toHaveValue(nextWeek);
-      await expect(dueTime).toHaveValue("17:00");
+      await expect(details.getByRole("button", { name: /^Due date:/ })).toBeVisible();
+      await expect(details.getByRole("button", { name: /^Due time:/ })).toBeVisible();
     });
   });
 

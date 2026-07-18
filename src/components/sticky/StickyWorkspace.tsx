@@ -30,6 +30,7 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  Clock3,
   Command as CommandIcon,
   Copy,
   GripVertical,
@@ -65,7 +66,15 @@ import {
   recurrenceCatchUpTarget,
 } from "@/lib/sticky/recurrence";
 import { AccentWheel, DEFAULT_ACCENT_HUE, ListColorWheel, applyAccentHue } from "./AccentWheel";
-import { CaptureScheduler, type CaptureRepeat } from "./CaptureScheduler";
+import {
+  CaptureScheduler,
+  DatePanel,
+  SchedulerChip,
+  TimePanel,
+  captureDateLabel,
+  captureTimeLabel,
+  type CaptureRepeat,
+} from "./CaptureScheduler";
 import { AnimatedNumber, ArcRing, ConfettiBurst, DrawnCheck, springs } from "./motion";
 import { StickyCalendar } from "./StickyCalendar";
 import { StickyConnections } from "./StickyConnections";
@@ -169,6 +178,17 @@ type CommandItem = {
 
 type CommandFocusTarget = "capture" | "search";
 
+type SearchResultItem = {
+  key: string;
+  kind: "list" | "task";
+  listId: string;
+  taskId: string | null;
+  title: string;
+  detail: string;
+  color: StickyColor;
+  isCompleted: boolean;
+};
+
 type BoardColumn = {
   list: StickyList;
   activeTasks: StickyTask[];
@@ -214,16 +234,6 @@ const COLORS: StickyColor[] = [
   "magenta",
   "rose",
   "ink",
-];
-const QUICK_DUE_OPTIONS = [
-  { label: "Today", offsetDays: 0 },
-  { label: "Tomorrow", offsetDays: 1 },
-  { label: "Next week", offsetDays: 7 },
-];
-const QUICK_TIME_OPTIONS = [
-  { label: "Morning", value: "09:00" },
-  { label: "Afternoon", value: "14:00" },
-  { label: "Evening", value: "17:00" },
 ];
 const TASK_VIEW_LABELS: Record<StickyTaskViewFilter, string> = {
   all: "All",
@@ -524,6 +534,48 @@ function useBoardPan() {
     onPointerCancel: endPan,
     onClickCapture,
   };
+}
+
+function isPhoneViewport() {
+  return window.matchMedia("(max-width: 860px)").matches;
+}
+
+/**
+ * Phone carousel depth: each list page carries --page-depth (0 = centered,
+ * 1 = one page away) so CSS can scale and dim the neighbours as they slide
+ * past. Transform/opacity only, painted at most once per frame.
+ */
+function paintBoardPageDepth(board: HTMLElement) {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    return;
+  }
+
+  const boardRect = board.getBoundingClientRect();
+  const boardCenter = boardRect.left + boardRect.width / 2;
+
+  for (const column of board.querySelectorAll<HTMLElement>(".board-column")) {
+    const rect = column.getBoundingClientRect();
+    const depth = Math.min(1, Math.abs(rect.left + rect.width / 2 - boardCenter) / boardRect.width);
+    column.style.setProperty("--page-depth", depth.toFixed(3));
+  }
+}
+
+function nearestBoardListId(board: HTMLElement) {
+  const boardRect = board.getBoundingClientRect();
+  const boardCenter = boardRect.left + boardRect.width / 2;
+  let nearestListId: string | null = null;
+  let nearestDistance = Infinity;
+
+  for (const column of board.querySelectorAll<HTMLElement>(".board-column")) {
+    const rect = column.getBoundingClientRect();
+    const distance = Math.abs(rect.left + rect.width / 2 - boardCenter);
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestListId = column.dataset.listId ?? null;
+    }
+  }
+
+  return nearestListId;
 }
 
 function HighlightText({ text, query }: { text: string; query: string }) {
@@ -987,6 +1039,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   const [commandQuery, setCommandQuery] = useState("");
   const [commandIndex, setCommandIndex] = useState(0);
   const [searchFocused, setSearchFocused] = useState(false);
+  const [searchResultIndex, setSearchResultIndex] = useState(-1);
   const [viewMode, setViewMode] = useState<"board" | "calendar">("board");
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [railCollapsed, setRailCollapsed] = useState(false);
@@ -1017,6 +1070,9 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   const quickInputRef = useRef<HTMLInputElement>(null);
   const quickCaptureClosedDetailsRef = useRef(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const boardScrollRef = useRef<HTMLElement | null>(null);
+  const boardSwipeSettleRef = useRef(0);
+  const boardDepthFrameRef = useRef(0);
   const commandInputRef = useRef<HTMLInputElement>(null);
   const commandTriggerRef = useRef<HTMLButtonElement>(null);
   const supabase = useMemo(
@@ -1630,6 +1686,66 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       : "No matches"
     : "Find";
 
+  // Everything the current query touches, flattened into a jump list:
+  // matching lists first, then matching tasks in board order.
+  const searchResults = useMemo<SearchResultItem[]>(() => {
+    if (!searchQuery) {
+      return [];
+    }
+
+    const results: SearchResultItem[] = [];
+
+    for (const list of visibleBoardLists) {
+      if (countTextMatches(list.name, searchQuery) > 0) {
+        const stats = listStats.get(list.id);
+        results.push({
+          key: `list:${list.id}`,
+          kind: "list",
+          listId: list.id,
+          taskId: null,
+          title: list.name,
+          detail: `List · ${stats?.active ?? 0} active`,
+          color: list.color,
+          isCompleted: false,
+        });
+      }
+    }
+
+    for (const list of visibleBoardLists) {
+      const listTasks = workspace.tasks
+        .filter((task) => task.listId === list.id)
+        .sort(bySortOrder);
+
+      for (const task of listTasks) {
+        const dueLabel = humanDue(task);
+        const findText = taskFindText(task, subtasksByTask.get(task.id) ?? [], dueLabel);
+
+        if (!findText.toLowerCase().includes(searchQuery)) {
+          continue;
+        }
+
+        results.push({
+          key: `task:${task.id}`,
+          kind: "task",
+          listId: list.id,
+          taskId: task.id,
+          title: task.title,
+          detail: [list.name, dueLabel, task.isCompleted ? "Done" : null]
+            .filter(Boolean)
+            .join(" · "),
+          color: task.color,
+          isCompleted: task.isCompleted,
+        });
+      }
+    }
+
+    return results.slice(0, 80);
+  }, [listStats, searchQuery, subtasksByTask, visibleBoardLists, workspace.tasks]);
+
+  useEffect(() => {
+    setSearchResultIndex(-1);
+  }, [searchQuery]);
+
   const boardColumns = useMemo<BoardColumn[]>(() => {
     const todayKey = localDateKey();
 
@@ -1739,6 +1855,44 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
     return () => window.clearTimeout(timer);
   }, [activeListId, activeTasks, selectedTaskId]);
+
+  // On the phone carousel, picking a list (chips, pager, command deck,
+  // launch intent) glides its page to center stage and keeps the header
+  // chip rail following along; desktop keeps free panning untouched.
+  useEffect(() => {
+    if (viewMode !== "board" || !activeListId || !isPhoneViewport()) {
+      return;
+    }
+
+    const columns = boardScrollRef.current?.querySelectorAll<HTMLElement>(".board-column") ?? [];
+    for (const column of columns) {
+      if (column.dataset.listId === activeListId) {
+        column.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+        break;
+      }
+    }
+
+    document
+      .querySelector(".list-tab.active")
+      ?.scrollIntoView({ behavior: "smooth", inline: "nearest", block: "nearest" });
+  }, [activeListId, viewMode]);
+
+  // First paint of the carousel depth so the peeking neighbours arrive
+  // already set back, instead of snapping on the first swipe.
+  useEffect(() => {
+    const board = boardScrollRef.current;
+    if (viewMode === "board" && board && isPhoneViewport()) {
+      paintBoardPageDepth(board);
+    }
+  }, [boardColumns, viewMode]);
+
+  useEffect(
+    () => () => {
+      window.clearTimeout(boardSwipeSettleRef.current);
+      window.cancelAnimationFrame(boardDepthFrameRef.current);
+    },
+    [],
+  );
 
   const recurringCatchUps = useMemo(() => {
     if (!activeListId) {
@@ -2197,6 +2351,101 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
     updateUserState({ selectedListId: listId, searchQuery: "" });
     setSelectedTaskId(null);
+  }
+
+  // Phone carousel: while a swipe is in flight the pages take their depth
+  // (scale + dim) from the live scroll position; once it settles on a snap
+  // point, the centered list becomes the active list so chips, pager, quick
+  // capture, and filters follow along.
+  function handleBoardScroll(event: React.UIEvent<HTMLElement>) {
+    const node = event.currentTarget;
+
+    if (!boardDepthFrameRef.current) {
+      boardDepthFrameRef.current = window.requestAnimationFrame(() => {
+        boardDepthFrameRef.current = 0;
+        if (isPhoneViewport()) {
+          paintBoardPageDepth(node);
+        }
+      });
+    }
+
+    window.clearTimeout(boardSwipeSettleRef.current);
+    boardSwipeSettleRef.current = window.setTimeout(() => {
+      // With details open the sheet covers the board, so any scroll here is
+      // programmatic (revealing the selected card) — never a swipe. Skipping
+      // keeps those reveals from yanking the active list and closing the task.
+      if (!isPhoneViewport() || searchQuery || selectedTaskId) {
+        return;
+      }
+
+      const nearestListId = nearestBoardListId(node);
+      if (nearestListId && nearestListId !== activeListId) {
+        switchList(nearestListId);
+      }
+    }, 150);
+  }
+
+  // Search results are live jump targets: revealing scrolls the board to the
+  // match while the query (and the panel) stay put, so you can keep cycling.
+  // Committing (openTask) additionally opens the task's details.
+  function revealSearchResult(result: SearchResultItem, openTask: boolean) {
+    if (result.listId !== activeListId) {
+      updateUserState({ selectedListId: result.listId });
+    }
+    if (openTask && result.taskId) {
+      setSelectedTaskId(result.taskId);
+    }
+
+    const scrollToMatch = () => {
+      const board = boardScrollRef.current;
+      if (!board) {
+        return;
+      }
+
+      let target: HTMLElement | null = null;
+      if (result.taskId) {
+        target = board.querySelector<HTMLElement>(`[data-task-id="${result.taskId}"]`);
+      }
+      if (!target) {
+        for (const column of board.querySelectorAll<HTMLElement>(".board-column")) {
+          if (column.dataset.listId === result.listId) {
+            target = column;
+            break;
+          }
+        }
+      }
+
+      target?.scrollIntoView({
+        behavior: "smooth",
+        inline: isPhoneViewport() ? "center" : "nearest",
+        block: "nearest",
+      });
+    };
+
+    // Twice: once right away, once after a possible lazy column render.
+    window.setTimeout(scrollToMatch, 30);
+    window.setTimeout(scrollToMatch, 240);
+  }
+
+  function cycleSearchResult(direction: 1 | -1) {
+    if (!searchResults.length) {
+      return;
+    }
+
+    const nextIndex =
+      searchResultIndex < 0
+        ? direction === 1
+          ? 0
+          : searchResults.length - 1
+        : (searchResultIndex + direction + searchResults.length) % searchResults.length;
+
+    setSearchResultIndex(nextIndex);
+    revealSearchResult(searchResults[nextIndex], false);
+    window.setTimeout(() => {
+      document
+        .querySelectorAll<HTMLElement>(".search-result-row")
+        [nextIndex]?.scrollIntoView({ block: "nearest" });
+    }, 0);
   }
 
   function fallbackListId(excludingListId: string) {
@@ -3943,7 +4192,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
             <div className={`workspace-tools${searchExpanded ? " search-expanded" : ""}`}>
               <div
-                className={`search-control workspace-find-control${searchExpanded ? " expanded" : ""}`}
+                className="workspace-find-anchor"
                 onFocusCapture={() => setSearchFocused(true)}
                 onBlurCapture={(event) => {
                   if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) {
@@ -3951,52 +4200,130 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                   }
                 }}
               >
-                <button
-                  className="workspace-find-trigger"
-                  type="button"
-                  aria-label="Open workspace search"
-                  onClick={() => setSearchFocused(true)}
-                >
-                  <Search size={17} />
-                </button>
-                <input
-                  ref={searchInputRef}
-                  value={workspace.userState.searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Escape") {
-                      event.preventDefault();
-                      if (workspace.userState.searchQuery) {
-                        setSearchQuery("");
-                      } else {
-                        event.currentTarget.blur();
-                      }
-                    }
-                  }}
-                  type="search"
-                  placeholder="Find in workspace"
-                  aria-label="Find in workspace"
-                />
-                {searchExpanded && workspace.userState.searchQuery ? (
+                <div className={`search-control workspace-find-control${searchExpanded ? " expanded" : ""}`}>
                   <button
-                    className="workspace-find-clear"
+                    className="workspace-find-trigger"
                     type="button"
-                    aria-label="Clear workspace search"
-                    onClick={() => {
-                      setSearchQuery("");
-                      searchInputRef.current?.focus();
-                    }}
+                    aria-label="Open workspace search"
+                    onClick={() => setSearchFocused(true)}
                   >
-                    <X size={14} />
+                    <Search size={17} />
                   </button>
-                ) : null}
-                {searchExpanded && searchQuery ? (
-                  <span
-                    className={`search-match-count${searchQuery && !searchMatchCount ? " empty" : ""}`}
-                    aria-live="polite"
-                  >
-                    {searchSummary}
-                  </span>
+                  <input
+                    ref={searchInputRef}
+                    value={workspace.userState.searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        if (workspace.userState.searchQuery) {
+                          setSearchQuery("");
+                        } else {
+                          event.currentTarget.blur();
+                        }
+                        return;
+                      }
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        cycleSearchResult(event.shiftKey ? -1 : 1);
+                        return;
+                      }
+                      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                        event.preventDefault();
+                        cycleSearchResult(event.key === "ArrowDown" ? 1 : -1);
+                      }
+                    }}
+                    type="search"
+                    placeholder="Find in workspace"
+                    aria-label="Find in workspace"
+                  />
+                  {searchExpanded && workspace.userState.searchQuery ? (
+                    <button
+                      className="workspace-find-clear"
+                      type="button"
+                      aria-label="Clear workspace search"
+                      onClick={() => {
+                        setSearchQuery("");
+                        searchInputRef.current?.focus();
+                      }}
+                    >
+                      <X size={14} />
+                    </button>
+                  ) : null}
+                  {searchExpanded && searchQuery ? (
+                    <span
+                      className={`search-match-count${searchQuery && !searchMatchCount ? " empty" : ""}`}
+                      aria-live="polite"
+                    >
+                      {searchSummary}
+                    </span>
+                  ) : null}
+                </div>
+                {searchFocused && searchQuery ? (
+                  <div className="search-results-panel" role="region" aria-label="Search results">
+                    <header className="search-results-head">
+                      <span className="search-results-count" aria-live="polite">
+                        {searchResults.length
+                          ? `${searchResultIndex >= 0 ? `${searchResultIndex + 1} / ` : ""}${
+                              searchResults.length
+                            } ${plural(searchResults.length, "result")}`
+                          : "No results"}
+                      </span>
+                      <div className="search-results-cycle">
+                        <button
+                          type="button"
+                          aria-label="Previous search result"
+                          disabled={!searchResults.length}
+                          onClick={() => cycleSearchResult(-1)}
+                        >
+                          <ChevronUp size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Next search result"
+                          disabled={!searchResults.length}
+                          onClick={() => cycleSearchResult(1)}
+                        >
+                          <ChevronDown size={15} />
+                        </button>
+                      </div>
+                    </header>
+                    {searchResults.length ? (
+                      <ul className="search-results-list">
+                        {searchResults.map((result, index) => (
+                          <li key={result.key}>
+                            <button
+                              type="button"
+                              className={`search-result-row color-${result.color}${
+                                index === searchResultIndex ? " active" : ""
+                              }${result.isCompleted ? " done" : ""}`}
+                              onClick={() => {
+                                setSearchResultIndex(index);
+                                revealSearchResult(result, result.kind === "task");
+                              }}
+                            >
+                              <i aria-hidden="true" />
+                              <span className="search-result-main">
+                                <span className="search-result-title">
+                                  <HighlightText text={result.title} query={searchQuery} />
+                                </span>
+                                <span className="search-result-detail">{result.detail}</span>
+                              </span>
+                              {result.kind === "list" ? (
+                                <Layers3 size={14} aria-hidden="true" />
+                              ) : (
+                                <ChevronRight size={14} aria-hidden="true" />
+                              )}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="search-results-empty">
+                        Nothing matches &ldquo;{workspace.userState.searchQuery.trim()}&rdquo; yet.
+                      </p>
+                    )}
+                  </div>
                 ) : null}
               </div>
               <button
@@ -4189,9 +4516,12 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
               }}
             />
           ) : (
+            <>
             <section
               className="board-scroll"
               aria-label="Active tasks"
+              ref={boardScrollRef}
+              onScroll={handleBoardScroll}
               {...boardPan}
               onClick={(event) => {
                 if (event.target !== event.currentTarget) {
@@ -4265,6 +4595,23 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                 </div>
               )}
             </section>
+            {boardColumns.length > 1 && !(searchFocused && searchQuery) ? (
+              <nav className="board-pager" aria-label="Jump to list">
+                {boardColumns.map((column) => (
+                  <button
+                    key={column.list.id}
+                    type="button"
+                    className={`board-pager-dot color-${column.list.color}${
+                      column.list.id === activeListId ? " active" : ""
+                    }`}
+                    aria-label={`Go to list ${column.list.name}`}
+                    aria-current={column.list.id === activeListId ? "true" : undefined}
+                    onClick={() => switchList(column.list.id)}
+                  />
+                ))}
+              </nav>
+            ) : null}
+            </>
           )}
         </section>
 
@@ -5199,6 +5546,109 @@ function CompletedTaskRow({
   );
 }
 
+/**
+ * The details-panel scheduling instrument: two glass chips (date, time) that
+ * ignite with a live label once set and open the same HUD calendar / time grid
+ * the quick-capture composer uses, wired straight to the task's due fields.
+ */
+function DueScheduler({
+  dueDate,
+  dueTime,
+  onPatch,
+}: {
+  dueDate: string | null;
+  dueTime: string | null;
+  onPatch: (patch: Partial<StickyTask>) => void;
+}) {
+  const [openPanel, setOpenPanel] = useState<"date" | "time" | null>(null);
+  const hasSchedule = Boolean(dueDate || dueTime);
+
+  return (
+    <div className="capture-scheduler due-scheduler">
+      <div className="scheduler-chips">
+        <SchedulerChip
+          icon={<CalendarDays size={15} />}
+          label={dueDate ? captureDateLabel(dueDate) : null}
+          open={openPanel === "date"}
+          ariaLabel={dueDate ? `Due date: ${captureDateLabel(dueDate)}` : "Set a due date"}
+          onClick={() => setOpenPanel((current) => (current === "date" ? null : "date"))}
+        />
+        <SchedulerChip
+          icon={<Clock3 size={15} />}
+          label={dueTime ? captureTimeLabel(dueTime) : null}
+          open={openPanel === "time"}
+          ariaLabel={dueTime ? `Due time: ${captureTimeLabel(dueTime)}` : "Set a due time"}
+          onClick={() => setOpenPanel((current) => (current === "time" ? null : "time"))}
+        />
+        <AnimatePresence initial={false}>
+          {hasSchedule ? (
+            <motion.button
+              type="button"
+              className="due-clear-chip"
+              aria-label="Remove due date and time"
+              onClick={() => {
+                onPatch({ dueDate: null, dueTime: null });
+                setOpenPanel(null);
+              }}
+              initial={{ opacity: 0, scale: 0.6 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.6 }}
+              whileTap={{ scale: 0.88 }}
+              transition={springs.snappy}
+            >
+              <X size={13} />
+            </motion.button>
+          ) : null}
+        </AnimatePresence>
+      </div>
+      <AnimatePresence initial={false}>
+        {openPanel ? (
+          <motion.div
+            key="tray"
+            className="scheduler-tray"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={springs.drawer}
+          >
+            <AnimatePresence initial={false} mode="popLayout">
+              <motion.div
+                key={openPanel}
+                initial={{ opacity: 0, x: 16 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -16 }}
+                transition={springs.snappy}
+              >
+                {openPanel === "date" ? (
+                  <DatePanel
+                    value={dueDate ?? ""}
+                    onPick={(date) => {
+                      onPatch({ dueDate: date });
+                      setOpenPanel(null);
+                    }}
+                    onClear={() => onPatch({ dueDate: null, dueTime: null })}
+                  />
+                ) : (
+                  <TimePanel
+                    value={dueTime ?? ""}
+                    onPick={(time, done) => {
+                      onPatch({ dueDate: dueDate ?? localDateKey(), dueTime: time });
+                      if (done) {
+                        setOpenPanel(null);
+                      }
+                    }}
+                    onClear={() => onPatch({ dueTime: null })}
+                  />
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 function TaskDetailsPanel({
   task,
   lists,
@@ -5247,7 +5697,6 @@ function TaskDetailsPanel({
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [titleDraft, setTitleDraft] = useState(task?.title ?? "");
   const [detailsDraft, setDetailsDraft] = useState(task?.details ?? "");
-  const dueTimeRestrictionId = useId();
   const subtaskTitleId = useId();
   const recurrenceRestrictionId = useId();
   const subtaskRestrictionId = useId();
@@ -5367,8 +5816,6 @@ function TaskDetailsPanel({
   }
 
   const activeTask = task;
-  const dueTimeNeedsDate = !activeTask.dueDate;
-  const hasDueSchedule = Boolean(activeTask.dueDate || activeTask.dueTime);
 
   function submitSubtask(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -5455,17 +5902,6 @@ function TaskDetailsPanel({
     });
   }
 
-  function setQuickDueDate(dueDate: string | null) {
-    onSavePatch(dueDate ? { dueDate } : { dueDate: null, dueTime: null });
-  }
-
-  function setQuickDueTime(dueTime: string | null) {
-    onSavePatch({
-      dueDate: activeTask.dueDate ?? localDateKey(),
-      dueTime,
-    });
-  }
-
   return (
     <aside className="details-panel" aria-label="Task details">
       <motion.div
@@ -5535,37 +5971,15 @@ function TaskDetailsPanel({
           <div className="mini-section-title">
             <CalendarDays size={16} />
             Due
-            {task.dueDate ? <strong>{humanDue(task)}</strong> : <strong>No date</strong>}
           </div>
-          <div className="due-chip-row" aria-label="Quick due dates">
-            {QUICK_DUE_OPTIONS.map((option) => {
-              const dueDate = localDateKey(option.offsetDays);
-              const active = task.dueDate === dueDate;
-
-              return (
-                <button
-                  key={option.label}
-                  type="button"
-                  className={active ? "active" : ""}
-                  aria-pressed={active}
-                  onClick={() => setQuickDueDate(dueDate)}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              className={!task.dueDate ? "active" : ""}
-              aria-pressed={!task.dueDate}
-              onClick={() => setQuickDueDate(null)}
-            >
-              No date
-            </button>
-          </div>
-          <div className="due-controls">
+          <DueScheduler dueDate={task.dueDate} dueTime={task.dueTime} onPatch={onSavePatch} />
+          {/* Visually-hidden exact-entry backing for the glass picker: keeps
+              arbitrary/far-future dates typeable and assistive tech well fed. */}
+          <div className="due-exact">
             <input
               type="date"
+              aria-label="Due date"
+              tabIndex={-1}
               value={task.dueDate ?? ""}
               onChange={(event) =>
                 onSavePatch(
@@ -5574,54 +5988,14 @@ function TaskDetailsPanel({
                     : { dueDate: null, dueTime: null },
                 )
               }
-              aria-label="Due date"
             />
             <input
               type="time"
+              aria-label="Due time"
+              tabIndex={-1}
               value={task.dueTime ?? ""}
               onChange={(event) => onSavePatch({ dueTime: event.target.value || null })}
-              aria-label="Due time"
-              disabled={dueTimeNeedsDate}
-              aria-describedby={dueTimeNeedsDate ? dueTimeRestrictionId : undefined}
             />
-            <button
-              type="button"
-              onClick={() => onSavePatch({ dueDate: null, dueTime: null })}
-              disabled={!hasDueSchedule}
-              aria-label="Remove due date and time"
-            >
-              Remove
-            </button>
-          </div>
-          {dueTimeNeedsDate ? (
-            <p className="helper-copy" id={dueTimeRestrictionId}>
-              Choose a due date before adding a time.
-            </p>
-          ) : null}
-          <div className="due-chip-row time-chip-row" aria-label="Quick due times">
-            {QUICK_TIME_OPTIONS.map((option) => {
-              const active = task.dueTime === option.value;
-
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  className={active ? "active" : ""}
-                  aria-pressed={active}
-                  onClick={() => setQuickDueTime(option.value)}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              className={task.dueDate && !task.dueTime ? "active" : ""}
-              aria-pressed={Boolean(task.dueDate && !task.dueTime)}
-              onClick={() => setQuickDueTime(null)}
-            >
-              Any time
-            </button>
           </div>
         </section>
 
