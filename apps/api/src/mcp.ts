@@ -48,6 +48,25 @@ function nextDate(date: string) {
   return value.toISOString().slice(0, 10);
 }
 
+export function moveListId(
+  listIds: string[],
+  listId: string,
+  relativeToListId: string,
+  position: "before" | "after",
+): string[] {
+  if (listId === relativeToListId) {
+    throw new StickyDomainError("validation_error", "Choose two different Sticky lists.", 422);
+  }
+  if (!listIds.includes(listId) || !listIds.includes(relativeToListId)) {
+    throw new StickyDomainError("not_found", "One of those Sticky lists was not found on the active board.", 404);
+  }
+
+  const reordered = listIds.filter((id) => id !== listId);
+  const targetIndex = reordered.indexOf(relativeToListId);
+  reordered.splice(targetIndex + (position === "after" ? 1 : 0), 0, listId);
+  return reordered;
+}
+
 function zonedMidnight(date: string, timeZone: string) {
   const target = Date.parse(`${date}T00:00:00Z`);
   const formatter = new Intl.DateTimeFormat("en-US", {
@@ -233,6 +252,28 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
   server.registerTool("create_list", { description: "Create a Sticky list.", inputSchema: z.object({ name: z.string().trim().min(1).max(80), color: z.enum(["sun", "coral", "mint", "sky", "violet", "ink"]).default("sun") }) },
     async (input) => mutationResult("create_list", input, async (current) => ({ list: await getRuntime().repository.createList(current, input) })));
 
+  server.registerTool("move_list", {
+    description: "Move one active Sticky list immediately before or after another active Sticky list. Use position=before for requests such as move Jobs to the left of Internships. This changes Sticky only and never reorders Google Tasks lists.",
+    inputSchema: z.object({
+      listId: id.describe("Sticky list to move. Resolve it with list_lists first."),
+      relativeToListId: id.describe("Sticky list that the moved list should sit beside."),
+      position: z.enum(["before", "after"]).describe("before means immediately left; after means immediately right."),
+    }),
+  }, async (input) => mutationResult("move_list", input, async (current) => {
+    const lists = await getRuntime().repository.listLists(current);
+    const listIds = moveListId(lists.map((list) => list.id), input.listId, input.relativeToListId, input.position);
+    return { lists: await getRuntime().repository.reorderLists(current, listIds) };
+  }));
+
+  server.registerTool("reorder_lists", {
+    description: "Set the complete left-to-right order of all active Sticky lists. Pass every active list id exactly once in the desired order. This changes Sticky only and never reorders Google Tasks lists.",
+    inputSchema: z.object({
+      listIds: z.array(id).min(1).max(200).describe("Every active Sticky list id, in exact left-to-right order. Read list_lists first."),
+    }),
+  }, async (input) => mutationResult("reorder_lists", input, async (current) => ({
+    lists: await getRuntime().repository.reorderLists(current, input.listIds),
+  })));
+
   server.registerTool("create_task", { description: "Create a task in a Sticky list.", inputSchema: z.object({ listId: id, title: z.string().trim().min(1).max(180), details: z.string().max(20_000).default(""), dueDate: z.iso.date().nullable().default(null), dueTime: z.string().nullable().default(null), timezone: z.string().default("America/Chicago") }) },
     async (input) => mutationResult("create_task", input, async (current) => ({ task: await getRuntime().repository.createTask(current, { ...input, color: "sun" }) })));
 
@@ -326,7 +367,7 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
   server.registerTool("delete_task", { description: "Permanently delete a task. Requires explicit confirmation.", inputSchema: z.object({ taskId: id, confirmation: destructive }), annotations: { destructiveHint: true } },
     async (input) => { const current = actor(); destructiveConfirmationSchema.parse(input.confirmation); requireDestructiveConfirmation(current, input.confirmation, ["delete", input.taskId]); return mutationResult("delete_task", input, async () => { await getRuntime().repository.deleteTask(current, input.taskId); return { deleted: true, taskId: input.taskId }; }); });
 
-  server.registerTool("delete_list", { description: "Permanently delete a list and its tasks. Requires explicit confirmation.", inputSchema: z.object({ listId: id, confirmation: destructive }), annotations: { destructiveHint: true } },
+  server.registerTool("delete_list", { description: "Permanently delete one Sticky list and every Sticky task, completed task, and subtask inside it. Read list_lists first. The user must explicitly request deletion; put the word delete and the exact Sticky list id in confirmation.summary. This never deletes a Google Tasks list, even when a Sticky task title mentions Google.", inputSchema: z.object({ listId: id, confirmation: destructive }), annotations: { destructiveHint: true } },
     async (input) => { const current = actor(); requireDestructiveConfirmation(current, input.confirmation, ["delete", input.listId]); return mutationResult("delete_list", input, async () => { await getRuntime().repository.deleteList(current, input.listId); return { deleted: true, listId: input.listId }; }); });
 
   server.registerTool("delete_calendar_event", { description: "Permanently delete a Sticky calendar event. Requires explicit confirmation.", inputSchema: z.object({ eventId: id, confirmation: destructive }), annotations: { destructiveHint: true } },
@@ -367,10 +408,10 @@ export function createMcpApp() {
   app.all("/", async (c) => {
     const isPoke = actor().actorId.startsWith("poke:");
     const server = new McpServer(
-      { name: isPoke ? "Sticky Focused Workspace" : "Sticky", version: "1.1.0" },
+      { name: isPoke ? "Sticky Focused Workspace" : "Sticky", version: "1.2.0" },
       {
         instructions: isPoke
-          ? "Sticky is the user's canonical focused task and planning system. Use this server only for Sticky tasks, Sticky Calendar, reminders, and the guarded one-time Google Tasks-to-Sticky transfer tools. Use Poke's own Google integration for routine Google Tasks and Google Calendar reads or changes. Google and Sticky are separate systems: never sync, mirror, or import them automatically. A transfer must start with preview_google_tasks_to_sticky and must receive a new explicit user confirmation before the matching copy or move tool. Moving also requires explicit approval to delete Google originals after Sticky verifies every copy. Tasks and calendar events are distinct: due dates are deadlines while events reserve time. Read the relevant Sticky record before changing it and request explicit confirmation before destructive actions."
+          ? "Sticky is the user's canonical focused task and planning system. Use this server only for Sticky tasks, Sticky Calendar, reminders, and the guarded one-time Google Tasks-to-Sticky transfer tools. Finish every requested part of a compound Sticky request in order and report each result. You can create Sticky lists, move or fully reorder them, archive them, and explicitly delete them with their contents; do not claim those tools are unavailable when they are present. For left/right list requests, read list_lists and use move_list. A title such as 'Google test' inside a Sticky list is still Sticky data and does not make the list a Google Tasks list. Use Poke's own Google integration for routine Google Tasks and Google Calendar reads or changes. Google and Sticky are separate systems: never sync, mirror, or import them automatically. A transfer must start with preview_google_tasks_to_sticky and must receive a new explicit user confirmation before the matching copy or move tool. Moving also requires explicit approval to delete Google originals after Sticky verifies every copy. Tasks and calendar events are distinct: due dates are deadlines while events reserve time. Read the relevant Sticky record before changing it. When the user explicitly asks to delete a named Sticky item in the current message, that request can supply the confirmation summary required by the matching destructive tool; never infer destructive approval."
           : "Sticky is the user's canonical focused task and planning system. This server exposes separate Sticky and live Google tools plus a guarded one-time Google Tasks-to-Sticky transfer. Never sync, import, mirror, or copy between the systems automatically. A transfer must start with preview_google_tasks_to_sticky and receive a new explicit user confirmation before the matching copy or move tool. Use Sticky tools for Sticky data and google-prefixed tools for Google data. Tasks and calendar events are distinct: due dates are deadlines while events reserve time. Read the relevant source before changing it and request explicit confirmation before destructive actions.",
       },
     );

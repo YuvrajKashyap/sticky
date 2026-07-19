@@ -93,6 +93,27 @@ export class StickyRepository {
     await this.writeActivity(activity(actor, "list.deleted", undefined, undefined, { deletedListId: id }));
   }
 
+  async reorderLists(actor: ActorContext, listIds: string[]): Promise<ListDto[]> {
+    const currentLists = await this.listLists(actor);
+    const currentIds = new Set(currentLists.map((list) => list.id));
+    const requestedIds = new Set(listIds);
+    if (listIds.length !== currentIds.size || requestedIds.size !== currentIds.size || listIds.some((id) => !currentIds.has(id))) {
+      throw new StickyDomainError(
+        "validation_error",
+        "List order must include every active Sticky list exactly once.",
+        422,
+      );
+    }
+
+    const { error } = await this.db.rpc("reorder_lists", {
+      p_list_ids: listIds,
+      p_request_user_id: actor.userId,
+    });
+    throwQuery(error, "Sticky could not reorder those lists.");
+    await this.writeActivity(activity(actor, "lists.reordered", undefined, undefined, { listIds }));
+    return this.listLists(actor);
+  }
+
   async getList(actor: ActorContext, id: string): Promise<ListDto> {
     const { data, error } = await this.db.from("lists").select("*").eq("id", id).eq("user_id", actor.userId).maybeSingle();
     throwQuery(error);

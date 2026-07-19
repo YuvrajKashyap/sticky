@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { createMcpApp, resolveMcpIdempotencyKey } from "./mcp";
+import { createMcpApp, moveListId, resolveMcpIdempotencyKey } from "./mcp";
 import { hashCredential, setRuntimeForTests } from "./runtime";
 import { pushOutboxEvent } from "./services/google";
 
@@ -48,6 +48,10 @@ describe("Sticky MCP source isolation", () => {
     const body = await response.json() as { result: { tools: Array<{ name: string; description: string; inputSchema: { required?: string[] } }> } };
     const tools = new Map(body.result.tools.map((tool) => [tool.name, tool]));
     expect(tools.has("list_tasks")).toBe(true);
+    expect(tools.has("move_list")).toBe(true);
+    expect(tools.has("reorder_lists")).toBe(true);
+    expect(tools.get("delete_list")?.description).toContain("every Sticky task");
+    expect(tools.get("delete_list")?.description).toContain("never deletes a Google Tasks list");
     expect(tools.has("create_calendar_event")).toBe(true);
     expect(tools.get("list_google_tasks")?.description).toContain("without copying them into Sticky");
     expect(tools.get("create_google_task")?.description).toContain("never creates a Sticky task");
@@ -84,6 +88,9 @@ describe("Sticky MCP source isolation", () => {
     const tools = new Map(body.result.tools.map((tool) => [tool.name, tool]));
     expect(tools.has("list_tasks")).toBe(true);
     expect(tools.has("create_task")).toBe(true);
+    expect(tools.has("move_list")).toBe(true);
+    expect(tools.has("reorder_lists")).toBe(true);
+    expect(tools.has("delete_list")).toBe(true);
     expect(tools.has("list_calendar_events")).toBe(true);
     expect(tools.has("preview_google_tasks_to_sticky")).toBe(true);
     expect(tools.has("copy_google_tasks_to_sticky")).toBe(true);
@@ -127,6 +134,18 @@ describe("Sticky MCP source isolation", () => {
       "4d1cc3fa-546d-4618-8c6f-2191f29e0fc9",
       "http-request-2",
     )).toBe("poke-retry-42");
+  });
+
+  it("moves a Sticky list immediately before or after another list", () => {
+    const original = ["jobs", "internships", "next-three", "software"];
+    expect(moveListId(original, "jobs", "internships", "before")).toEqual(original);
+    expect(moveListId(original, "jobs", "internships", "after")).toEqual(["internships", "jobs", "next-three", "software"]);
+    expect(moveListId(original, "software", "internships", "before")).toEqual(["jobs", "software", "internships", "next-three"]);
+  });
+
+  it("rejects ambiguous or unknown Sticky list moves", () => {
+    expect(() => moveListId(["jobs", "internships"], "jobs", "jobs", "before")).toThrow("different Sticky lists");
+    expect(() => moveListId(["jobs", "internships"], "missing", "jobs", "before")).toThrow("not found");
   });
 
   it("keeps the legacy Google mirror pipeline inert by default", async () => {
