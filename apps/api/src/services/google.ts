@@ -265,7 +265,13 @@ export async function updateGoogleTask(actor: ActorContext, input: {
 export async function deleteGoogleTask(actor: ActorContext, taskListId: string, taskId: string) {
   const account = await getGoogleAccount(actor.userId);
   const tasksApi = await googleTasksForAccount(account);
-  await tasksApi.tasks.delete({ tasklist: taskListId, task: taskId });
+  try {
+    await tasksApi.tasks.delete({ tasklist: taskListId, task: taskId });
+  } catch (error) {
+    // A repeated move, or deleting a parent after its child, can make an
+    // already-removed Google task return 404/410. Treat that as success.
+    if (![404, 410].includes(googleErrorStatus(error) ?? 0)) throw error;
+  }
   return { deleted: true, taskListId, taskId };
 }
 

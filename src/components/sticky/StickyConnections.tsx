@@ -133,7 +133,7 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
   const googleAccount = integrations.data?.integrations.find((item) => ["google_workspace", "google_tasks"].includes(item.provider) && item.status !== "revoked");
   const googleConfigured = Boolean(integrations.data?.capabilities.googleTasks && integrations.data?.capabilities.googleCalendar);
   const pokeConnectUrl = pokeConnection
-    ? `https://poke.com/integrations/new?name=Sticky&url=${encodeURIComponent(pokeConnection.mcpUrl)}&apiKey=${encodeURIComponent(pokeConnection.token)}`
+    ? `https://poke.com/integrations/new?name=${encodeURIComponent("Sticky Focused Workspace")}&url=${encodeURIComponent(pokeConnection.mcpUrl)}&apiKey=${encodeURIComponent(pokeConnection.token)}`
     : null;
 
   return (
@@ -146,13 +146,13 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
 
         <div className="connection-row">
           <span className="connection-icon poke"><Send size={20} /></span>
-          <div className="connection-copy"><strong>Poke</strong><small>{pokeConnected ? "Connected to separate Sticky and Google tools" : pokeCredential ? "Connection key created" : "Use Sticky and Google independently by message"}</small></div>
+          <div className="connection-copy"><strong>Poke</strong><small>{pokeConnected ? "Sticky focused tools connected · Google stays direct in Poke" : pokeCredential ? "Connection key created" : "Connect Sticky here and Google directly in Poke"}</small></div>
           {pokeCredential ? <button type="button" className="connection-icon-button" onClick={() => disconnectPoke.mutate(pokeCredential.id)} aria-label="Disconnect Poke"><Unplug size={16} /></button> : null}
         </div>
         {!pokeCredential ? <div className="connection-inline-form"><button type="button" className="connection-primary" disabled={createPokeCredential.isPending} onClick={() => createPokeCredential.mutate()}><KeyRound size={15} />{createPokeCredential.isPending ? "Creating..." : "Create private connection"}</button></div> : null}
         {pokeConnection ? (
           <div className="connection-setup">
-            <p>Use this once to add Sticky to Poke. The key will not be shown again.</p>
+            <p>Use this once to add Sticky Focused Workspace to Poke. Connect Google separately in Poke for normal Google work; this adds Sticky plus the confirmed bulk-transfer bridge. The key will not be shown again.</p>
             <div className="connection-token"><code>{pokeConnection.token}</code><button type="button" onClick={() => void navigator.clipboard.writeText(pokeConnection.token)} aria-label="Copy Poke connection key"><Copy size={15} /></button></div>
             <div className="connection-setup-actions">
               <button type="button" className="connection-secondary" onClick={() => void navigator.clipboard.writeText(pokeConnection.mcpUrl)}><Copy size={15} />Copy server URL</button>
@@ -181,7 +181,7 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
 
         <div className="connection-row">
           <span className="connection-icon push"><CalendarSync size={20} /></span>
-          <div className="connection-copy"><strong>Google Workspace</strong><small>{googleAccount ? `${googleAccount.provider_email || "Connected"} · live assistant access · never imported` : googleConfigured ? "Connect as a separate Tasks and Calendar source" : "OAuth keys need to be added in Vercel"}</small></div>
+          <div className="connection-copy"><strong>Google Workspace</strong><small>{googleAccount ? `${googleAccount.provider_email || "Connected"} · guarded transfers and custom agents · never auto-imported` : googleConfigured ? "Connect for guarded transfers and non-Poke agents" : "OAuth keys need to be added in Vercel"}</small></div>
           {googleAccount ? <button type="button" className="connection-icon-button" onClick={() => disconnectGoogle.mutate()} aria-label="Disconnect Google"><Unplug size={16} /></button> : null}
         </div>
         {!googleAccount ? <div className="connection-inline-form"><button type="button" className="connection-primary" disabled={!googleConfigured || connectGoogle.isPending} onClick={() => connectGoogle.mutate()}><ExternalLink size={15} />{connectGoogle.isPending ? "Opening…" : "Connect Google"}</button></div> : null}

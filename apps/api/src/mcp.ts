@@ -23,6 +23,7 @@ import {
   updateGoogleTask,
   updateGoogleTaskList,
 } from "./services/google";
+import { executeGoogleTaskTransfer, previewGoogleTaskTransfer } from "./services/google-task-transfer";
 import { outboxWorkflow } from "./workflows/outbox";
 import { reminderWorkflow } from "./workflows/reminder";
 
@@ -125,7 +126,7 @@ async function scheduleReminderWorkflow(reminder: { id: string; remindAt: string
   return run.runId;
 }
 
-function registerTools(server: McpServer) {
+function registerTools(server: McpServer, options: { includeDirectGoogle: boolean }) {
   const id = z.uuid();
   const version = z.int().positive();
   const destructive = z.object({ confirmed: z.literal(true), summary: z.string().min(5).max(240) });
@@ -172,17 +173,62 @@ function registerTools(server: McpServer) {
       return result({ date, timezone, tasks: tasks.filter((task) => task.dueDate === date), events });
     });
 
-  server.registerTool("list_google_task_lists", { description: "List the user's live Google Tasks lists. Google data stays separate from Sticky and is never imported by this tool.", inputSchema: z.object({}), annotations: { readOnlyHint: true } },
-    async () => { const current = actor(); requireScope(current, "tasks:read"); return result({ lists: await listGoogleTaskLists(current), source: "google_tasks" }); });
+  if (options.includeDirectGoogle) {
+    server.registerTool("list_google_task_lists", { description: "List the user's live Google Tasks lists. Google data stays separate from Sticky and is never imported by this tool.", inputSchema: z.object({}), annotations: { readOnlyHint: true } },
+      async () => { const current = actor(); requireScope(current, "tasks:read"); return result({ lists: await listGoogleTaskLists(current), source: "google_tasks" }); });
 
-  server.registerTool("list_google_tasks", { description: "List tasks directly from one Google Tasks list without copying them into Sticky.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), includeCompleted: z.boolean().default(false), includeHidden: z.boolean().default(false) }), annotations: { readOnlyHint: true } },
-    async (input) => { const current = actor(); requireScope(current, "tasks:read"); return result({ tasks: await listGoogleTasks(current, input), source: "google_tasks" }); });
+    server.registerTool("list_google_tasks", { description: "List tasks directly from one Google Tasks list without copying them into Sticky.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), includeCompleted: z.boolean().default(false), includeHidden: z.boolean().default(false) }), annotations: { readOnlyHint: true } },
+      async (input) => { const current = actor(); requireScope(current, "tasks:read"); return result({ tasks: await listGoogleTasks(current, input), source: "google_tasks" }); });
 
-  server.registerTool("list_google_calendars", { description: "List the user's live Google calendars without copying them into Sticky Calendar.", inputSchema: z.object({}), annotations: { readOnlyHint: true } },
-    async () => { const current = actor(); requireScope(current, "calendar:read"); return result({ calendars: await listGoogleCalendars(current), source: "google_calendar" }); });
+    server.registerTool("list_google_calendars", { description: "List the user's live Google calendars without copying them into Sticky Calendar.", inputSchema: z.object({}), annotations: { readOnlyHint: true } },
+      async () => { const current = actor(); requireScope(current, "calendar:read"); return result({ calendars: await listGoogleCalendars(current), source: "google_calendar" }); });
 
-  server.registerTool("list_google_calendar_events", { description: "List live Google Calendar events in a time range. This reads Google directly and does not create Sticky Calendar events.", inputSchema: z.object({ calendarId: z.string().min(1).max(1_000), from: z.iso.datetime({ offset: true }), to: z.iso.datetime({ offset: true }), query: z.string().trim().max(500).optional() }), annotations: { readOnlyHint: true } },
-    async (input) => { const current = actor(); requireScope(current, "calendar:read"); return result({ events: await listGoogleCalendarEvents(current, input), source: "google_calendar" }); });
+    server.registerTool("list_google_calendar_events", { description: "List live Google Calendar events in a time range. This reads Google directly and does not create Sticky Calendar events.", inputSchema: z.object({ calendarId: z.string().min(1).max(1_000), from: z.iso.datetime({ offset: true }), to: z.iso.datetime({ offset: true }), query: z.string().trim().max(500).optional() }), annotations: { readOnlyHint: true } },
+      async (input) => { const current = actor(); requireScope(current, "calendar:read"); return result({ events: await listGoogleCalendarEvents(current, input), source: "google_calendar" }); });
+  }
+
+  server.registerTool("preview_google_tasks_to_sticky", {
+    description: "Preview one specific Google Tasks list -> one Sticky list transfer. This reads both sides, copies nothing, and returns the exact confirmation needed for the separate copy or move tool. Never use it for routine Google work or automatic sync.",
+    inputSchema: z.object({
+      googleTaskList: z.string().trim().min(1).max(1_000).describe("Exact Google Tasks list name or id."),
+      stickyList: z.string().trim().min(1).max(80).describe("Exact Sticky list name or id."),
+      mode: z.enum(["copy", "move"]).default("copy"),
+      includeCompleted: z.boolean().default(false),
+      includeHidden: z.boolean().default(false),
+    }),
+    annotations: { readOnlyHint: true },
+  }, async (input) => {
+    const current = actor();
+    requireScope(current, "tasks:read");
+    return result(await previewGoogleTaskTransfer(current, input));
+  });
+
+  const confirmedTransfer = z.object({
+    googleTaskListId: z.string().trim().min(1).max(1_000),
+    stickyListId: id,
+    includeCompleted: z.boolean().default(false),
+    includeHidden: z.boolean().default(false),
+    expectedTaskCount: z.int().min(1).max(500),
+    sourceFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    acknowledgedSeparateSystems: z.literal(true),
+    confirmedAfterPreview: z.literal(true),
+    confirmationPhrase: z.string().trim().min(10).max(240),
+  });
+
+  server.registerTool("copy_google_tasks_to_sticky", {
+    description: "After preview_google_tasks_to_sticky and a new explicit user confirmation, copy that exact Google list snapshot into the chosen Sticky list once. Repeats are deduplicated. Google originals remain and no sync is enabled.",
+    inputSchema: confirmedTransfer,
+  }, async (input) => mutationResult("copy_google_tasks_to_sticky", input, async (current) => executeGoogleTaskTransfer(current, { ...input, mode: "copy" })));
+
+  server.registerTool("move_google_tasks_to_sticky", {
+    description: "After preview_google_tasks_to_sticky and explicit user approval to delete the Google originals, copy and verify every task in Sticky first, then delete the originals from Google. No sync is enabled.",
+    inputSchema: confirmedTransfer.extend({ confirmedDeleteGoogleOriginals: z.literal(true) }),
+    annotations: { destructiveHint: true },
+  }, async (input) => {
+    const current = actor();
+    requireScope(current, "tasks:destructive");
+    return mutationResult("move_google_tasks_to_sticky", input, async () => executeGoogleTaskTransfer(current, { ...input, mode: "move" }));
+  });
 
   server.registerTool("create_list", { description: "Create a Sticky list.", inputSchema: z.object({ name: z.string().trim().min(1).max(80), color: z.enum(["sun", "coral", "mint", "sky", "violet", "ink"]).default("sun") }) },
     async (input) => mutationResult("create_list", input, async (current) => ({ list: await getRuntime().repository.createList(current, input) })));
@@ -190,29 +236,31 @@ function registerTools(server: McpServer) {
   server.registerTool("create_task", { description: "Create a task in a Sticky list.", inputSchema: z.object({ listId: id, title: z.string().trim().min(1).max(180), details: z.string().max(20_000).default(""), dueDate: z.iso.date().nullable().default(null), dueTime: z.string().nullable().default(null), timezone: z.string().default("America/Chicago") }) },
     async (input) => mutationResult("create_task", input, async (current) => ({ task: await getRuntime().repository.createTask(current, { ...input, color: "sun" }) })));
 
-  server.registerTool("create_google_task", { description: "Create a task directly in Google Tasks. This never creates a Sticky task.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), title: z.string().trim().min(1).max(1_000), notes: z.string().max(20_000).default(""), dueDate: z.iso.date().nullable().default(null), parentId: z.string().min(1).max(1_000).optional(), previousId: z.string().min(1).max(1_000).optional() }) },
-    async (input) => externalMutationResult("create_google_task", input, async (current) => ({ task: await createGoogleTask(current, input), source: "google_tasks" }), "tasks:write"));
+  if (options.includeDirectGoogle) {
+    server.registerTool("create_google_task", { description: "Create a task directly in Google Tasks. This never creates a Sticky task.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), title: z.string().trim().min(1).max(1_000), notes: z.string().max(20_000).default(""), dueDate: z.iso.date().nullable().default(null), parentId: z.string().min(1).max(1_000).optional(), previousId: z.string().min(1).max(1_000).optional() }) },
+      async (input) => externalMutationResult("create_google_task", input, async (current) => ({ task: await createGoogleTask(current, input), source: "google_tasks" }), "tasks:write"));
 
-  server.registerTool("create_google_task_list", { description: "Create a list directly in Google Tasks. This never creates a Sticky list.", inputSchema: z.object({ title: z.string().trim().min(1).max(1_000) }) },
-    async ({ title }) => externalMutationResult("create_google_task_list", { title }, async (current) => ({ list: await createGoogleTaskList(current, title), source: "google_tasks" }), "tasks:write"));
+    server.registerTool("create_google_task_list", { description: "Create a list directly in Google Tasks. This never creates a Sticky list.", inputSchema: z.object({ title: z.string().trim().min(1).max(1_000) }) },
+      async ({ title }) => externalMutationResult("create_google_task_list", { title }, async (current) => ({ list: await createGoogleTaskList(current, title), source: "google_tasks" }), "tasks:write"));
 
-  server.registerTool("update_google_task_list", { description: "Rename a list directly in Google Tasks. This never changes a Sticky list.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), title: z.string().trim().min(1).max(1_000) }) },
-    async (input) => externalMutationResult("update_google_task_list", input, async (current) => ({ list: await updateGoogleTaskList(current, input.taskListId, input.title), source: "google_tasks" }), "tasks:write"));
+    server.registerTool("update_google_task_list", { description: "Rename a list directly in Google Tasks. This never changes a Sticky list.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), title: z.string().trim().min(1).max(1_000) }) },
+      async (input) => externalMutationResult("update_google_task_list", input, async (current) => ({ list: await updateGoogleTaskList(current, input.taskListId, input.title), source: "google_tasks" }), "tasks:write"));
 
-  server.registerTool("update_google_task", { description: "Update or complete a task directly in Google Tasks. This never changes a Sticky task.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), taskId: z.string().min(1).max(1_000), title: z.string().trim().min(1).max(1_000).optional(), notes: z.string().max(20_000).optional(), dueDate: z.iso.date().nullable().optional(), completed: z.boolean().optional() }) },
-    async (input) => externalMutationResult("update_google_task", input, async (current) => ({ task: await updateGoogleTask(current, input), source: "google_tasks" }), "tasks:write"));
+    server.registerTool("update_google_task", { description: "Update or complete a task directly in Google Tasks. This never changes a Sticky task.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), taskId: z.string().min(1).max(1_000), title: z.string().trim().min(1).max(1_000).optional(), notes: z.string().max(20_000).optional(), dueDate: z.iso.date().nullable().optional(), completed: z.boolean().optional() }) },
+      async (input) => externalMutationResult("update_google_task", input, async (current) => ({ task: await updateGoogleTask(current, input), source: "google_tasks" }), "tasks:write"));
 
-  server.registerTool("complete_google_task", { description: "Mark one live Google Task complete. This never changes or creates a Sticky task.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), taskId: z.string().min(1).max(1_000) }) },
-    async (input) => externalMutationResult("complete_google_task", input, async (current) => ({ task: await updateGoogleTask(current, { ...input, completed: true }), source: "google_tasks" }), "tasks:write"));
+    server.registerTool("complete_google_task", { description: "Mark one live Google Task complete. This never changes or creates a Sticky task.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), taskId: z.string().min(1).max(1_000) }) },
+      async (input) => externalMutationResult("complete_google_task", input, async (current) => ({ task: await updateGoogleTask(current, { ...input, completed: true }), source: "google_tasks" }), "tasks:write"));
 
-  server.registerTool("restore_google_task", { description: "Restore one completed Google Task to active. This never changes or creates a Sticky task.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), taskId: z.string().min(1).max(1_000) }) },
-    async (input) => externalMutationResult("restore_google_task", input, async (current) => ({ task: await updateGoogleTask(current, { ...input, completed: false }), source: "google_tasks" }), "tasks:write"));
+    server.registerTool("restore_google_task", { description: "Restore one completed Google Task to active. This never changes or creates a Sticky task.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), taskId: z.string().min(1).max(1_000) }) },
+      async (input) => externalMutationResult("restore_google_task", input, async (current) => ({ task: await updateGoogleTask(current, { ...input, completed: false }), source: "google_tasks" }), "tasks:write"));
 
-  server.registerTool("delete_google_task", { description: "Permanently delete a Google task. Requires explicit confirmation and never touches Sticky.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), taskId: z.string().min(1).max(1_000), confirmation: destructive }), annotations: { destructiveHint: true } },
-    async (input) => { const current = actor(); requireDestructiveConfirmation(current, input.confirmation, ["delete", "Google", input.taskId]); return externalMutationResult("delete_google_task", input, async () => deleteGoogleTask(current, input.taskListId, input.taskId), "tasks:write"); });
+    server.registerTool("delete_google_task", { description: "Permanently delete a Google task. Requires explicit confirmation and never touches Sticky.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), taskId: z.string().min(1).max(1_000), confirmation: destructive }), annotations: { destructiveHint: true } },
+      async (input) => { const current = actor(); requireDestructiveConfirmation(current, input.confirmation, ["delete", "Google", input.taskId]); return externalMutationResult("delete_google_task", input, async () => deleteGoogleTask(current, input.taskListId, input.taskId), "tasks:write"); });
 
-  server.registerTool("delete_google_task_list", { description: "Permanently delete a Google Tasks list and its tasks. Requires explicit confirmation and never touches Sticky.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), confirmation: destructive }), annotations: { destructiveHint: true } },
-    async (input) => { const current = actor(); requireDestructiveConfirmation(current, input.confirmation, ["delete", "Google", "list", input.taskListId]); return externalMutationResult("delete_google_task_list", input, async () => deleteGoogleTaskList(current, input.taskListId), "tasks:write"); });
+    server.registerTool("delete_google_task_list", { description: "Permanently delete a Google Tasks list and its tasks. Requires explicit confirmation and never touches Sticky.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), confirmation: destructive }), annotations: { destructiveHint: true } },
+      async (input) => { const current = actor(); requireDestructiveConfirmation(current, input.confirmation, ["delete", "Google", "list", input.taskListId]); return externalMutationResult("delete_google_task_list", input, async () => deleteGoogleTaskList(current, input.taskListId), "tasks:write"); });
+  }
 
   server.registerTool("create_calendar_event", { description: "Create a timed or all-day event in Sticky Calendar.", inputSchema: z.discriminatedUnion("allDay", [
     z.object({ calendarId: id.optional(), taskId: id.nullable().default(null), title: z.string().trim().min(1).max(240), details: z.string().max(20_000).default(""), location: z.string().max(500).default(""), allDay: z.literal(false), startAt: z.iso.datetime({ offset: true }), endAt: z.iso.datetime({ offset: true }), timezone: z.string().default("America/Chicago") }),
@@ -220,14 +268,16 @@ function registerTools(server: McpServer) {
   ]) },
     async (input) => mutationResult("create_calendar_event", input, async (current) => ({ event: await getRuntime().repository.createCalendarEvent(current, { ...input, recurrence: [], status: "confirmed", transparency: "opaque", color: null }) }), "calendar:write"));
 
-  server.registerTool("create_google_calendar_event", { description: "Create an event directly in Google Calendar. This never creates a Sticky Calendar event.", inputSchema: googleCalendarEventInput },
-    async (input) => externalMutationResult("create_google_calendar_event", input, async (current) => ({ event: await createGoogleCalendarEvent(current, input), source: "google_calendar" }), "calendar:write"));
+  if (options.includeDirectGoogle) {
+    server.registerTool("create_google_calendar_event", { description: "Create an event directly in Google Calendar. This never creates a Sticky Calendar event.", inputSchema: googleCalendarEventInput },
+      async (input) => externalMutationResult("create_google_calendar_event", input, async (current) => ({ event: await createGoogleCalendarEvent(current, input), source: "google_calendar" }), "calendar:write"));
 
-  server.registerTool("update_google_calendar_event", { description: "Update an event directly in Google Calendar. Supply its current schedule; Sticky Calendar remains unchanged.", inputSchema: googleCalendarEventUpdateInput },
-    async (input) => externalMutationResult("update_google_calendar_event", input, async (current) => ({ event: await updateGoogleCalendarEvent(current, input), source: "google_calendar" }), "calendar:write"));
+    server.registerTool("update_google_calendar_event", { description: "Update an event directly in Google Calendar. Supply its current schedule; Sticky Calendar remains unchanged.", inputSchema: googleCalendarEventUpdateInput },
+      async (input) => externalMutationResult("update_google_calendar_event", input, async (current) => ({ event: await updateGoogleCalendarEvent(current, input), source: "google_calendar" }), "calendar:write"));
 
-  server.registerTool("delete_google_calendar_event", { description: "Permanently delete a Google Calendar event. Requires explicit confirmation and never touches Sticky Calendar.", inputSchema: z.object({ calendarId: z.string().min(1).max(1_000), eventId: z.string().min(1).max(1_000), confirmation: destructive }), annotations: { destructiveHint: true } },
-    async (input) => { const current = actor(); requireDestructiveConfirmation(current, input.confirmation, ["delete", "Google", input.eventId], "calendar:destructive"); return externalMutationResult("delete_google_calendar_event", input, async () => deleteGoogleCalendarEvent(current, input.calendarId, input.eventId), "calendar:write"); });
+    server.registerTool("delete_google_calendar_event", { description: "Permanently delete a Google Calendar event. Requires explicit confirmation and never touches Sticky Calendar.", inputSchema: z.object({ calendarId: z.string().min(1).max(1_000), eventId: z.string().min(1).max(1_000), confirmation: destructive }), annotations: { destructiveHint: true } },
+      async (input) => { const current = actor(); requireDestructiveConfirmation(current, input.confirmation, ["delete", "Google", input.eventId], "calendar:destructive"); return externalMutationResult("delete_google_calendar_event", input, async () => deleteGoogleCalendarEvent(current, input.calendarId, input.eventId), "calendar:write"); });
+  }
 
   server.registerTool("update_calendar_event", { description: "Update a Sticky calendar event using its current record version.", inputSchema: z.object({ eventId: id, version, title: z.string().trim().min(1).max(240).optional(), details: z.string().max(20_000).optional(), location: z.string().max(500).optional(), allDay: z.boolean().optional(), startAt: z.iso.datetime({ offset: true }).nullable().optional(), endAt: z.iso.datetime({ offset: true }).nullable().optional(), startDate: z.iso.date().nullable().optional(), endDate: z.iso.date().nullable().optional(), timezone: z.string().optional(), status: z.enum(["confirmed", "tentative", "cancelled"]).optional() }) },
     async ({ eventId, ...input }) => mutationResult("update_calendar_event", { eventId, ...input }, async (current) => ({ event: await getRuntime().repository.updateCalendarEvent(current, eventId, input) }), "calendar:write"));
@@ -315,13 +365,16 @@ export function createMcpApp() {
   });
   app.get("/", (c) => c.body(null, 405, { Allow: "POST" }));
   app.all("/", async (c) => {
+    const isPoke = actor().actorId.startsWith("poke:");
     const server = new McpServer(
-      { name: "Sticky", version: "1.0.0" },
+      { name: isPoke ? "Sticky Focused Workspace" : "Sticky", version: "1.1.0" },
       {
-        instructions: "Sticky is the user's canonical focused task and planning system. The server also exposes live Google Tasks and Google Calendar tools. Sticky and Google are separate systems: never sync, import, mirror, or copy between them unless the user explicitly asks for a specific transfer and names the destination. Use Sticky tools for Sticky data and google-prefixed tools for Google data. If a requested task source is ambiguous, identify it from the prior read result or ask whether the user means Sticky or Google. Prefer complete_task for Sticky completion and complete_google_task for Google completion. Tasks and calendar events are distinct: due dates describe deadlines, while events reserve time. Read the relevant source before changing it and request explicit confirmation before destructive actions.",
+        instructions: isPoke
+          ? "Sticky is the user's canonical focused task and planning system. Use this server only for Sticky tasks, Sticky Calendar, reminders, and the guarded one-time Google Tasks-to-Sticky transfer tools. Use Poke's own Google integration for routine Google Tasks and Google Calendar reads or changes. Google and Sticky are separate systems: never sync, mirror, or import them automatically. A transfer must start with preview_google_tasks_to_sticky and must receive a new explicit user confirmation before the matching copy or move tool. Moving also requires explicit approval to delete Google originals after Sticky verifies every copy. Tasks and calendar events are distinct: due dates are deadlines while events reserve time. Read the relevant Sticky record before changing it and request explicit confirmation before destructive actions."
+          : "Sticky is the user's canonical focused task and planning system. This server exposes separate Sticky and live Google tools plus a guarded one-time Google Tasks-to-Sticky transfer. Never sync, import, mirror, or copy between the systems automatically. A transfer must start with preview_google_tasks_to_sticky and receive a new explicit user confirmation before the matching copy or move tool. Use Sticky tools for Sticky data and google-prefixed tools for Google data. Tasks and calendar events are distinct: due dates are deadlines while events reserve time. Read the relevant source before changing it and request explicit confirmation before destructive actions.",
       },
     );
-    registerTools(server);
+    registerTools(server, { includeDirectGoogle: !isPoke });
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,

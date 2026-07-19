@@ -57,8 +57,42 @@ describe("Sticky MCP source isolation", () => {
     expect(tools.get("create_google_calendar_event")?.description).toContain("never creates a Sticky Calendar event");
     expect(tools.get("complete_google_task")?.description).toContain("never changes or creates a Sticky task");
     expect(tools.has("restore_google_task")).toBe(true);
+    expect(tools.has("preview_google_tasks_to_sticky")).toBe(true);
+    expect(tools.has("copy_google_tasks_to_sticky")).toBe(true);
+    expect(tools.has("move_google_tasks_to_sticky")).toBe(true);
     expect(tools.get("complete_task")?.inputSchema.required).toContain("taskId");
     expect(tools.get("complete_task")?.inputSchema.required).not.toContain("version");
+  });
+
+  it("gives Poke Sticky tools and the guarded bridge without overlapping routine Google tools", async () => {
+    const { credentialId, secret, pokeUserId } = setAgentCredentialRuntime("poke");
+
+    const response = await createMcpApp().request("http://localhost/", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer stk_${credentialId}_${secret}`,
+        Accept: "application/json, text/event-stream",
+        "Content-Type": "application/json",
+        Host: "localhost",
+        "X-Poke-User-Id": pokeUserId,
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = await response.json() as { result: { tools: Array<{ name: string; description: string }> } };
+    const tools = new Map(body.result.tools.map((tool) => [tool.name, tool]));
+    expect(tools.has("list_tasks")).toBe(true);
+    expect(tools.has("create_task")).toBe(true);
+    expect(tools.has("list_calendar_events")).toBe(true);
+    expect(tools.has("preview_google_tasks_to_sticky")).toBe(true);
+    expect(tools.has("copy_google_tasks_to_sticky")).toBe(true);
+    expect(tools.has("move_google_tasks_to_sticky")).toBe(true);
+    expect(tools.has("list_google_tasks")).toBe(false);
+    expect(tools.has("create_google_task")).toBe(false);
+    expect(tools.has("complete_google_task")).toBe(false);
+    expect(tools.has("list_google_calendar_events")).toBe(false);
+    expect(tools.has("create_google_calendar_event")).toBe(false);
   });
 
   it("returns 405 for the optional GET stream instead of timing out on Vercel", async () => {
