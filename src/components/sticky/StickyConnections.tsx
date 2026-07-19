@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, BellRing, Bird, CalendarSync, Check, Copy, ExternalLink, KeyRound, Send, Smartphone, Unplug, X } from "lucide-react";
+import { AlertTriangle, BellRing, Bird, CalendarSync, Check, Copy, ExternalLink, KeyRound, RefreshCw, Send, Smartphone, Unplug, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { createStickyPlatformClient } from "@/lib/sticky/api-client";
 
@@ -135,6 +135,10 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
   const pokeConnectUrl = pokeConnection
     ? `https://poke.com/integrations/new?name=${encodeURIComponent("Sticky Focused Workspace")}&url=${encodeURIComponent(pokeConnection.mcpUrl)}&apiKey=${encodeURIComponent(pokeConnection.token)}`
     : null;
+  const openPokeRefresh = () => {
+    window.open("https://poke.com/integrations", "_blank", "noopener,noreferrer");
+    setStatusMessage("Poke integrations opened. Choose Sticky Focused Workspace, then click Refresh Connection to resync its tools.");
+  };
 
   return (
     <div className="dialog-backdrop connections-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
@@ -147,7 +151,14 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
         <div className="connection-row">
           <span className="connection-icon poke"><Send size={20} /></span>
           <div className="connection-copy"><strong>Poke</strong><small>{pokeConnected ? "Sticky focused tools connected · Google stays direct in Poke" : pokeCredential ? "Connection key created" : "Connect Sticky here and Google directly in Poke"}</small></div>
-          {pokeCredential ? <button type="button" className="connection-icon-button" onClick={() => disconnectPoke.mutate(pokeCredential.id)} aria-label="Disconnect Poke"><Unplug size={16} /></button> : null}
+          {pokeCredential ? (
+            <div className="connection-row-actions">
+              <button type="button" className="connection-refresh-button" onClick={openPokeRefresh} aria-label="Refresh Poke connection in Poke">
+                <RefreshCw size={15} />Refresh
+              </button>
+              <button type="button" className="connection-icon-button" onClick={() => disconnectPoke.mutate(pokeCredential.id)} aria-label="Disconnect Poke"><Unplug size={16} /></button>
+            </div>
+          ) : null}
         </div>
         {!pokeCredential ? <div className="connection-inline-form"><button type="button" className="connection-primary" disabled={createPokeCredential.isPending} onClick={() => createPokeCredential.mutate()}><KeyRound size={15} />{createPokeCredential.isPending ? "Creating..." : "Create private connection"}</button></div> : null}
         {pokeConnection ? (
