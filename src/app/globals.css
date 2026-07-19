@@ -5595,6 +5595,11 @@ mark.find-highlight {
   background: var(--sky-tint);
 }
 
+.connection-icon.agenda {
+  color: var(--mint-ink);
+  background: var(--mint-tint);
+}
+
 .connection-copy {
   flex: 1;
   min-width: 0;
@@ -5745,6 +5750,114 @@ mark.find-highlight {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.daily-agenda-row {
+  box-shadow: var(--shadow-paper), inset 3px 0 0 color-mix(in srgb, var(--mint-ink) 68%, transparent);
+}
+
+.daily-agenda-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  padding: 7px 10px;
+  border-radius: 999px;
+  color: var(--ink-soft);
+  background: var(--surface-sunken);
+  box-shadow: inset 0 0 0 1.5px var(--line);
+  font-size: 0.74rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.daily-agenda-toggle input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent-deep);
+}
+
+.daily-agenda-settings {
+  background: color-mix(in srgb, var(--mint-tint) 62%, var(--surface-raised));
+}
+
+.daily-agenda-settings > p {
+  color: var(--ink-soft);
+  line-height: 1.45;
+}
+
+.daily-agenda-fields {
+  display: grid;
+  grid-template-columns: minmax(112px, 0.72fr) minmax(0, 1.5fr);
+  gap: 10px;
+}
+
+.daily-agenda-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.daily-agenda-fields label > span {
+  color: var(--ink-faint);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.daily-agenda-fields input,
+.daily-agenda-fields select {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  color: var(--ink);
+  background: var(--surface-raised);
+  box-shadow: inset 0 0 0 1.5px var(--line-strong);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.daily-agenda-fields input:focus,
+.daily-agenda-fields select:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent-bright) 52%, transparent);
+  outline-offset: 1px;
+}
+
+.daily-agenda-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--danger-ink) !important;
+}
+
+.daily-agenda-warning svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+@media (max-width: 520px) {
+  .daily-agenda-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .daily-agenda-row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .daily-agenda-row .connection-copy {
+    min-width: calc(100% - 54px);
+  }
+
+  .daily-agenda-toggle {
+    margin-left: 54px;
+  }
 }
 
 .connection-status {

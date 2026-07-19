@@ -1,0 +1,284 @@
+import { nextDailyAgendaOccurrence } from "@sticky/domain";
+import { getRuntime } from "../runtime";
+import { pokeNotificationInstruction, sendPokeMessage } from "./notifications";
+
+const MAX_ITEMS_PER_SECTION = 50;
+const DELIVERY_STALE_AFTER_MS = 5 * 60_000;
+
+type AgendaTask = {
+  id: string;
+  listId: string;
+  listName: string;
+  title: string;
+  dueTime: string | null;
+  sortOrder: number;
+};
+
+type AgendaSubtask = {
+  id: string;
+  listId: string;
+  listName: string;
+  parentTaskId: string;
+  parentTitle: string;
+  title: string;
+  sortOrder: number;
+};
+
+export type DailyAgendaItems = {
+  dueTasks: AgendaTask[];
+  dueSubtasks: AgendaSubtask[];
+  undatedTasks: AgendaTask[];
+};
+
+type DailyAgendaDeliveryInput = {
+  date: string;
+  timezone: string;
+  scheduleVersion?: number;
+  test?: boolean;
+  deliveryKey?: string;
+};
+
+function cleanLine(value: unknown) {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function dateLabel(date: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${date}T12:00:00Z`));
+}
+
+function timeLabel(time: string | null) {
+  if (!time) return "";
+  const [hour, minute] = time.split(":").map(Number);
+  const suffix = hour >= 12 ? "PM" : "AM";
+  const displayHour = hour % 12 || 12;
+  return ` at ${displayHour}:${String(minute).padStart(2, "0")} ${suffix}`;
+}
+
+function compareAgendaItems(
+  first: { listId: string; sortOrder: number; title: string },
+  second: { listId: string; sortOrder: number; title: string },
+  listOrder: Map<string, number>,
+) {
+  return (listOrder.get(first.listId) ?? 0) - (listOrder.get(second.listId) ?? 0)
+    || first.sortOrder - second.sortOrder
+    || first.title.localeCompare(second.title);
+}
+
+export function buildDailyAgendaMessage(
+  date: string,
+  timezone: string,
+  items: DailyAgendaItems,
+  options: { test?: boolean; siteUrl?: string } = {},
+) {
+  const dueCount = items.dueTasks.length + items.dueSubtasks.length;
+  const lines = [
+    options.test ? "TEST - Sticky daily agenda" : "Good morning - here is your Sticky agenda",
+    `${dateLabel(date)} · ${timezone}`,
+    "",
+    `DUE TODAY (${dueCount})`,
+  ];
+
+  if (dueCount === 0) {
+    lines.push("Nothing is due today.");
+  } else {
+    const dueLines = [
+      ...items.dueTasks.map((task) => `• ${cleanLine(task.listName)} - ${cleanLine(task.title)}${timeLabel(task.dueTime)}`),
+      ...items.dueSubtasks.map((subtask) => `• ${cleanLine(subtask.listName)} - ${cleanLine(subtask.parentTitle)}\n  ↳ ${cleanLine(subtask.title)}`),
+    ];
+    lines.push(...dueLines.slice(0, MAX_ITEMS_PER_SECTION));
+    if (dueLines.length > MAX_ITEMS_PER_SECTION) {
+      lines.push(`+ ${dueLines.length - MAX_ITEMS_PER_SECTION} more due item${dueLines.length - MAX_ITEMS_PER_SECTION === 1 ? "" : "s"} in Sticky`);
+    }
+  }
+
+  lines.push("", `ACTIVE WITHOUT A DUE DATE (${items.undatedTasks.length})`);
+  if (items.undatedTasks.length === 0) {
+    lines.push("No active undated tasks.");
+  } else {
+    let currentList = "";
+    for (const task of items.undatedTasks.slice(0, MAX_ITEMS_PER_SECTION)) {
+      if (task.listName !== currentList) {
+        currentList = task.listName;
+        lines.push(cleanLine(currentList));
+      }
+      lines.push(`• ${cleanLine(task.title)}`);
+    }
+    if (items.undatedTasks.length > MAX_ITEMS_PER_SECTION) {
+      lines.push(`+ ${items.undatedTasks.length - MAX_ITEMS_PER_SECTION} more active task${items.undatedTasks.length - MAX_ITEMS_PER_SECTION === 1 ? "" : "s"} in Sticky`);
+    }
+  }
+
+  lines.push("", `Open Sticky: ${(options.siteUrl ?? process.env.NEXT_PUBLIC_SITE_URL ?? "https://sticky.yuvrajkashyap.com").replace(/\/$/, "")}/?view=today`);
+  return lines.join("\n");
+}
+
+export async function loadDailyAgendaItems(userId: string, date: string): Promise<DailyAgendaItems> {
+  const { db } = getRuntime();
+  const [listsResult, tasksResult, subtasksResult] = await Promise.all([
+    db.from("lists").select("id,name,sort_order").eq("user_id", userId).is("archived_at", null).order("sort_order").limit(5000),
+    db.from("tasks").select("id,list_id,title,due_date,due_time,sort_order,is_completed").eq("user_id", userId).eq("is_completed", false).limit(5000),
+    db.from("subtasks").select("id,task_id,title,due_date,sort_order,is_completed").eq("user_id", userId).eq("is_completed", false).eq("due_date", date).limit(5000),
+  ]);
+  const firstError = listsResult.error ?? tasksResult.error ?? subtasksResult.error;
+  if (firstError) throw firstError;
+
+  const lists = listsResult.data ?? [];
+  const listNames = new Map(lists.map((list) => [String(list.id), cleanLine(list.name)]));
+  const listOrder = new Map(lists.map((list, index) => [String(list.id), Number(list.sort_order ?? index)]));
+  const activeTasks = (tasksResult.data ?? []).filter((task) => listNames.has(String(task.list_id)));
+  const tasksById = new Map(activeTasks.map((task) => [String(task.id), task]));
+  const mapTask = (task: Record<string, unknown>): AgendaTask => ({
+    id: String(task.id),
+    listId: String(task.list_id),
+    listName: listNames.get(String(task.list_id)) ?? "List",
+    title: cleanLine(task.title),
+    dueTime: task.due_time ? String(task.due_time) : null,
+    sortOrder: Number(task.sort_order ?? 0),
+  });
+
+  const dueTasks = activeTasks
+    .filter((task) => task.due_date === date)
+    .map((task) => mapTask(task))
+    .sort((first, second) => compareAgendaItems(first, second, listOrder));
+  const undatedTasks = activeTasks
+    .filter((task) => task.due_date == null)
+    .map((task) => mapTask(task))
+    .sort((first, second) => compareAgendaItems(first, second, listOrder));
+  const dueSubtasks = (subtasksResult.data ?? []).flatMap((subtask) => {
+    const parent = tasksById.get(String(subtask.task_id));
+    if (!parent) return [];
+    return [{
+      id: String(subtask.id),
+      listId: String(parent.list_id),
+      listName: listNames.get(String(parent.list_id)) ?? "List",
+      parentTaskId: String(parent.id),
+      parentTitle: cleanLine(parent.title),
+      title: cleanLine(subtask.title),
+      sortOrder: Number(subtask.sort_order ?? 0),
+    }];
+  }).sort((first, second) => compareAgendaItems(first, second, listOrder));
+
+  return { dueTasks, dueSubtasks, undatedTasks };
+}
+
+async function claimDelivery(userId: string, deliveryKey: string) {
+  const { db } = getRuntime();
+  const attempt = await db.from("notification_deliveries").insert({
+    user_id: userId,
+    reminder_id: null,
+    channel: "poke",
+    delivery_key: deliveryKey,
+    status: "delivering",
+    attempt_count: 1,
+  }).select("id,status,attempt_count,updated_at").maybeSingle();
+
+  if (!attempt.error && attempt.data) return { delivery: attempt.data, skipped: null };
+  if (attempt.error?.code !== "23505") throw attempt.error ?? new Error("Could not start daily agenda delivery.");
+
+  const existingResult = await db.from("notification_deliveries")
+    .select("id,status,attempt_count,updated_at")
+    .eq("delivery_key", deliveryKey)
+    .maybeSingle();
+  if (existingResult.error) throw existingResult.error;
+  const existing = existingResult.data;
+  if (!existing) throw new Error("Sticky could not recover the daily agenda delivery record.");
+  if (existing.status === "delivered") return { delivery: null, skipped: "already_delivered" };
+  const updatedAt = Date.parse(String(existing.updated_at));
+  if (existing.status === "delivering" && Number.isFinite(updatedAt) && Date.now() - updatedAt < DELIVERY_STALE_AFTER_MS) {
+    return { delivery: null, skipped: "already_delivering" };
+  }
+
+  const claim = await db.from("notification_deliveries").update({
+    status: "delivering",
+    attempt_count: Number(existing.attempt_count ?? 0) + 1,
+    error_code: null,
+    error_message: null,
+  }).eq("id", existing.id).eq("updated_at", existing.updated_at)
+    .select("id,status,attempt_count,updated_at").maybeSingle();
+  if (claim.error) throw claim.error;
+  return claim.data ? { delivery: claim.data, skipped: null } : { delivery: null, skipped: "claimed_elsewhere" };
+}
+
+export async function deliverDailyAgenda(userId: string, input: DailyAgendaDeliveryInput) {
+  const { db } = getRuntime();
+  if (input.scheduleVersion !== undefined) {
+    const preferences = await db.from("user_preferences")
+      .select("daily_agenda_enabled,daily_agenda_schedule_version")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (preferences.error) throw preferences.error;
+    if (!preferences.data?.daily_agenda_enabled || Number(preferences.data.daily_agenda_schedule_version) !== input.scheduleVersion) {
+      return { skipped: "obsolete_schedule", continue: false };
+    }
+  }
+
+  const deliveryKey = input.deliveryKey ?? `daily-agenda:${userId}:${input.date}:poke`;
+  const claim = await claimDelivery(userId, deliveryKey);
+  if (!claim.delivery) return { skipped: claim.skipped, continue: true };
+
+  try {
+    const items = await loadDailyAgendaItems(userId, input.date);
+    const message = buildDailyAgendaMessage(input.date, input.timezone, items, { test: input.test });
+    const receipt = await sendPokeMessage(pokeNotificationInstruction(message), userId, {
+      delivery_key: deliveryKey,
+      daily_agenda_date: input.date,
+      daily_agenda_test: Boolean(input.test),
+    });
+    const counts = {
+      dueTasks: items.dueTasks.length,
+      dueSubtasks: items.dueSubtasks.length,
+      undatedTasks: items.undatedTasks.length,
+    };
+    const { error: deliveryError } = await db.from("notification_deliveries").update({
+      status: "delivered",
+      delivered_at: new Date().toISOString(),
+      provider_receipt: { ...receipt, counts, date: input.date, test: Boolean(input.test) },
+      error_code: null,
+      error_message: null,
+    }).eq("id", claim.delivery.id);
+    if (deliveryError) throw deliveryError;
+
+    if (!input.test && input.scheduleVersion !== undefined) {
+      const { error: preferencesError } = await db.from("user_preferences").update({
+        daily_agenda_last_sent_on: input.date,
+        daily_agenda_last_sent_at: new Date().toISOString(),
+      }).eq("user_id", userId).eq("daily_agenda_schedule_version", input.scheduleVersion);
+      if (preferencesError) throw preferencesError;
+    }
+    return { delivered: true, counts, continue: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Daily agenda delivery failed";
+    await db.from("notification_deliveries").update({
+      status: "failed",
+      error_message: message,
+      error_code: "daily_agenda_delivery_failed",
+    }).eq("id", claim.delivery.id);
+    throw error;
+  }
+}
+
+export function dailyAgendaScheduleFromRow(
+  row: Record<string, unknown>,
+  now = new Date(),
+) {
+  const time = String(row.daily_agenda_time ?? "06:00").slice(0, 5);
+  const timezone = String(row.daily_agenda_timezone ?? "America/Chicago");
+  const next = nextDailyAgendaOccurrence(now, time, timezone);
+  return {
+    enabled: Boolean(row.daily_agenda_enabled),
+    time,
+    timezone,
+    scheduleVersion: Number(row.daily_agenda_schedule_version ?? 1),
+    workflowRunId: row.daily_agenda_workflow_run_id ? String(row.daily_agenda_workflow_run_id) : null,
+    lastSentOn: row.daily_agenda_last_sent_on ? String(row.daily_agenda_last_sent_on) : null,
+    lastSentAt: row.daily_agenda_last_sent_at ? String(row.daily_agenda_last_sent_at) : null,
+    nextRunDate: next.localDate,
+    nextRunAt: next.instant.toISOString(),
+  };
+}

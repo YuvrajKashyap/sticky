@@ -42,7 +42,13 @@ export async function deliverReminder(reminderId: string, expectedRemindAt: stri
     if (error || !delivery) throw error ?? new Error("Could not start reminder delivery.");
     try {
       const receipt = channel === "poke"
-        ? await sendPoke(String(task.title), reminder.user_id, String(task.id))
+        ? await sendPokeMessage(
+            pokeNotificationInstruction(
+              `Reminder: ${String(task.title)}\n\nOpen Sticky: ${process.env.NEXT_PUBLIC_SITE_URL}/?task=${String(task.id)}`,
+            ),
+            reminder.user_id,
+            { task_id: String(task.id), delivery_key: deliveryKey },
+          )
         : await sendPush(reminder.user_id, task);
       await db.from("notification_deliveries").update({ status: "delivered", delivered_at: new Date().toISOString(), provider_receipt: receipt })
         .eq("id", delivery.id);
@@ -60,7 +66,22 @@ export async function deliverReminder(reminderId: string, expectedRemindAt: stri
   return { results };
 }
 
-async function sendPoke(title: string, userId: string, taskId: string) {
+export function pokeNotificationInstruction(notification: string) {
+  return [
+    "This is an automated notification from my Sticky task app.",
+    "Send me the notification below now as your reply. Preserve its sections and wording. Do not modify any tasks or ask a follow-up question.",
+    "",
+    "--- Sticky notification ---",
+    notification,
+    "--- End notification ---",
+  ].join("\n");
+}
+
+export async function sendPokeMessage(
+  message: string,
+  userId: string,
+  metadata: Record<string, unknown> = {},
+) {
   const token = process.env.POKE_API_KEY;
   if (!token) throw new Error("Poke delivery is not configured.");
   const { data: credential, error } = await getRuntime().db.from("api_credentials")
@@ -74,13 +95,18 @@ async function sendPoke(title: string, userId: string, taskId: string) {
     .maybeSingle();
   if (error) throw error;
   if (!credential?.provider_user_id) throw new Error("Poke is not linked to this Sticky account.");
+  const deliveryKey = typeof metadata.delivery_key === "string" ? metadata.delivery_key : null;
   const response = await fetch("https://poke.com/api/v1/inbound/api-message", {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(deliveryKey ? { "Idempotency-Key": deliveryKey } : {}),
+    },
     body: JSON.stringify({
-      message: `Reminder: ${title}\n\nOpen Sticky: ${process.env.NEXT_PUBLIC_SITE_URL}/?task=${taskId}`,
+      message,
       source: "sticky",
-      task_id: taskId,
+      ...metadata,
     }),
   });
   if (!response.ok) throw new Error(`Poke returned ${response.status}.`);

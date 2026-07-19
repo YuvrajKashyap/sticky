@@ -18,7 +18,7 @@ import {
   updateSubtaskSchema,
   timeBlockTaskSchema,
 } from "@sticky/contracts";
-import { requireDestructiveConfirmation, requireScope, resolveReminderTime, StickyDomainError } from "@sticky/domain";
+import { isValidTimeZone, requireDestructiveConfirmation, requireScope, resolveReminderTime, StickyDomainError, zonedDateKeyAt } from "@sticky/domain";
 import { start } from "workflow/api";
 import { Hono, type Context } from "hono";
 import { secureHeaders } from "hono/secure-headers";
@@ -28,6 +28,7 @@ import { idempotent } from "./idempotency";
 import { agentRateLimit, authenticate, enforceOrigin, requestContext, type ApiVariables } from "./middleware";
 import { createMcpApp } from "./mcp";
 import { createCredentialToken, getRuntime } from "./runtime";
+import { dailyAgendaScheduleFromRow, deliverDailyAgenda } from "./services/daily-agenda";
 import {
   finishGoogleConnection,
   googleAuthorizationUrl,
@@ -40,6 +41,7 @@ import {
 import { deliverReminder } from "./services/notifications";
 import { reminderWorkflow } from "./workflows/reminder";
 import { outboxWorkflow } from "./workflows/outbox";
+import { dailyAgendaWorkflow } from "./workflows/daily-agenda";
 
 type Env = { Variables: ApiVariables };
 
@@ -48,6 +50,14 @@ const googleBulkSyncConfirmationSchema = z.object({
   confirmedBulkCopy: z.literal(true),
   confirmationPhrase: z.literal("SYNC GOOGLE INTO STICKY"),
 });
+
+const dailyAgendaSettingsSchema = z.object({
+  enabled: z.boolean(),
+  time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  timezone: z.string().trim().min(1).max(100).refine(isValidTimeZone, "Use a valid IANA timezone."),
+});
+
+const dailyAgendaPreferenceColumns = "daily_agenda_enabled,daily_agenda_time,daily_agenda_timezone,daily_agenda_schedule_version,daily_agenda_workflow_run_id,daily_agenda_last_sent_on,daily_agenda_last_sent_at";
 
 function success<T>(c: Context<Env>, data: T, replayed = false) {
   return c.json<ApiSuccess<T>>({
@@ -72,6 +82,48 @@ function requireCron(c: Context) {
   const secret = process.env.CRON_SECRET;
   const supplied = c.req.header("authorization")?.replace(/^Bearer\s+/i, "");
   if (!secret || supplied !== secret) throw new StickyDomainError("unauthorized", "Invalid worker credential.", 401);
+}
+
+async function pokeDailyAgendaState(userId: string) {
+  const { data, error } = await getRuntime().db.from("api_credentials")
+    .select("provider_user_id")
+    .eq("user_id", userId)
+    .eq("provider", "poke")
+    .is("revoked_at", null)
+    .not("provider_user_id", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return {
+    pokeLinked: Boolean(data?.provider_user_id),
+    pokeDeliveryConfigured: Boolean(process.env.POKE_API_KEY),
+  };
+}
+
+async function ensureDailyAgendaWorkflow(userId: string, row: Record<string, unknown>) {
+  if (!row.daily_agenda_enabled || row.daily_agenda_workflow_run_id || process.env.WORKFLOW_ENABLED === "false") {
+    return row;
+  }
+  const scheduleVersion = Number(row.daily_agenda_schedule_version ?? 1);
+  const run = await start(dailyAgendaWorkflow, [userId, scheduleVersion]);
+  const { data, error } = await getRuntime().db.from("user_preferences")
+    .update({ daily_agenda_workflow_run_id: run.runId })
+    .eq("user_id", userId)
+    .eq("daily_agenda_schedule_version", scheduleVersion)
+    .is("daily_agenda_workflow_run_id", null)
+    .select(dailyAgendaPreferenceColumns)
+    .maybeSingle();
+  if (error) throw error;
+  return data ?? row;
+}
+
+async function dailyAgendaSettingsResponse(userId: string, row: Record<string, unknown>) {
+  const [connection, schedule] = await Promise.all([
+    pokeDailyAgendaState(userId),
+    Promise.resolve(dailyAgendaScheduleFromRow(row)),
+  ]);
+  return { ...schedule, ...connection };
 }
 
 const webCommandColumns: Record<string, ReadonlySet<string>> = {
@@ -456,6 +508,66 @@ const app = new Hono<Env>();
         await getRuntime().db.from("task_reminders").update({ workflow_run_id: workflowRunId }).eq("id", reminder.id);
       }
       return { reminder, workflowRunId };
+    });
+  });
+
+  app.get("/api/v1/daily-agenda", async (c) => {
+    const actor = c.get("actor"); requireScope(actor, "tasks:read");
+    const { data, error } = await getRuntime().db.from("user_preferences")
+      .select(dailyAgendaPreferenceColumns)
+      .eq("user_id", actor.userId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new StickyDomainError("not_found", "Sticky could not find your daily agenda settings.", 404);
+    const row = await ensureDailyAgendaWorkflow(actor.userId, data);
+    return success(c, await dailyAgendaSettingsResponse(actor.userId, row));
+  });
+
+  app.put("/api/v1/daily-agenda", async (c) => {
+    const actor = c.get("actor"); requireScope(actor, "tasks:write");
+    if (actor.actorType !== "human" || !actor.accessToken) {
+      throw new StickyDomainError("forbidden", "Change the daily agenda schedule from Sticky Settings.", 403);
+    }
+    const body = await parseJson(c, dailyAgendaSettingsSchema);
+    return mutate(c, body, async () => {
+      const current = await getRuntime().db.from("user_preferences")
+        .select("daily_agenda_schedule_version")
+        .eq("user_id", actor.userId)
+        .maybeSingle();
+      if (current.error) throw current.error;
+      if (!current.data) throw new StickyDomainError("not_found", "Sticky could not find your daily agenda settings.", 404);
+      const scheduleVersion = Number(current.data.daily_agenda_schedule_version ?? 1) + 1;
+      const updated = await getRuntime().db.from("user_preferences").update({
+        daily_agenda_enabled: body.enabled,
+        daily_agenda_time: `${body.time}:00`,
+        daily_agenda_timezone: body.timezone,
+        daily_agenda_schedule_version: scheduleVersion,
+        daily_agenda_workflow_run_id: null,
+      }).eq("user_id", actor.userId).select(dailyAgendaPreferenceColumns).single();
+      if (updated.error) throw updated.error;
+      const row = await ensureDailyAgendaWorkflow(actor.userId, updated.data);
+      return dailyAgendaSettingsResponse(actor.userId, row);
+    });
+  });
+
+  app.post("/api/v1/daily-agenda/test", async (c) => {
+    const actor = c.get("actor"); requireScope(actor, "tasks:write");
+    const body = await parseJson(c, z.object({}));
+    return mutate(c, body, async () => {
+      const preferences = await getRuntime().db.from("user_preferences")
+        .select(dailyAgendaPreferenceColumns)
+        .eq("user_id", actor.userId)
+        .maybeSingle();
+      if (preferences.error) throw preferences.error;
+      if (!preferences.data) throw new StickyDomainError("not_found", "Sticky could not find your daily agenda settings.", 404);
+      const schedule = dailyAgendaScheduleFromRow(preferences.data);
+      const date = zonedDateKeyAt(new Date(), schedule.timezone);
+      return deliverDailyAgenda(actor.userId, {
+        date,
+        timezone: schedule.timezone,
+        test: true,
+        deliveryKey: `daily-agenda-test:${actor.userId}:${actor.idempotencyKey ?? actor.requestId}:poke`,
+      });
     });
   });
 

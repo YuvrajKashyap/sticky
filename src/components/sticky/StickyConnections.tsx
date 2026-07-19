@@ -1,13 +1,26 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, BellRing, Bird, CalendarSync, Check, Copy, ExternalLink, KeyRound, RefreshCw, Send, Smartphone, Unplug, X } from "lucide-react";
+import { AlertTriangle, BellRing, Bird, CalendarSync, Check, Clock3, Copy, ExternalLink, KeyRound, RefreshCw, Send, Smartphone, Unplug, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { createStickyPlatformClient } from "@/lib/sticky/api-client";
 
 type Credential = { id: string; name: string; provider: string; provider_user_id: string | null; token_prefix: string; last_used_at: string | null; revoked_at: string | null };
 type McpConnection = { token: string; mcpUrl: string };
 type Integration = { id: string; provider: string; provider_email: string | null; status: string };
+type DailyAgendaSettings = {
+  enabled: boolean;
+  time: string;
+  timezone: string;
+  scheduleVersion: number;
+  workflowRunId: string | null;
+  lastSentOn: string | null;
+  lastSentAt: string | null;
+  nextRunDate: string;
+  nextRunAt: string;
+  pokeLinked: boolean;
+  pokeDeliveryConfigured: boolean;
+};
 
 const AGENT_SCOPES = ["tasks:read", "tasks:write", "tasks:destructive", "calendar:read", "calendar:write", "calendar:destructive"];
 
@@ -17,6 +30,19 @@ function urlBase64ToUint8Array(value: string) {
   return Uint8Array.from(window.atob(base64), (character) => character.charCodeAt(0));
 }
 
+function nextAgendaLabel(settings: DailyAgendaSettings | undefined) {
+  if (!settings?.enabled) return "Off";
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: settings.timezone,
+    timeZoneName: "short",
+  }).format(new Date(settings.nextRunAt));
+}
+
 export function StickyConnections({ open, onClose }: { open: boolean; onClose: () => void }) {
   const client = useMemo(() => createStickyPlatformClient(), []);
   const queryClient = useQueryClient();
@@ -24,6 +50,11 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
   const [littlebirdConnection, setLittlebirdConnection] = useState<McpConnection | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [googleSyncStep, setGoogleSyncStep] = useState<0 | 1 | 2>(0);
+  const [dailyAgendaDraft, setDailyAgendaDraft] = useState<{ enabled: boolean; time: string; timezone: string } | null>(null);
+  const timezoneOptions = useMemo(() => {
+    const supported = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
+    return [...new Set(["America/Chicago", Intl.DateTimeFormat().resolvedOptions().timeZone, ...supported].filter(Boolean))];
+  }, []);
 
   const credentials = useQuery({
     queryKey: ["credentials"],
@@ -35,6 +66,16 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
     enabled: open && Boolean(client),
     queryFn: () => client!.request<{ integrations: Integration[]; capabilities: { googleTasks: boolean; googleCalendar: boolean } }>("/api/v1/integrations"),
   });
+  const dailyAgenda = useQuery({
+    queryKey: ["daily-agenda"],
+    enabled: open && Boolean(client),
+    queryFn: () => client!.request<DailyAgendaSettings>("/api/v1/daily-agenda"),
+  });
+  const dailyAgendaValues = dailyAgendaDraft ?? {
+    enabled: dailyAgenda.data?.enabled ?? true,
+    time: dailyAgenda.data?.time ?? "06:00",
+    timezone: dailyAgenda.data?.timezone ?? "America/Chicago",
+  };
 
   const createPokeCredential = useMutation({
     mutationFn: () => client!.request<{ token: string; mcpUrl: string }>("/api/v1/credentials", {
@@ -75,6 +116,31 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
       setLittlebirdConnection(null);
       setStatusMessage("Littlebird disconnected from Sticky.");
       void queryClient.invalidateQueries({ queryKey: ["credentials"] });
+    },
+    onError: (error) => setStatusMessage(error.message),
+  });
+  const saveDailyAgenda = useMutation({
+    mutationFn: () => client!.request<DailyAgendaSettings>("/api/v1/daily-agenda", {
+      method: "PUT",
+      body: JSON.stringify(dailyAgendaValues),
+    }),
+    onSuccess: (settings) => {
+      queryClient.setQueryData(["daily-agenda"], settings);
+      setDailyAgendaDraft(null);
+      setStatusMessage(settings.enabled
+        ? `Daily Poke agenda scheduled for ${settings.time} in ${settings.timezone}.`
+        : "Daily Poke agenda turned off.");
+    },
+    onError: (error) => setStatusMessage(error.message),
+  });
+  const testDailyAgenda = useMutation({
+    mutationFn: () => client!.request<{ delivered?: boolean; counts?: { dueTasks: number; dueSubtasks: number; undatedTasks: number } }>("/api/v1/daily-agenda/test", {
+      method: "POST",
+      body: "{}",
+    }),
+    onSuccess: (result) => {
+      const due = (result.counts?.dueTasks ?? 0) + (result.counts?.dueSubtasks ?? 0);
+      setStatusMessage(`Test agenda sent to Poke with ${due} due and ${result.counts?.undatedTasks ?? 0} active undated task${result.counts?.undatedTasks === 1 ? "" : "s"}.`);
     },
     onError: (error) => setStatusMessage(error.message),
   });
@@ -171,6 +237,76 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
             </div>
           </div>
         ) : null}
+
+        <div className="connection-row daily-agenda-row">
+          <span className="connection-icon agenda"><Clock3 size={20} /></span>
+          <div className="connection-copy">
+            <strong>Daily Poke agenda</strong>
+            <small>{dailyAgenda.isLoading ? "Loading schedule…" : nextAgendaLabel(dailyAgenda.data)}</small>
+          </div>
+          <label className="daily-agenda-toggle">
+            <input
+              type="checkbox"
+              checked={dailyAgendaValues.enabled}
+              onChange={(event) => setDailyAgendaDraft({ ...dailyAgendaValues, enabled: event.target.checked })}
+              aria-label="Enable daily Poke agenda"
+            />
+            <span>{dailyAgendaValues.enabled ? "On" : "Off"}</span>
+          </label>
+        </div>
+        <div className="connection-setup daily-agenda-settings" aria-label="Daily Poke agenda settings">
+          <p>Sticky will text you through Poke with tasks and subtasks due that day, followed by active tasks without a due date.</p>
+          <div className="daily-agenda-fields">
+            <label>
+              <span>Send at</span>
+              <input
+                type="time"
+                value={dailyAgendaValues.time}
+                onChange={(event) => setDailyAgendaDraft({ ...dailyAgendaValues, time: event.target.value })}
+                aria-label="Daily agenda time"
+              />
+            </label>
+            <label>
+              <span>Time zone</span>
+              <select
+                value={dailyAgendaValues.timezone}
+                onChange={(event) => setDailyAgendaDraft({ ...dailyAgendaValues, timezone: event.target.value })}
+                aria-label="Daily agenda timezone"
+              >
+                {timezoneOptions.map((timezone) => (
+                  <option key={timezone} value={timezone}>
+                    {timezone === "America/Chicago" ? "Central Time (America/Chicago)" : timezone}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="connection-setup-actions">
+            <button
+              type="button"
+              className="connection-primary"
+              disabled={!client || !dailyAgenda.data || saveDailyAgenda.isPending || !dailyAgendaValues.time || !dailyAgendaValues.timezone}
+              onClick={() => saveDailyAgenda.mutate()}
+            >
+              <Clock3 size={15} />{saveDailyAgenda.isPending ? "Saving…" : "Save schedule"}
+            </button>
+            <button
+              type="button"
+              className="connection-secondary"
+              disabled={!client || testDailyAgenda.isPending || !dailyAgenda.data?.pokeLinked || !dailyAgenda.data?.pokeDeliveryConfigured}
+              onClick={() => testDailyAgenda.mutate()}
+            >
+              <Send size={15} />{testDailyAgenda.isPending ? "Sending…" : "Send test now"}
+            </button>
+          </div>
+          {dailyAgenda.data && !dailyAgenda.data.pokeLinked ? (
+            <p className="daily-agenda-warning"><AlertTriangle size={14} /> Connect Poke above before the daily agenda can reach your text thread.</p>
+          ) : null}
+          {dailyAgenda.data && !dailyAgenda.data.pokeDeliveryConfigured ? (
+            <p className="daily-agenda-warning"><AlertTriangle size={14} /> Poke outreach needs a Poke Kitchen API key configured in Sticky.</p>
+          ) : null}
+          {dailyAgenda.error ? <p className="daily-agenda-warning"><AlertTriangle size={14} /> {dailyAgenda.error.message}</p> : null}
+        </div>
 
         <div className="connection-row">
           <span className="connection-icon push"><Bird size={20} /></span>
