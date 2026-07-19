@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { createMcpApp, moveListId, resolveMcpIdempotencyKey } from "./mcp";
+import { createMcpApp, moveListId, moveSubtaskId, resolveMcpIdempotencyKey } from "./mcp";
 import { hashCredential, setRuntimeForTests } from "./runtime";
 import { pushOutboxEvent } from "./services/google";
 
@@ -48,6 +48,16 @@ describe("Sticky MCP source isolation", () => {
     const body = await response.json() as { result: { tools: Array<{ name: string; description: string; inputSchema: { required?: string[] } }> } };
     const tools = new Map(body.result.tools.map((tool) => [tool.name, tool]));
     expect(tools.has("list_tasks")).toBe(true);
+    expect(tools.has("list_subtasks")).toBe(true);
+    expect(tools.has("add_subtask")).toBe(true);
+    expect(tools.has("update_subtask")).toBe(true);
+    expect(tools.has("complete_subtask")).toBe(true);
+    expect(tools.has("restore_subtask")).toBe(true);
+    expect(tools.has("move_subtask")).toBe(true);
+    expect(tools.has("reorder_subtasks")).toBe(true);
+    expect(tools.has("delete_subtask")).toBe(true);
+    expect(tools.get("add_subtask")?.description).toContain("never claim the integration cannot create subtasks");
+    expect(tools.get("create_task")?.description).toContain("all of its Sticky subtasks");
     expect(tools.has("move_list")).toBe(true);
     expect(tools.has("reorder_lists")).toBe(true);
     expect(tools.get("delete_list")?.description).toContain("every Sticky task");
@@ -88,6 +98,14 @@ describe("Sticky MCP source isolation", () => {
     const tools = new Map(body.result.tools.map((tool) => [tool.name, tool]));
     expect(tools.has("list_tasks")).toBe(true);
     expect(tools.has("create_task")).toBe(true);
+    expect(tools.has("list_subtasks")).toBe(true);
+    expect(tools.has("add_subtask")).toBe(true);
+    expect(tools.has("update_subtask")).toBe(true);
+    expect(tools.has("complete_subtask")).toBe(true);
+    expect(tools.has("restore_subtask")).toBe(true);
+    expect(tools.has("move_subtask")).toBe(true);
+    expect(tools.has("reorder_subtasks")).toBe(true);
+    expect(tools.has("delete_subtask")).toBe(true);
     expect(tools.has("move_list")).toBe(true);
     expect(tools.has("reorder_lists")).toBe(true);
     expect(tools.has("delete_list")).toBe(true);
@@ -141,6 +159,21 @@ describe("Sticky MCP source isolation", () => {
     expect(moveListId(original, "jobs", "internships", "before")).toEqual(original);
     expect(moveListId(original, "jobs", "internships", "after")).toEqual(["internships", "jobs", "next-three", "software"]);
     expect(moveListId(original, "software", "internships", "before")).toEqual(["jobs", "software", "internships", "next-three"]);
+  });
+
+  it("moves a Sticky subtask immediately before or after another subtask", () => {
+    const original = ["research", "prototype", "ship", "review"];
+    expect(moveSubtaskId(original, "ship", "research", "before")).toEqual([
+      "ship", "research", "prototype", "review",
+    ]);
+    expect(moveSubtaskId(original, "research", "ship", "after")).toEqual([
+      "prototype", "ship", "research", "review",
+    ]);
+  });
+
+  it("rejects invalid Sticky subtask moves", () => {
+    expect(() => moveSubtaskId(["one", "two"], "one", "one", "before")).toThrow("different Sticky subtasks");
+    expect(() => moveSubtaskId(["one", "two"], "missing", "two", "after")).toThrow("not found under the parent task");
   });
 
   it("rejects ambiguous or unknown Sticky list moves", () => {

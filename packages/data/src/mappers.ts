@@ -1,4 +1,4 @@
-import type { CalendarDto, CalendarEventDto, ListDto, ReminderDto, TaskDto } from "@sticky/contracts";
+import type { CalendarDto, CalendarEventDto, ListDto, ReminderDto, SubtaskDto, TaskDto } from "@sticky/contracts";
 
 export type DataRow = Record<string, unknown>;
 
@@ -32,6 +32,22 @@ export function mapTaskRow(row: DataRow): TaskDto {
     completedAt: row.completed_at ? String(row.completed_at) : null,
     sortOrder: Number(row.sort_order),
     completedSortOrder: row.completed_sort_order == null ? null : Number(row.completed_sort_order),
+    version: Number(row.version ?? 1),
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+  };
+}
+
+export function mapSubtaskRow(row: DataRow): SubtaskDto {
+  return {
+    id: String(row.id),
+    userId: String(row.user_id),
+    taskId: String(row.task_id),
+    title: String(row.title),
+    dueDate: row.due_date ? String(row.due_date) : null,
+    isCompleted: Boolean(row.is_completed),
+    completedAt: row.completed_at ? String(row.completed_at) : null,
+    sortOrder: Number(row.sort_order),
     version: Number(row.version ?? 1),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),

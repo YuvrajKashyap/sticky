@@ -66,6 +66,7 @@ export function mapSubtask(row: DbSubtask): StickySubtask {
     userId: row.user_id,
     taskId: row.task_id,
     title: row.title,
+    dueDate: row.due_date,
     isCompleted: row.is_completed,
     completedAt: row.completed_at,
     sortOrder: row.sort_order,
@@ -143,6 +144,7 @@ export function subtaskToDb(subtask: Partial<StickySubtask>) {
   return {
     task_id: subtask.taskId,
     title: subtask.title,
+    due_date: subtask.dueDate,
     is_completed: subtask.isCompleted,
     completed_at: subtask.completedAt,
     sort_order: subtask.sortOrder,

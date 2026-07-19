@@ -238,9 +238,9 @@ export function createDemoWorkspaceData(): StickyWorkspaceData {
     ],
     tasks: [...reminderTasks, ...nextTasks, ...bringTasks, ...productTasks, ...financeTasks, ...booksTasks],
     subtasks: [
-      { id: "demo-subtask-sort", userId, taskId: captureTaskId, title: "Sort the loose notes", isCompleted: true, completedAt: iso(now, 16), sortOrder: 1000, createdAt: iso(now, 70), updatedAt: iso(now, 16) },
-      { id: "demo-subtask-priority", userId, taskId: captureTaskId, title: "Pull one priority to the top", isCompleted: false, completedAt: null, sortOrder: 2000, createdAt: iso(now, 65), updatedAt: iso(now, 18) },
-      { id: "demo-subtask-mobile", userId, taskId: detailsTaskId, title: "Check the mobile sheet", isCompleted: false, completedAt: null, sortOrder: 1000, createdAt: iso(now, 60), updatedAt: iso(now, 18) },
+      { id: "demo-subtask-sort", userId, taskId: captureTaskId, title: "Sort the loose notes", dueDate: null, isCompleted: true, completedAt: iso(now, 16), sortOrder: 1000, createdAt: iso(now, 70), updatedAt: iso(now, 16) },
+      { id: "demo-subtask-priority", userId, taskId: captureTaskId, title: "Pull one priority to the top", dueDate: null, isCompleted: false, completedAt: null, sortOrder: 2000, createdAt: iso(now, 65), updatedAt: iso(now, 18) },
+      { id: "demo-subtask-mobile", userId, taskId: detailsTaskId, title: "Check the mobile sheet", dueDate: null, isCompleted: false, completedAt: null, sortOrder: 1000, createdAt: iso(now, 60), updatedAt: iso(now, 18) },
     ],
     recurrenceRules: [
       {

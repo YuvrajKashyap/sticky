@@ -4016,6 +4016,10 @@ mark.find-highlight {
   gap: 2px;
 }
 
+.subtask-schedule-help {
+  margin: -2px 0 2px;
+}
+
 .subtask-row {
   display: flex;
   align-items: center;
@@ -4058,7 +4062,7 @@ mark.find-highlight {
   box-shadow: inset 0 0 0 2px var(--success);
 }
 
-.subtask-row input {
+.subtask-title {
   flex: 1;
   min-width: 0;
   border: 0;
@@ -4069,15 +4073,35 @@ mark.find-highlight {
   border-radius: 7px;
 }
 
-.subtask-row input:focus {
+.subtask-title:focus {
   outline: none;
   background: var(--surface-raised);
   box-shadow: inset 0 0 0 2px var(--accent);
 }
 
-.subtask-row input.done {
+.subtask-title.done {
   text-decoration: line-through;
   color: var(--ink-faint);
+}
+
+.subtask-date {
+  flex: none;
+  width: 126px;
+  min-width: 0;
+  border: 0;
+  border-radius: 7px;
+  padding: 5px 6px;
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.subtask-date:focus,
+.subtask-date:hover {
+  outline: none;
+  background: var(--surface-raised);
+  box-shadow: inset 0 0 0 1.5px var(--line-strong);
 }
 
 .subtask-move,

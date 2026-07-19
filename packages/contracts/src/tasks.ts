@@ -21,6 +21,20 @@ export const taskDtoSchema = z.object({
   updatedAt: z.iso.datetime(),
 });
 
+export const subtaskDtoSchema = z.object({
+  id: idSchema,
+  userId: idSchema,
+  taskId: idSchema,
+  title: z.string(),
+  dueDate: z.iso.date().nullable(),
+  isCompleted: z.boolean(),
+  completedAt: z.iso.datetime().nullable(),
+  sortOrder: z.number().int(),
+  version: versionSchema,
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+
 export const createTaskSchema = z.object({
   id: idSchema.optional(),
   listId: idSchema,
@@ -57,9 +71,24 @@ export const reorderTasksSchema = z.object({
 export const createSubtaskSchema = z.object({
   id: idSchema.optional(),
   title: z.string().trim().min(1).max(160),
+  dueDate: z.iso.date().nullable().default(null),
   sortOrder: z.number().int().min(0).optional(),
 });
 
+export const updateSubtaskSchema = z.object({
+  version: versionSchema,
+  title: z.string().trim().min(1).max(160).optional(),
+  dueDate: z.iso.date().nullable().optional(),
+});
+
+export const reorderSubtasksSchema = z.object({
+  taskId: idSchema,
+  subtaskIds: z.array(idSchema).min(1),
+});
+
 export type TaskDto = z.infer<typeof taskDtoSchema>;
+export type SubtaskDto = z.infer<typeof subtaskDtoSchema>;
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
+export type CreateSubtaskInput = z.infer<typeof createSubtaskSchema>;
+export type UpdateSubtaskInput = z.infer<typeof updateSubtaskSchema>;

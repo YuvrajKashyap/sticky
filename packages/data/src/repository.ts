@@ -6,24 +6,28 @@ import type {
   CreateCalendarEventInput,
   CreateListInput,
   CreateReminderInput,
+  CreateSubtaskInput,
   CreateTaskInput,
   ListDto,
   ReminderDto,
+  SubtaskDto,
   TaskDto,
   TimeBlockTaskInput,
   UpdateCalendarEventInput,
   UpdateListInput,
+  UpdateSubtaskInput,
   UpdateTaskInput,
 } from "@sticky/contracts";
 import { assertVersion, conflict, StickyDomainError } from "@sticky/domain";
 import type { StickySupabaseClient } from "./client";
-import { mapCalendarEventRow, mapCalendarRow, mapListRow, mapReminderRow, mapTaskRow, type DataRow } from "./mappers";
+import { mapCalendarEventRow, mapCalendarRow, mapListRow, mapReminderRow, mapSubtaskRow, mapTaskRow, type DataRow } from "./mappers";
 
 type QueryError = { code?: string; message: string; details?: string | null };
 
 function throwQuery(error: QueryError | null, fallback = "Sticky could not save that change."): void {
   if (!error) return;
   if (error.code === "23505") throw conflict("That item already exists.", { database: error.details });
+  if (error.code === "22023") throw new StickyDomainError("validation_error", error.message, 422);
   throw new StickyDomainError("internal_error", fallback, 500, { databaseCode: error.code });
 }
 
@@ -160,6 +164,30 @@ export class StickyRepository {
     return task;
   }
 
+  async createTaskWithSubtasks(
+    actor: ActorContext,
+    input: CreateTaskInput & { subtasks: Array<{ title: string; dueDate: string | null }> },
+  ): Promise<{ task: TaskDto; subtasks: SubtaskDto[] }> {
+    await this.getList(actor, input.listId);
+    const { data, error } = await this.db.rpc("create_task_with_subtasks", {
+      p_list_id: input.listId,
+      p_title: input.title,
+      p_details: input.details,
+      p_color: input.color,
+      p_due_date: input.dueDate,
+      p_due_time: input.dueTime,
+      p_timezone: input.timezone,
+      p_subtasks: input.subtasks,
+      p_request_user_id: actor.userId,
+    });
+    throwQuery(error);
+    const taskId = String(data);
+    const task = await this.getTask(actor, taskId);
+    const subtasks = await this.listSubtasks(actor, taskId, true);
+    await this.writeActivity(activity(actor, "task.created", task.id, task.listId, { subtaskCount: subtasks.length }));
+    return { task, subtasks };
+  }
+
   async updateTask(actor: ActorContext, id: string, input: UpdateTaskInput): Promise<TaskDto> {
     const current = await this.getTask(actor, id);
     assertVersion(input.version, current.version, "Task");
@@ -218,18 +246,92 @@ export class StickyRepository {
     }));
   }
 
-  async createSubtask(actor: ActorContext, taskId: string, input: { id?: string; title: string; sortOrder?: number }): Promise<DataRow> {
+  async listSubtasks(actor: ActorContext, taskId?: string, includeCompleted = true): Promise<SubtaskDto[]> {
+    let query = this.db.from("subtasks").select("*").eq("user_id", actor.userId)
+      .order("sort_order").order("created_at");
+    if (taskId) query = query.eq("task_id", taskId);
+    if (!includeCompleted) query = query.eq("is_completed", false);
+    const { data, error } = await query;
+    throwQuery(error);
+    return ((data ?? []) as DataRow[]).map(mapSubtaskRow);
+  }
+
+  async getSubtask(actor: ActorContext, id: string): Promise<SubtaskDto> {
+    const { data, error } = await this.db.from("subtasks").select("*")
+      .eq("id", id).eq("user_id", actor.userId).maybeSingle();
+    throwQuery(error);
+    if (!data) throw new StickyDomainError("not_found", "Subtask not found.", 404);
+    return mapSubtaskRow(data as DataRow);
+  }
+
+  async createSubtask(actor: ActorContext, taskId: string, input: CreateSubtaskInput): Promise<SubtaskDto> {
     await this.getTask(actor, taskId);
     const { data, error } = await this.db.from("subtasks").insert({
       id: input.id,
       user_id: actor.userId,
       task_id: taskId,
       title: input.title,
+      due_date: input.dueDate,
       sort_order: input.sortOrder ?? (await this.nextOrder("subtasks", actor.userId, taskId)),
     }).select("*").single();
     throwQuery(error);
     await this.writeActivity(activity(actor, "subtask.created", taskId, undefined, { subtaskId: (data as DataRow).id }));
-    return data as DataRow;
+    return mapSubtaskRow(data as DataRow);
+  }
+
+  async updateSubtask(actor: ActorContext, id: string, input: UpdateSubtaskInput): Promise<SubtaskDto> {
+    const current = await this.getSubtask(actor, id);
+    assertVersion(input.version, current.version, "Subtask");
+    const values: Record<string, unknown> = {};
+    if (input.title !== undefined) values.title = input.title;
+    if (input.dueDate !== undefined) values.due_date = input.dueDate;
+    if (!Object.keys(values).length) return current;
+    const { data, error } = await this.db.from("subtasks").update(values)
+      .eq("id", id).eq("user_id", actor.userId).eq("version", input.version).select("*").maybeSingle();
+    throwQuery(error);
+    if (!data) throw conflict("Subtask changed somewhere else. Refresh and try again.");
+    const subtask = mapSubtaskRow(data as DataRow);
+    await this.writeActivity(activity(actor, "subtask.updated", subtask.taskId, undefined, { subtaskId: id }));
+    return subtask;
+  }
+
+  async setSubtaskCompleted(actor: ActorContext, id: string, completed: boolean, version: number): Promise<SubtaskDto> {
+    const current = await this.getSubtask(actor, id);
+    assertVersion(version, current.version, "Subtask");
+    const { data, error } = await this.db.from("subtasks").update({
+      is_completed: completed,
+      completed_at: completed ? new Date().toISOString() : null,
+    }).eq("id", id).eq("user_id", actor.userId).eq("version", version).select("*").maybeSingle();
+    throwQuery(error);
+    if (!data) throw conflict("Subtask changed somewhere else. Refresh and try again.");
+    const subtask = mapSubtaskRow(data as DataRow);
+    await this.writeActivity(activity(actor, completed ? "subtask.completed" : "subtask.restored", subtask.taskId, undefined, { subtaskId: id }));
+    return subtask;
+  }
+
+  async reorderSubtasks(actor: ActorContext, taskId: string, subtaskIds: string[]): Promise<SubtaskDto[]> {
+    await this.getTask(actor, taskId);
+    const current = await this.listSubtasks(actor, taskId, true);
+    const currentIds = current.map((subtask) => subtask.id);
+    const requested = new Set(subtaskIds);
+    if (requested.size !== subtaskIds.length || subtaskIds.length !== currentIds.length || currentIds.some((id) => !requested.has(id))) {
+      throw new StickyDomainError("validation_error", "Pass every subtask in this task exactly once.", 422);
+    }
+    const { error } = await this.db.rpc("reorder_subtasks", {
+      p_task_id: taskId,
+      p_subtask_ids: subtaskIds,
+      p_request_user_id: actor.userId,
+    });
+    throwQuery(error);
+    await this.writeActivity(activity(actor, "subtasks.reordered", taskId, undefined, { subtaskIds }));
+    return this.listSubtasks(actor, taskId, true);
+  }
+
+  async deleteSubtask(actor: ActorContext, id: string): Promise<void> {
+    const subtask = await this.getSubtask(actor, id);
+    const { error } = await this.db.from("subtasks").delete().eq("id", id).eq("user_id", actor.userId);
+    throwQuery(error);
+    await this.writeActivity(activity(actor, "subtask.deleted", subtask.taskId, undefined, { deletedSubtaskId: id }));
   }
 
   async createReminder(actor: ActorContext, taskId: string, input: CreateReminderInput, remindAt: Date): Promise<ReminderDto> {

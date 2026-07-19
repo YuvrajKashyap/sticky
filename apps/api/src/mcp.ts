@@ -67,6 +67,25 @@ export function moveListId(
   return reordered;
 }
 
+export function moveSubtaskId(
+  subtaskIds: string[],
+  subtaskId: string,
+  relativeToSubtaskId: string,
+  position: "before" | "after",
+): string[] {
+  if (subtaskId === relativeToSubtaskId) {
+    throw new StickyDomainError("validation_error", "Choose two different Sticky subtasks.", 422);
+  }
+  if (!subtaskIds.includes(subtaskId) || !subtaskIds.includes(relativeToSubtaskId)) {
+    throw new StickyDomainError("not_found", "One of those Sticky subtasks was not found under the parent task.", 404);
+  }
+
+  const reordered = subtaskIds.filter((id) => id !== subtaskId);
+  const targetIndex = reordered.indexOf(relativeToSubtaskId);
+  reordered.splice(targetIndex + (position === "after" ? 1 : 0), 0, subtaskId);
+  return reordered;
+}
+
 function zonedMidnight(date: string, timeZone: string) {
   const target = Date.parse(`${date}T00:00:00Z`);
   const formatter = new Intl.DateTimeFormat("en-US", {
@@ -169,6 +188,9 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
 
   server.registerTool("get_task", { description: "Get one Sticky task by id.", inputSchema: z.object({ taskId: id }), annotations: { readOnlyHint: true } },
     async ({ taskId }) => { const current = actor(); requireScope(current, "tasks:read"); return result({ task: await getRuntime().repository.getTask(current, taskId) }); });
+
+  server.registerTool("list_subtasks", { description: "List the real Sticky subtasks under one task, including each subtask's own due date, completion state, order, and version. Use this before changing, completing, moving, or deleting a subtask. These are Sticky subtasks, never Google Tasks.", inputSchema: z.object({ taskId: id, includeCompleted: z.boolean().default(true) }), annotations: { readOnlyHint: true } },
+    async ({ taskId, includeCompleted }) => { const current = actor(); requireScope(current, "tasks:read"); return result({ subtasks: await getRuntime().repository.listSubtasks(current, taskId, includeCompleted) }); });
 
   server.registerTool("get_agenda", { description: "Get incomplete tasks due in an inclusive date range.", inputSchema: z.object({ from: z.iso.date(), to: z.iso.date() }), annotations: { readOnlyHint: true } },
     async ({ from, to }) => { const current = actor(); requireScope(current, "tasks:read"); const tasks = await getRuntime().repository.listTasks(current); return result({ tasks: tasks.filter((task) => task.dueDate && task.dueDate >= from && task.dueDate <= to) }); });
@@ -274,8 +296,13 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
     lists: await getRuntime().repository.reorderLists(current, input.listIds),
   })));
 
-  server.registerTool("create_task", { description: "Create a task in a Sticky list.", inputSchema: z.object({ listId: id, title: z.string().trim().min(1).max(180), details: z.string().max(20_000).default(""), dueDate: z.iso.date().nullable().default(null), dueTime: z.string().nullable().default(null), timezone: z.string().default("America/Chicago") }) },
-    async (input) => mutationResult("create_task", input, async (current) => ({ task: await getRuntime().repository.createTask(current, { ...input, color: "sun" }) })));
+  server.registerTool("create_task", { description: "Create a Sticky task and, when requested, all of its Sticky subtasks in the same call. Always include the subtasks array when the user's request names a task plus subtasks; do not create only the parent or send the user to Google Tasks. Every subtask can have its own dueDate. Sticky automatically keeps the parent task due on or after the latest subtask due date.", inputSchema: z.object({ listId: id, title: z.string().trim().min(1).max(180), details: z.string().max(20_000).default(""), dueDate: z.iso.date().nullable().default(null), dueTime: z.string().nullable().default(null), timezone: z.string().default("America/Chicago"), subtasks: z.array(z.object({ title: z.string().trim().min(1).max(160), dueDate: z.iso.date().nullable().default(null) })).max(100).default([]) }) },
+    async (input) => mutationResult("create_task", input, async (current) => {
+      const taskInput = { ...input, color: "sun" as const };
+      return input.subtasks.length
+        ? getRuntime().repository.createTaskWithSubtasks(current, taskInput)
+        : { task: await getRuntime().repository.createTask(current, taskInput), subtasks: [] };
+    }));
 
   if (options.includeDirectGoogle) {
     server.registerTool("create_google_task", { description: "Create a task directly in Google Tasks. This never creates a Sticky task.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), title: z.string().trim().min(1).max(1_000), notes: z.string().max(20_000).default(""), dueDate: z.iso.date().nullable().default(null), parentId: z.string().min(1).max(1_000).optional(), previousId: z.string().min(1).max(1_000).optional() }) },
@@ -344,8 +371,42 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
       return { task: await getRuntime().repository.setTaskCompleted(current, input.taskId, false, currentVersion) };
     }));
 
-  server.registerTool("add_subtask", { description: "Add a subtask to a non-recurring Sticky task.", inputSchema: z.object({ taskId: id, title: z.string().trim().min(1).max(160) }) },
-    async (input) => mutationResult("add_subtask", input, async (current) => ({ subtask: await getRuntime().repository.createSubtask(current, input.taskId, { title: input.title }) })));
+  server.registerTool("add_subtask", { description: "Create a real subtask under an existing non-recurring Sticky task. Use this whenever the user says add/create a subtask; never claim the integration cannot create subtasks and never redirect this request to Google Tasks. The subtask may have its own dueDate. If that date is later than the parent task, Sticky automatically extends the parent task due date.", inputSchema: z.object({ taskId: id, title: z.string().trim().min(1).max(160), dueDate: z.iso.date().nullable().default(null) }) },
+    async (input) => mutationResult("add_subtask", input, async (current) => ({ subtask: await getRuntime().repository.createSubtask(current, input.taskId, input) })));
+
+  server.registerTool("update_subtask", { description: "Rename or reschedule one existing Sticky subtask. Read list_subtasks first. A subtask has its own optional dueDate, and Sticky automatically keeps the parent task deadline on or after it.", inputSchema: z.object({ subtaskId: id, version: version.optional(), title: z.string().trim().min(1).max(160).optional(), dueDate: z.iso.date().nullable().optional() }) },
+    async (input) => mutationResult("update_subtask", input, async (current) => {
+      const existing = await getRuntime().repository.getSubtask(current, input.subtaskId);
+      return { subtask: await getRuntime().repository.updateSubtask(current, input.subtaskId, { version: input.version ?? existing.version, title: input.title, dueDate: input.dueDate }) };
+    }));
+
+  server.registerTool("complete_subtask", { description: "Mark one Sticky subtask complete without completing its parent task. Read list_subtasks first. The record version is optional.", inputSchema: z.object({ subtaskId: id, version: version.optional() }) },
+    async (input) => mutationResult("complete_subtask", input, async (current) => {
+      const existing = await getRuntime().repository.getSubtask(current, input.subtaskId);
+      return { subtask: await getRuntime().repository.setSubtaskCompleted(current, input.subtaskId, true, input.version ?? existing.version) };
+    }));
+
+  server.registerTool("restore_subtask", { description: "Restore one completed Sticky subtask without changing its parent task. Read list_subtasks first. The record version is optional.", inputSchema: z.object({ subtaskId: id, version: version.optional() }) },
+    async (input) => mutationResult("restore_subtask", input, async (current) => {
+      const existing = await getRuntime().repository.getSubtask(current, input.subtaskId);
+      return { subtask: await getRuntime().repository.setSubtaskCompleted(current, input.subtaskId, false, input.version ?? existing.version) };
+    }));
+
+  server.registerTool("move_subtask", {
+    description: "Move one Sticky subtask immediately before or after another subtask under the same parent task. Read list_subtasks first. This never changes Google Tasks.",
+    inputSchema: z.object({ taskId: id, subtaskId: id, relativeToSubtaskId: id, position: z.enum(["before", "after"]) }),
+  }, async (input) => mutationResult("move_subtask", input, async (current) => {
+    const subtasks = await getRuntime().repository.listSubtasks(current, input.taskId, true);
+    const subtaskIds = moveSubtaskId(subtasks.map((subtask) => subtask.id), input.subtaskId, input.relativeToSubtaskId, input.position);
+    return { subtasks: await getRuntime().repository.reorderSubtasks(current, input.taskId, subtaskIds) };
+  }));
+
+  server.registerTool("reorder_subtasks", {
+    description: "Set the complete top-to-bottom order of every Sticky subtask under one parent task. Pass every subtask id exactly once. This never changes Google Tasks.",
+    inputSchema: z.object({ taskId: id, subtaskIds: z.array(id).min(1).max(500) }),
+  }, async (input) => mutationResult("reorder_subtasks", input, async (current) => ({
+    subtasks: await getRuntime().repository.reorderSubtasks(current, input.taskId, input.subtaskIds),
+  })));
 
   server.registerTool("schedule_reminder", { description: "Schedule a web push, Poke, or combined reminder for a task.", inputSchema: z.object({ taskId: id, kind: z.enum(["absolute", "relative"]), remindAt: z.iso.datetime().optional(), relativeMinutes: z.int().positive().optional(), channels: z.array(z.enum(["push", "poke"])).min(1) }) },
     async ({ taskId, ...input }) => mutationResult("schedule_reminder", { taskId, ...input }, async (current) => {
@@ -366,6 +427,9 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
 
   server.registerTool("delete_task", { description: "Permanently delete a task. Requires explicit confirmation.", inputSchema: z.object({ taskId: id, confirmation: destructive }), annotations: { destructiveHint: true } },
     async (input) => { const current = actor(); destructiveConfirmationSchema.parse(input.confirmation); requireDestructiveConfirmation(current, input.confirmation, ["delete", input.taskId]); return mutationResult("delete_task", input, async () => { await getRuntime().repository.deleteTask(current, input.taskId); return { deleted: true, taskId: input.taskId }; }); });
+
+  server.registerTool("delete_subtask", { description: "Permanently delete one Sticky subtask without deleting its parent task. Read list_subtasks first and require the user's explicit deletion request. This never deletes a Google Task.", inputSchema: z.object({ subtaskId: id, confirmation: destructive }), annotations: { destructiveHint: true } },
+    async (input) => { const current = actor(); requireDestructiveConfirmation(current, input.confirmation, ["delete", input.subtaskId]); return mutationResult("delete_subtask", input, async () => { await getRuntime().repository.deleteSubtask(current, input.subtaskId); return { deleted: true, subtaskId: input.subtaskId }; }); });
 
   server.registerTool("delete_list", { description: "Permanently delete one Sticky list and every Sticky task, completed task, and subtask inside it. Read list_lists first. The user must explicitly request deletion; put the word delete and the exact Sticky list id in confirmation.summary. This never deletes a Google Tasks list, even when a Sticky task title mentions Google.", inputSchema: z.object({ listId: id, confirmation: destructive }), annotations: { destructiveHint: true } },
     async (input) => { const current = actor(); requireDestructiveConfirmation(current, input.confirmation, ["delete", input.listId]); return mutationResult("delete_list", input, async () => { await getRuntime().repository.deleteList(current, input.listId); return { deleted: true, listId: input.listId }; }); });
@@ -408,10 +472,10 @@ export function createMcpApp() {
   app.all("/", async (c) => {
     const isPoke = actor().actorId.startsWith("poke:");
     const server = new McpServer(
-      { name: isPoke ? "Sticky Focused Workspace" : "Sticky", version: "1.2.0" },
+      { name: isPoke ? "Sticky Focused Workspace" : "Sticky", version: "1.3.0" },
       {
         instructions: isPoke
-          ? "Sticky is the user's canonical focused task and planning system. Use this server only for Sticky tasks, Sticky Calendar, reminders, and the guarded one-time Google Tasks-to-Sticky transfer tools. Finish every requested part of a compound Sticky request in order and report each result. You can create Sticky lists, move or fully reorder them, archive them, and explicitly delete them with their contents; do not claim those tools are unavailable when they are present. For left/right list requests, read list_lists and use move_list. A title such as 'Google test' inside a Sticky list is still Sticky data and does not make the list a Google Tasks list. Use Poke's own Google integration for routine Google Tasks and Google Calendar reads or changes. Google and Sticky are separate systems: never sync, mirror, or import them automatically. A transfer must start with preview_google_tasks_to_sticky and must receive a new explicit user confirmation before the matching copy or move tool. Moving also requires explicit approval to delete Google originals after Sticky verifies every copy. Tasks and calendar events are distinct: due dates are deadlines while events reserve time. Read the relevant Sticky record before changing it. When the user explicitly asks to delete a named Sticky item in the current message, that request can supply the confirmation summary required by the matching destructive tool; never infer destructive approval."
+          ? "Sticky is the user's canonical focused task and planning system. Use this server only for Sticky tasks, Sticky subtasks, Sticky Calendar, reminders, and the guarded one-time Google Tasks-to-Sticky transfer tools. Finish every requested part of a compound Sticky request in order and report each result. When one request names a new task and its subtasks, pass the subtasks directly to create_task so the whole hierarchy is created; never create only the parent, claim subtasks are unavailable, or redirect Sticky subtasks to Google Tasks. Sticky subtasks are first-class: you can list, add, rename, independently date, complete, restore, reorder, and delete them. Their due dates are scheduled steps, while the parent task due date is the final deadline and Sticky keeps it on or after the latest subtask. You can create Sticky lists, move or fully reorder them, archive them, and explicitly delete them with their contents; do not claim those tools are unavailable when they are present. For left/right list requests, read list_lists and use move_list. A title such as 'Google test' inside a Sticky list is still Sticky data and does not make the list a Google Tasks list. Use Poke's own Google integration for routine Google Tasks and Google Calendar reads or changes. Google and Sticky are separate systems: never sync, mirror, or import them automatically. A transfer must start with preview_google_tasks_to_sticky and must receive a new explicit user confirmation before the matching copy or move tool. Moving also requires explicit approval to delete Google originals after Sticky verifies every copy. Tasks and calendar events are distinct: due dates are deadlines while events reserve time. Read the relevant Sticky record before changing it. When the user explicitly asks to delete a named Sticky item in the current message, that request can supply the confirmation summary required by the matching destructive tool; never infer destructive approval."
           : "Sticky is the user's canonical focused task and planning system. This server exposes separate Sticky and live Google tools plus a guarded one-time Google Tasks-to-Sticky transfer. Never sync, import, mirror, or copy between the systems automatically. A transfer must start with preview_google_tasks_to_sticky and receive a new explicit user confirmation before the matching copy or move tool. Use Sticky tools for Sticky data and google-prefixed tools for Google data. Tasks and calendar events are distinct: due dates are deadlines while events reserve time. Read the relevant source before changing it and request explicit confirmation before destructive actions.",
       },
     );

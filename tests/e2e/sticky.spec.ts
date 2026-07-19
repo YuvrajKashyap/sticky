@@ -1065,7 +1065,7 @@ test.describe("Sticky workspace", () => {
       await newSubtaskTitle.fill("First subtask");
       await expect(addSubtaskButton).toBeEnabled();
       await addSubtaskButton.click();
-      const firstSubtaskInput = details.locator(".subtask-row input").first();
+      const firstSubtaskInput = details.locator(".subtask-title").first();
       await expect(firstSubtaskInput).toHaveValue("First subtask");
       await firstSubtaskInput.fill("Edited subtask");
       await firstSubtaskInput.blur();
@@ -1080,6 +1080,14 @@ test.describe("Sticky workspace", () => {
       await expect(
         editedSubtaskRow.getByRole("button", { name: "Delete subtask: Edited subtask" }),
       ).toBeVisible();
+      const subtaskDueDate = editedSubtaskRow.getByLabel("Due date for subtask: Edited subtask");
+      const parentDueDate = details.locator('input[aria-label="Due date"]');
+      await subtaskDueDate.fill("2035-10-15");
+      await expect(subtaskDueDate).toHaveValue("2035-10-15");
+      await expect(parentDueDate).toHaveValue("2035-10-15");
+      await parentDueDate.fill("2035-10-14");
+      await expect(parentDueDate).toHaveValue("2035-10-15");
+      await expect(page.getByText("Task deadline stays after its steps")).toBeVisible();
 
       await newSubtaskTitle.fill("Second subtask");
       await addSubtaskButton.click();
@@ -1091,16 +1099,16 @@ test.describe("Sticky workspace", () => {
         subtaskRows.nth(1).getByRole("button", { name: /Move Second subtask down/ }),
       ).toBeDisabled();
       await subtaskRows.nth(1).getByRole("button", { name: /Move Second subtask up/ }).click();
-      await expect(details.locator(".subtask-row input").first()).toHaveValue("Second subtask");
+      await expect(details.locator(".subtask-title").first()).toHaveValue("Second subtask");
       await expect(
         details.locator(".subtask-row").first().getByRole("button", { name: /Move Second subtask up/ }),
       ).toBeDisabled();
       await details.locator(".subtask-row").first().getByRole("button", { name: /Move Second subtask down/ }).click();
-      await expect(details.locator(".subtask-row input").nth(1)).toHaveValue("Second subtask");
+      await expect(details.locator(".subtask-title").nth(1)).toHaveValue("Second subtask");
       await dragBetween(page, details.locator(".subtask-drag").nth(1), details.locator(".subtask-drag").nth(0));
       await expect(details.locator(".subtask-row.dragging")).toHaveCount(0);
       await page.waitForTimeout(100);
-      await expect(details.locator(".subtask-row input").first()).toHaveValue("Second subtask");
+      await expect(details.locator(".subtask-title").first()).toHaveValue("Second subtask");
       await details.getByRole("button", { name: "Complete subtask: Second subtask" }).click();
       await expect(details.getByRole("button", { name: "Restore subtask: Second subtask" })).toBeVisible();
       await details.getByRole("button", { name: "Delete subtask: Second subtask" }).click();
@@ -1605,7 +1613,7 @@ test.describe("Sticky workspace", () => {
       await expect(details.locator('input[aria-label="Due time"]')).toHaveValue("09:00");
       await expect(details.locator(".subtask-row")).toHaveCount(2);
       await expect(details.locator(".subtask-check.done")).toHaveCount(0);
-      await expect(details.locator(".subtask-row input").first()).toHaveValue("First copied subtask");
+      await expect(details.locator(".subtask-title").first()).toHaveValue("First copied subtask");
 
       await page.reload();
       const copiedCard = page.locator(".task-card", { hasText: "Reusable setup copy" });

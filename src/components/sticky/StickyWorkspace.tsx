@@ -3039,6 +3039,20 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   }
 
   function updateTask(taskId: string, patch: Partial<StickyTask>, save = true) {
+    if (patch.dueDate !== undefined) {
+      const latestSubtaskDue = workspace.subtasks
+        .filter((subtask) => subtask.taskId === taskId && subtask.dueDate)
+        .reduce<string | null>((latest, subtask) => !latest || subtask.dueDate! > latest ? subtask.dueDate : latest, null);
+
+      if (latestSubtaskDue && (!patch.dueDate || patch.dueDate < latestSubtaskDue)) {
+        pushToast({
+          title: "Task deadline stays after its steps",
+          body: `This task has a subtask due ${humanDate(latestSubtaskDue)}. Move that step first, or choose the same/later task date.`,
+        });
+        return;
+      }
+    }
+
     const before = workspace;
     const updatedAt = nowIso();
     const nextTasks = workspace.tasks.map((task) =>
@@ -3644,6 +3658,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       userId: workspace.user.id,
       taskId: task.id,
       title: trimmed,
+      dueDate: null,
       isCompleted: false,
       completedAt: null,
       sortOrder: nextSortOrder(existing),
@@ -3661,10 +3676,23 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
   function updateSubtask(subtaskId: string, patch: Partial<StickySubtask>, save = true) {
     const before = workspace;
+    const currentSubtask = workspace.subtasks.find((subtask) => subtask.id === subtaskId);
+    const parentTask = currentSubtask
+      ? workspace.tasks.find((task) => task.id === currentSubtask.taskId)
+      : null;
+    const shouldExtendParent = Boolean(
+      patch.dueDate && parentTask && (!parentTask.dueDate || parentTask.dueDate < patch.dueDate),
+    );
+    const updatedAt = nowIso();
     setWorkspace({
       ...workspace,
+      tasks: shouldExtendParent
+        ? workspace.tasks.map((task) => task.id === parentTask!.id
+          ? { ...task, dueDate: patch.dueDate!, updatedAt }
+          : task)
+        : workspace.tasks,
       subtasks: workspace.subtasks.map((subtask) =>
-        subtask.id === subtaskId ? { ...subtask, ...patch, updatedAt: nowIso() } : subtask,
+        subtask.id === subtaskId ? { ...subtask, ...patch, updatedAt } : subtask,
       ),
     });
 
@@ -6178,6 +6206,10 @@ function TaskDetailsPanel({
             <strong>{subtasks.filter((subtask) => !subtask.isCompleted).length}</strong>
           </div>
 
+          <p className="helper-copy subtask-schedule-help">
+            Give each step its own date. The task deadline automatically stays on or after the latest step.
+          </p>
+
           <form className="subtask-form" onSubmit={submitSubtask}>
             <label className="sr-only" htmlFor={subtaskTitleId}>
               New subtask title
@@ -6356,7 +6388,14 @@ function SortableSubtaskRow({
           }
         }}
         aria-label={`Subtask title: ${subtask.title}`}
-        className={subtask.isCompleted ? "done" : ""}
+        className={`subtask-title${subtask.isCompleted ? " done" : ""}`}
+      />
+      <input
+        type="date"
+        value={subtask.dueDate ?? ""}
+        onChange={(event) => onUpdate({ dueDate: event.target.value || null })}
+        aria-label={`Due date for subtask: ${subtask.title}`}
+        className="subtask-date"
       />
       <button
         className="subtask-move"

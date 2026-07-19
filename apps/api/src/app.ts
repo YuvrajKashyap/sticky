@@ -10,10 +10,12 @@ import {
   createTaskSchema,
   destructiveConfirmationSchema,
   moveTaskSchema,
+  reorderSubtasksSchema,
   snoozeReminderSchema,
   updateListSchema,
   updateCalendarEventSchema,
   updateTaskSchema,
+  updateSubtaskSchema,
   timeBlockTaskSchema,
 } from "@sticky/contracts";
 import { requireDestructiveConfirmation, requireScope, resolveReminderTime, StickyDomainError } from "@sticky/domain";
@@ -77,7 +79,7 @@ const webCommandColumns: Record<string, ReadonlySet<string>> = {
   user_preferences: new Set(["completed_open_by_list", "density", "color_mode", "board_style", "task_view_filter", "task_sort_mode"]),
   lists: new Set(["id", "user_id", "name", "color", "sort_order", "is_visible_on_board", "archived_at"]),
   tasks: new Set(["id", "user_id", "list_id", "title", "details", "color", "due_date", "due_time", "timezone", "is_completed", "completed_at", "sort_order", "completed_sort_order"]),
-  subtasks: new Set(["id", "user_id", "task_id", "title", "is_completed", "completed_at", "sort_order"]),
+  subtasks: new Set(["id", "user_id", "task_id", "title", "due_date", "is_completed", "completed_at", "sort_order"]),
   task_recurrence_rules: new Set(["id", "user_id", "task_id", "frequency", "interval_count", "days_of_week", "month_day", "starts_on", "end_type", "end_date", "occurrence_count", "timezone", "paused"]),
 };
 
@@ -201,12 +203,13 @@ const app = new Hono<Env>();
   app.get("/api/v1/workspace", async (c) => {
     const actor = c.get("actor");
     requireScope(actor, "tasks:read");
-    const [lists, tasks, reminders] = await Promise.all([
+    const [lists, tasks, subtasks, reminders] = await Promise.all([
       getRuntime().repository.listLists(actor, true),
       getRuntime().repository.listTasks(actor, { includeCompleted: true }),
+      getRuntime().repository.listSubtasks(actor),
       getRuntime().repository.listReminders(actor),
     ]);
-    return success(c, { lists, tasks, reminders });
+    return success(c, { lists, tasks, subtasks, reminders });
   });
 
   const webCommandSchema = z.discriminatedUnion("kind", [
@@ -347,6 +350,40 @@ const app = new Hono<Env>();
     const actor = c.get("actor"); requireScope(actor, "tasks:write");
     const body = await parseJson(c, createSubtaskSchema);
     return mutate(c, body, async () => ({ subtask: await getRuntime().repository.createSubtask(actor, c.req.param("id"), body) }));
+  });
+  app.get("/api/v1/subtasks", async (c) => {
+    const actor = c.get("actor"); requireScope(actor, "tasks:read");
+    return success(c, { subtasks: await getRuntime().repository.listSubtasks(actor, c.req.query("taskId"), c.req.query("completed") !== "exclude") });
+  });
+  app.get("/api/v1/subtasks/:id", async (c) => {
+    const actor = c.get("actor"); requireScope(actor, "tasks:read");
+    return success(c, { subtask: await getRuntime().repository.getSubtask(actor, c.req.param("id")) });
+  });
+  app.patch("/api/v1/subtasks/:id", async (c) => {
+    const actor = c.get("actor"); requireScope(actor, "tasks:write");
+    const body = await parseJson(c, updateSubtaskSchema);
+    return mutate(c, body, async () => ({ subtask: await getRuntime().repository.updateSubtask(actor, c.req.param("id"), body) }));
+  });
+  app.post("/api/v1/subtasks/:id/complete", async (c) => {
+    const actor = c.get("actor"); requireScope(actor, "tasks:write");
+    const body = await parseJson(c, completeTaskSchema);
+    return mutate(c, body, async () => ({ subtask: await getRuntime().repository.setSubtaskCompleted(actor, c.req.param("id"), true, body.version) }));
+  });
+  app.post("/api/v1/subtasks/:id/restore", async (c) => {
+    const actor = c.get("actor"); requireScope(actor, "tasks:write");
+    const body = await parseJson(c, completeTaskSchema);
+    return mutate(c, body, async () => ({ subtask: await getRuntime().repository.setSubtaskCompleted(actor, c.req.param("id"), false, body.version) }));
+  });
+  app.post("/api/v1/tasks/:id/subtasks/reorder", async (c) => {
+    const actor = c.get("actor"); requireScope(actor, "tasks:write");
+    const input = reorderSubtasksSchema.parse({ ...(await c.req.json()), taskId: c.req.param("id") });
+    return mutate(c, input, async () => ({ subtasks: await getRuntime().repository.reorderSubtasks(actor, input.taskId, input.subtaskIds) }));
+  });
+  app.delete("/api/v1/subtasks/:id", async (c) => {
+    const actor = c.get("actor");
+    const body = await parseJson(c, z.object({ confirmation: destructiveConfirmationSchema }));
+    requireDestructiveConfirmation(actor, body.confirmation, ["delete", c.req.param("id")]);
+    return mutate(c, body, async () => { await getRuntime().repository.deleteSubtask(actor, c.req.param("id")); return { deleted: true }; });
   });
 
   app.get("/api/v1/calendars", async (c) => {

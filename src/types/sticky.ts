@@ -72,6 +72,7 @@ export type StickySubtask = {
   userId: string;
   taskId: string;
   title: string;
+  dueDate: string | null;
   isCompleted: boolean;
   completedAt: string | null;
   sortOrder: number;
@@ -159,6 +160,7 @@ export type DbSubtask = {
   user_id: string;
   task_id: string;
   title: string;
+  due_date: string | null;
   is_completed: boolean;
   completed_at: string | null;
   sort_order: number;
