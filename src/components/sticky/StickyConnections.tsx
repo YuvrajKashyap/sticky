@@ -348,7 +348,7 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
           </label>
         </div>
         <div className="connection-setup daily-agenda-settings" aria-label="Daily agenda settings">
-          <p>Sticky sends this agenda directly to your phone, then also hands it to Poke: tasks and subtasks due that day, the next three upcoming dated items, then active tasks without a due date.</p>
+          <p>Sticky sends this agenda directly to your phone, then also hands it to Poke: everything due today, every active task and subtask without a due date, then the top three dated items strictly after today.</p>
           <div className="daily-agenda-fields">
             <label>
               <span>Send at</span>

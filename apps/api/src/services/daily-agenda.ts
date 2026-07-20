@@ -116,7 +116,7 @@ export function buildDailyAgendaMessage(
     options.test ? "TEST - Sticky daily agenda" : "Good morning - here is your Sticky agenda",
     `${dateLabel(date)} · ${timezone}`,
     "",
-    `DUE TODAY (${dueCount})`,
+    `TODAY'S TASKS (${dueCount})`,
   ];
 
   if (dueCount === 0) {
@@ -129,21 +129,6 @@ export function buildDailyAgendaMessage(
     lines.push(...dueLines.slice(0, MAX_ITEMS_PER_SECTION));
     if (dueLines.length > MAX_ITEMS_PER_SECTION) {
       lines.push(`+ ${dueLines.length - MAX_ITEMS_PER_SECTION} more due item${dueLines.length - MAX_ITEMS_PER_SECTION === 1 ? "" : "s"} in Sticky`);
-    }
-  }
-
-  const upcomingItems = items.upcomingItems.slice(0, 3);
-  lines.push("", `NEXT 3 UPCOMING (${upcomingItems.length})`);
-  if (upcomingItems.length === 0) {
-    lines.push("No upcoming dated tasks.");
-  } else {
-    for (const item of upcomingItems) {
-      const prefix = `• ${upcomingDateLabel(item.dueDate)} · ${cleanLine(item.listName)} - `;
-      if (item.kind === "subtask") {
-        lines.push(`${prefix}${cleanLine(item.parentTitle)}\n  ↳ ${cleanLine(item.title)}`);
-      } else {
-        lines.push(`${prefix}${cleanLine(item.title)}${timeLabel(item.dueTime)}`);
-      }
     }
   }
 
@@ -177,6 +162,21 @@ export function buildDailyAgendaMessage(
     if (undatedCount > MAX_ITEMS_PER_SECTION) {
       const remaining = undatedCount - MAX_ITEMS_PER_SECTION;
       lines.push(`+ ${remaining} more active item${remaining === 1 ? "" : "s"} in Sticky`);
+    }
+  }
+
+  const upcomingItems = items.upcomingItems.slice(0, 3);
+  lines.push("", `TOP 3 UPCOMING (${upcomingItems.length})`);
+  if (upcomingItems.length === 0) {
+    lines.push("No upcoming dated tasks.");
+  } else {
+    for (const item of upcomingItems) {
+      const prefix = `• ${upcomingDateLabel(item.dueDate)} · ${cleanLine(item.listName)} - `;
+      if (item.kind === "subtask") {
+        lines.push(`${prefix}${cleanLine(item.parentTitle)}\n  ↳ ${cleanLine(item.title)}`);
+      } else {
+        lines.push(`${prefix}${cleanLine(item.title)}${timeLabel(item.dueTime)}`);
+      }
     }
   }
 

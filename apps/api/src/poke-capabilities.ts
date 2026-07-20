@@ -28,7 +28,7 @@ export const POKE_MANUAL_CAPABILITIES = [
   { area: "calendar", action: "time-block a task", tools: ["time_block_task"] },
   { area: "planning", action: "read a task agenda or combined daily plan", tools: ["get_agenda", "get_daily_plan"] },
   { area: "reminders", action: "list, schedule, and snooze reminders", tools: ["list_reminders", "schedule_reminder", "snooze_reminder"] },
-  { area: "daily agenda", action: "preview, change, enable, disable, and test the canonical daily Poke agenda", tools: ["get_daily_agenda_settings", "get_daily_agenda_preview", "update_daily_agenda_settings", "send_daily_agenda_test"] },
+  { area: "daily agenda", action: "preview, schedule at a selected daily time, enable, disable, and test the canonical three-bucket Poke agenda", tools: ["get_daily_agenda_settings", "get_daily_agenda_preview", "update_daily_agenda_settings", "send_daily_agenda_test"] },
   { area: "preferences", action: "read and change persisted workspace view preferences", tools: ["get_workspace_preferences", "update_workspace_preferences"] },
 ] as const;
 

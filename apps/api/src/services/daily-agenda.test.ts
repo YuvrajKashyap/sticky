@@ -99,21 +99,21 @@ describe("daily Poke agenda", () => {
     expect(selected.upcomingItems.map((item) => item.id)).toContain("future-step");
   });
 
-  it("puts due items first, the next three dated items second, and active undated tasks last", () => {
+  it("renders today's items, every active undated item, and then the next three dated items", () => {
     const message = buildDailyAgendaMessage("2026-07-19", "America/Chicago", items, {
       siteUrl: "https://sticky.example.com",
     });
 
-    expect(message).toContain("DUE TODAY (2)");
+    expect(message).toContain("TODAY'S TASKS (2)");
     expect(message).toContain("Software - Ship Sticky at 9:30 AM");
     expect(message).toContain("Software - Projects\n  ↳ Racial detection");
-    expect(message).toContain("NEXT 3 UPCOMING (2)");
+    expect(message).toContain("TOP 3 UPCOMING (2)");
     expect(message).toContain("Mon, Jul 20 · Immigration - Prepare O-1\n  ↳ Collect evidence");
     expect(message).toContain("Wed, Jul 22 · Software - Release agenda at 2:00 PM");
     expect(message).toContain("ACTIVE WITHOUT A DUE DATE (2)\nImmigration\n• Find O-1 requirements\n• Prepare O-1\n  ↳ Request recommendation letters");
     expect(message).toContain("https://sticky.example.com/?view=today");
-    expect(message.indexOf("DUE TODAY")).toBeLessThan(message.indexOf("NEXT 3 UPCOMING"));
-    expect(message.indexOf("NEXT 3 UPCOMING")).toBeLessThan(message.indexOf("ACTIVE WITHOUT A DUE DATE"));
+    expect(message.indexOf("TODAY'S TASKS")).toBeLessThan(message.indexOf("ACTIVE WITHOUT A DUE DATE"));
+    expect(message.indexOf("ACTIVE WITHOUT A DUE DATE")).toBeLessThan(message.indexOf("TOP 3 UPCOMING"));
   });
 
   it("still sends a useful agenda when both sections are empty", () => {
