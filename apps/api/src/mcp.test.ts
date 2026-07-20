@@ -72,6 +72,8 @@ describe("Sticky MCP source isolation", () => {
     expect(tools.get("delete_list")?.description).toContain("every Sticky task");
     expect(tools.get("delete_list")?.description).toContain("never deletes a Google Tasks list");
     expect(tools.has("create_calendar_event")).toBe(true);
+    expect(tools.has("get_daily_agenda_preview")).toBe(true);
+    expect(tools.get("get_daily_agenda_preview")?.description).toContain("active tasks and subtasks");
     expect(tools.get("list_google_tasks")?.description).toContain("without copying them into Sticky");
     expect(tools.get("create_google_task")?.description).toContain("never creates a Sticky task");
     expect(tools.get("create_google_task_list")?.description).toContain("never creates a Sticky list");
@@ -134,6 +136,8 @@ describe("Sticky MCP source isolation", () => {
     expect(tools.has("reorder_lists")).toBe(true);
     expect(tools.has("delete_list")).toBe(true);
     expect(tools.has("list_calendar_events")).toBe(true);
+    expect(tools.has("get_daily_agenda_preview")).toBe(true);
+    expect(tools.get("get_daily_agenda_preview")?.description).toContain("Relay the returned message exactly");
     expect(tools.has("preview_google_tasks_to_sticky")).toBe(true);
     expect(tools.has("copy_google_tasks_to_sticky")).toBe(true);
     expect(tools.has("move_google_tasks_to_sticky")).toBe(true);

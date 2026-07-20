@@ -185,7 +185,7 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
   const testDailyAgenda = useMutation({
     mutationFn: async () => {
       const registration = await registerThisDeviceForPush();
-      const result = await client!.request<{ delivered?: boolean; channels?: { push: boolean; poke: boolean }; counts?: { dueTasks: number; dueSubtasks: number; upcomingItems: number; undatedTasks: number } }>("/api/v1/daily-agenda/test", {
+      const result = await client!.request<{ delivered?: boolean; channels?: { push: boolean; poke: boolean }; counts?: { dueTasks: number; dueSubtasks: number; upcomingItems: number; undatedTasks: number; undatedSubtasks: number } }>("/api/v1/daily-agenda/test", {
         method: "POST",
         body: "{}",
       });
@@ -200,8 +200,9 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
     },
     onSuccess: (result) => {
       const due = (result.counts?.dueTasks ?? 0) + (result.counts?.dueSubtasks ?? 0);
+      const active = (result.counts?.undatedTasks ?? 0) + (result.counts?.undatedSubtasks ?? 0);
       setStatusMessage(result.channels?.push
-        ? `Sticky sent the test agenda to your phone with ${due} due, ${result.counts?.upcomingItems ?? 0} upcoming, and ${result.counts?.undatedTasks ?? 0} active undated task${result.counts?.undatedTasks === 1 ? "" : "s"}.`
+        ? `Sticky sent the test agenda to your phone with ${due} due, ${result.counts?.upcomingItems ?? 0} upcoming, and ${active} active undated item${active === 1 ? "" : "s"}.`
         : "Poke accepted the test, but Sticky could not reach a registered phone notification device.");
     },
     onError: (error) => setStatusMessage(error.message),

@@ -24,6 +24,7 @@ import {
   updateGoogleTaskList,
 } from "./services/google";
 import { executeGoogleTaskTransfer, previewGoogleTaskTransfer } from "./services/google-task-transfer";
+import { buildDailyAgendaMessage, loadDailyAgendaItems } from "./services/daily-agenda";
 import { dailyAgendaSettingsSchema, getDailyAgendaSettings, sendDailyAgendaTest, updateDailyAgendaSettings } from "./services/daily-agenda-settings";
 import { outboxWorkflow } from "./workflows/outbox";
 import { reminderWorkflow } from "./workflows/reminder";
@@ -261,6 +262,30 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
 
   server.registerTool("get_daily_agenda_settings", { description: "Read whether Sticky's daily Poke agenda is enabled, its delivery time and timezone, delivery readiness, and last send state.", inputSchema: z.object({}), annotations: { readOnlyHint: true } },
     async () => { const current = actor(); requireScope(current, "tasks:read"); return result({ settings: await getDailyAgendaSettings(current.userId) }); });
+
+  server.registerTool("get_daily_agenda_preview", {
+    description: "Return Sticky's canonical daily agenda message for today or a requested date. Always use this tool when the user asks for their daily brief, morning brief, agenda right now, tasks for today plus upcoming work, or a preview of the scheduled agenda. Relay the returned message exactly instead of rebuilding sections from raw tasks. It includes active tasks and subtasks: items due that day, the next three future-dated items, and every active undated item.",
+    inputSchema: z.object({ date: z.iso.date().optional() }),
+    annotations: { readOnlyHint: true },
+  }, async ({ date }) => {
+    const current = actor();
+    requireScope(current, "tasks:read");
+    const settings = await getDailyAgendaSettings(current.userId);
+    const agendaDate = date ?? zonedDateKeyAt(new Date(), settings.timezone);
+    const items = await loadDailyAgendaItems(current.userId, agendaDate);
+    return result({
+      date: agendaDate,
+      timezone: settings.timezone,
+      message: buildDailyAgendaMessage(agendaDate, settings.timezone, items),
+      counts: {
+        dueTasks: items.dueTasks.length,
+        dueSubtasks: items.dueSubtasks.length,
+        upcomingItems: items.upcomingItems.length,
+        undatedTasks: items.undatedTasks.length,
+        undatedSubtasks: items.undatedSubtasks.length,
+      },
+    });
+  });
 
   server.registerTool("get_agenda", { description: "Get incomplete tasks due in an inclusive date range.", inputSchema: z.object({ from: z.iso.date(), to: z.iso.date() }), annotations: { readOnlyHint: true } },
     async ({ from, to }) => { const current = actor(); requireScope(current, "tasks:read"); const tasks = await getRuntime().repository.listTasks(current); return result({ tasks: tasks.filter((task) => task.dueDate && task.dueDate >= from && task.dueDate <= to) }); });
@@ -701,7 +726,7 @@ export function createMcpApp() {
   app.all("/", async (c) => {
     const isPoke = actor().actorId.startsWith("poke:");
     const server = new McpServer(
-      { name: isPoke ? "Sticky Focused Workspace" : "Sticky", version: "1.6.0" },
+      { name: isPoke ? "Sticky Focused Workspace" : "Sticky", version: "1.7.0" },
       {
         instructions: isPoke
           ? "Sticky is the user's canonical focused task and planning system. All meaningful server-backed actions available in the Sticky app are exposed here. Before claiming an action is unsupported, inspect the available tools; for compound requests, call get_workspace_snapshot, complete every requested part in order, and report each result. Use this server only for Sticky tasks, Sticky subtasks, recurring tasks, Sticky Calendar, reminders, daily-agenda settings, workspace preferences, and the guarded one-time Google Tasks-to-Sticky transfer tools. You can create, rename, recolor, show, hide, move, reorder, archive, restore, and explicitly delete Sticky lists. You can create, edit, recolor, move, reorder, duplicate, complete, restore, and explicitly delete Sticky tasks. Recurring Sticky tasks are first-class and fully supported. Whenever the user says recurring, repeats, daily, weekly, monthly, yearly, every day, every week, or names a weekday cadence, you MUST use create_recurring_task instead of create_task. When the task already exists and should repeat, you MUST use make_task_recurring. Never create a one-time substitute for a requested recurrence. You can list, change, pause, resume, catch up, undo the latest recurring completion, and remove recurrence. Weekly days use 0=Sunday through 6=Saturday, startsOn is the first due date, dueTime is the local occurrence time, and dueTime=23:59 means end of day. The default timezone is America/Chicago. Recurrence and reminders are different: never replace a requested recurring task with a reminder or claim recurrence is unsupported. Completing a recurring task creates its next occurrence automatically. Repeating tasks cannot contain subtasks. When one request names a new non-recurring task and its subtasks, pass the subtasks directly to create_task so the whole hierarchy is created; never create only the parent, claim subtasks are unavailable, or redirect Sticky subtasks to Google Tasks. Sticky subtasks are first-class: you can list, inspect, add, rename, independently date, complete, restore, reorder, and delete them. Their due dates are scheduled steps, while the parent task due date is the final deadline and Sticky keeps it on or after the latest subtask. A title such as 'Google test' inside a Sticky list is still Sticky data and does not make the list a Google Tasks list. Use Poke's own Google integration for routine Google Tasks and Google Calendar reads or changes. Google and Sticky are separate systems: never sync, mirror, or import them automatically. A transfer must start with preview_google_tasks_to_sticky and must receive a new explicit user confirmation before the matching copy or move tool. Moving also requires explicit approval to delete Google originals after Sticky verifies every copy. Tasks and calendar events are distinct: due dates are deadlines while events reserve time. Read the relevant Sticky record before changing it. When the user explicitly asks to delete a named Sticky item in the current message, that request can supply the confirmation summary required by the matching destructive tool; never infer destructive approval. Credential, OAuth, bulk-import override, browser-permission, sign-out, and device-local navigation controls remain human-only."

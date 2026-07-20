@@ -52,6 +52,16 @@ const items: DailyAgendaItems = {
     dueDate: null,
     sortOrder: 1000,
   }],
+  undatedSubtasks: [{
+    id: "subtask-3",
+    listId: "list-2",
+    listName: "Immigration",
+    parentTaskId: "task-5",
+    parentTitle: "Prepare O-1",
+    title: "Request recommendation letters",
+    dueDate: null,
+    sortOrder: 2000,
+  }],
 };
 
 describe("daily Poke agenda", () => {
@@ -72,6 +82,23 @@ describe("daily Poke agenda", () => {
     expect(selected.upcomingItems.some((task) => task.id === "today")).toBe(false);
   });
 
+  it("places every active subtask in the matching daily-agenda section", () => {
+    const selected = selectDailyAgendaItems(
+      "2026-07-20",
+      [{ id: "list-immigration", name: "Immigration", sort_order: 1000 }],
+      [{ id: "parent", list_id: "list-immigration", title: "Prepare O-1", due_date: null, due_time: null, sort_order: 1000 }],
+      [
+        { id: "undated-step", task_id: "parent", title: "Request letters", due_date: null, sort_order: 1000 },
+        { id: "today-step", task_id: "parent", title: "Collect passport", due_date: "2026-07-20", sort_order: 2000 },
+        { id: "future-step", task_id: "parent", title: "File petition", due_date: "2026-07-22", sort_order: 3000 },
+      ],
+    );
+
+    expect(selected.undatedSubtasks.map((subtask) => subtask.id)).toEqual(["undated-step"]);
+    expect(selected.dueSubtasks.map((subtask) => subtask.id)).toEqual(["today-step"]);
+    expect(selected.upcomingItems.map((item) => item.id)).toContain("future-step");
+  });
+
   it("puts due items first, the next three dated items second, and active undated tasks last", () => {
     const message = buildDailyAgendaMessage("2026-07-19", "America/Chicago", items, {
       siteUrl: "https://sticky.example.com",
@@ -83,7 +110,7 @@ describe("daily Poke agenda", () => {
     expect(message).toContain("NEXT 3 UPCOMING (2)");
     expect(message).toContain("Mon, Jul 20 · Immigration - Prepare O-1\n  ↳ Collect evidence");
     expect(message).toContain("Wed, Jul 22 · Software - Release agenda at 2:00 PM");
-    expect(message).toContain("ACTIVE WITHOUT A DUE DATE (1)\nImmigration\n• Find O-1 requirements");
+    expect(message).toContain("ACTIVE WITHOUT A DUE DATE (2)\nImmigration\n• Find O-1 requirements\n• Prepare O-1\n  ↳ Request recommendation letters");
     expect(message).toContain("https://sticky.example.com/?view=today");
     expect(message.indexOf("DUE TODAY")).toBeLessThan(message.indexOf("NEXT 3 UPCOMING"));
     expect(message.indexOf("NEXT 3 UPCOMING")).toBeLessThan(message.indexOf("ACTIVE WITHOUT A DUE DATE"));
@@ -95,6 +122,7 @@ describe("daily Poke agenda", () => {
       dueSubtasks: [],
       upcomingItems: [],
       undatedTasks: [],
+      undatedSubtasks: [],
     }, { test: true });
 
     expect(message).toContain("TEST - Sticky daily agenda");
