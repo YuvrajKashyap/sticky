@@ -296,11 +296,7 @@ export async function deliverDailyAgenda(userId: string, input: DailyAgendaDeliv
   try {
     const items = await loadDailyAgendaItems(userId, input.date);
     const message = buildDailyAgendaMessage(input.date, input.timezone, items, { test: input.test });
-    const receipt = await sendPokeMessage(pokeNotificationInstruction(message), userId, {
-      delivery_key: deliveryKey,
-      daily_agenda_date: input.date,
-      daily_agenda_test: Boolean(input.test),
-    });
+    const receipt = await sendPokeMessage(pokeNotificationInstruction(message), userId);
     const counts = {
       dueTasks: items.dueTasks.length,
       dueSubtasks: items.dueSubtasks.length,

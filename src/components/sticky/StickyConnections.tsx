@@ -140,7 +140,7 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
     }),
     onSuccess: (result) => {
       const due = (result.counts?.dueTasks ?? 0) + (result.counts?.dueSubtasks ?? 0);
-      setStatusMessage(`Test agenda sent to Poke with ${due} due, ${result.counts?.upcomingItems ?? 0} upcoming, and ${result.counts?.undatedTasks ?? 0} active undated task${result.counts?.undatedTasks === 1 ? "" : "s"}.`);
+      setStatusMessage(`Poke accepted the test agenda with ${due} due, ${result.counts?.upcomingItems ?? 0} upcoming, and ${result.counts?.undatedTasks ?? 0} active undated task${result.counts?.undatedTasks === 1 ? "" : "s"}. It should now reply in your current Poke conversation.`);
     },
     onError: (error) => setStatusMessage(error.message),
   });

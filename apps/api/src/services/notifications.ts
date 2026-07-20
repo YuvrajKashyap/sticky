@@ -47,7 +47,6 @@ export async function deliverReminder(reminderId: string, expectedRemindAt: stri
               `Reminder: ${String(task.title)}\n\nOpen Sticky: ${process.env.NEXT_PUBLIC_SITE_URL}/?task=${String(task.id)}`,
             ),
             reminder.user_id,
-            { task_id: String(task.id), delivery_key: deliveryKey },
           )
         : await sendPush(reminder.user_id, task);
       await db.from("notification_deliveries").update({ status: "delivered", delivered_at: new Date().toISOString(), provider_receipt: receipt })
@@ -68,8 +67,8 @@ export async function deliverReminder(reminderId: string, expectedRemindAt: stri
 
 export function pokeNotificationInstruction(notification: string) {
   return [
-    "Reply to me now with exactly the Sticky notification below.",
-    "Do not modify any tasks or ask a follow-up question.",
+    "Reply in my current Poke conversation now with exactly the Sticky notification below.",
+    "This is a notification delivery request. Do not use any tools, modify anything, or ask a follow-up question.",
     "",
     notification,
   ].join("\n");
@@ -79,10 +78,20 @@ export function pokeApiPayload(message: string) {
   return { message };
 }
 
+export function pokeApiRequestInit(token: string, message: string): RequestInit {
+  return {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(pokeApiPayload(message)),
+  };
+}
+
 export async function sendPokeMessage(
   message: string,
   userId: string,
-  metadata: Record<string, unknown> = {},
 ) {
   const token = process.env.POKE_API_KEY;
   if (!token) throw new Error("Poke delivery is not configured.");
@@ -97,18 +106,14 @@ export async function sendPokeMessage(
     .maybeSingle();
   if (error) throw error;
   if (!credential?.provider_user_id) throw new Error("Poke is not linked to this Sticky account.");
-  const deliveryKey = typeof metadata.delivery_key === "string" ? metadata.delivery_key : null;
-  const response = await fetch("https://poke.com/api/v1/inbound/api-message", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      ...(deliveryKey ? { "Idempotency-Key": deliveryKey } : {}),
-    },
-    body: JSON.stringify(pokeApiPayload(message)),
-  });
+  const response = await fetch(
+    "https://poke.com/api/v1/inbound/api-message",
+    pokeApiRequestInit(token, message),
+  );
   if (!response.ok) throw new Error(`Poke returned ${response.status}.`);
-  return response.json() as Promise<Record<string, unknown>>;
+  const receipt = await response.json() as Record<string, unknown>;
+  if (receipt.success !== true) throw new Error("Poke did not accept the message.");
+  return receipt;
 }
 
 async function sendPush(userId: string, task: Record<string, unknown>) {

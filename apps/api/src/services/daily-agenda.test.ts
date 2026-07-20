@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pokeApiPayload, pokeNotificationInstruction } from "./notifications";
+import { pokeApiPayload, pokeApiRequestInit, pokeNotificationInstruction } from "./notifications";
 import { buildDailyAgendaMessage, type DailyAgendaItems } from "./daily-agenda";
 
 const items: DailyAgendaItems = {
@@ -89,12 +89,20 @@ describe("daily Poke agenda", () => {
   it("gives Poke an explicit outbound-notification instruction", () => {
     const instruction = pokeNotificationInstruction("TEST - Sticky daily agenda");
 
-    expect(instruction).toContain("Reply to me now with exactly the Sticky notification below");
-    expect(instruction).toContain("Do not modify any tasks");
+    expect(instruction).toContain("Reply in my current Poke conversation now");
+    expect(instruction).toContain("Do not use any tools, modify anything");
     expect(instruction).toContain("TEST - Sticky daily agenda");
   });
 
   it("sends Poke only the documented message payload", () => {
     expect(pokeApiPayload("test")).toEqual({ message: "test" });
+    expect(pokeApiRequestInit("poke-key", "test")).toEqual({
+      method: "POST",
+      headers: {
+        Authorization: "Bearer poke-key",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ message: "test" }),
+    });
   });
 });
