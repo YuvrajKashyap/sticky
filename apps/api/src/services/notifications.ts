@@ -68,13 +68,15 @@ export async function deliverReminder(reminderId: string, expectedRemindAt: stri
 
 export function pokeNotificationInstruction(notification: string) {
   return [
-    "This is an automated notification from my Sticky task app.",
-    "Send me the notification below now as your reply. Preserve its sections and wording. Do not modify any tasks or ask a follow-up question.",
+    "Reply to me now with exactly the Sticky notification below.",
+    "Do not modify any tasks or ask a follow-up question.",
     "",
-    "--- Sticky notification ---",
     notification,
-    "--- End notification ---",
   ].join("\n");
+}
+
+export function pokeApiPayload(message: string) {
+  return { message };
 }
 
 export async function sendPokeMessage(
@@ -103,11 +105,7 @@ export async function sendPokeMessage(
       "Content-Type": "application/json",
       ...(deliveryKey ? { "Idempotency-Key": deliveryKey } : {}),
     },
-    body: JSON.stringify({
-      message,
-      source: "sticky",
-      ...metadata,
-    }),
+    body: JSON.stringify(pokeApiPayload(message)),
   });
   if (!response.ok) throw new Error(`Poke returned ${response.status}.`);
   return response.json() as Promise<Record<string, unknown>>;
