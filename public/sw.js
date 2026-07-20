@@ -22,7 +22,7 @@ self.addEventListener("push", (event) => {
     body: message.body || "A task needs your attention.",
     icon: "/icon.svg",
     badge: "/icon.svg",
-    tag: message.taskId ? `sticky-task-${message.taskId}` : undefined,
+    tag: message.tag || (message.taskId ? `sticky-task-${message.taskId}` : undefined),
     data: { url: message.url || "/" },
   }));
 });

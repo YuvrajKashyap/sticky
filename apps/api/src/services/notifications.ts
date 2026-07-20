@@ -116,7 +116,15 @@ export async function sendPokeMessage(
   return receipt;
 }
 
-async function sendPush(userId: string, task: Record<string, unknown>) {
+type WebPushMessage = {
+  title: string;
+  body: string;
+  url: string;
+  tag?: string;
+  taskId?: string;
+};
+
+export async function sendWebPushMessage(userId: string, message: WebPushMessage) {
   configureWebPush();
   const { db } = getRuntime();
   const { data: subscriptions } = await db.from("push_subscriptions").select("*").eq("user_id", userId).eq("is_active", true);
@@ -127,7 +135,7 @@ async function sendPush(userId: string, task: Record<string, unknown>) {
       const result = await webpush.sendNotification({
         endpoint: subscription.endpoint,
         keys: { p256dh: subscription.p256dh, auth: subscription.auth_secret },
-      }, JSON.stringify({ title: "Sticky reminder", body: task.title, url: `/?task=${task.id}`, taskId: task.id }));
+      }, JSON.stringify(message));
       receipts.push({ endpoint: subscription.endpoint, statusCode: result.statusCode });
       await db.from("push_subscriptions").update({ last_success_at: new Date().toISOString(), last_error: null }).eq("id", subscription.id);
     } catch (error) {
@@ -136,5 +144,15 @@ async function sendPush(userId: string, task: Record<string, unknown>) {
       if (![404, 410].includes(statusCode)) throw error;
     }
   }
+  if (!receipts.length) throw new Error("No registered notification device accepted the message.");
   return { receipts };
+}
+
+async function sendPush(userId: string, task: Record<string, unknown>) {
+  return sendWebPushMessage(userId, {
+    title: "Sticky reminder",
+    body: String(task.title),
+    url: `/?task=${String(task.id)}`,
+    taskId: String(task.id),
+  });
 }

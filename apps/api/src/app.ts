@@ -566,7 +566,7 @@ const app = new Hono<Env>();
         date,
         timezone: schedule.timezone,
         test: true,
-        deliveryKey: `daily-agenda-test:${actor.userId}:${actor.idempotencyKey ?? actor.requestId}:poke`,
+        deliveryKey: `daily-agenda-test:${actor.userId}:${actor.idempotencyKey ?? actor.requestId}:push`,
       });
     });
   });

@@ -128,19 +128,21 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
       queryClient.setQueryData(["daily-agenda"], settings);
       setDailyAgendaDraft(null);
       setStatusMessage(settings.enabled
-        ? `Daily Poke agenda scheduled for ${settings.time} in ${settings.timezone}.`
-        : "Daily Poke agenda turned off.");
+        ? `Daily agenda scheduled for ${settings.time} in ${settings.timezone}.`
+        : "Daily agenda turned off.");
     },
     onError: (error) => setStatusMessage(error.message),
   });
   const testDailyAgenda = useMutation({
-    mutationFn: () => client!.request<{ delivered?: boolean; counts?: { dueTasks: number; dueSubtasks: number; upcomingItems: number; undatedTasks: number } }>("/api/v1/daily-agenda/test", {
+    mutationFn: () => client!.request<{ delivered?: boolean; channels?: { push: boolean; poke: boolean }; counts?: { dueTasks: number; dueSubtasks: number; upcomingItems: number; undatedTasks: number } }>("/api/v1/daily-agenda/test", {
       method: "POST",
       body: "{}",
     }),
     onSuccess: (result) => {
       const due = (result.counts?.dueTasks ?? 0) + (result.counts?.dueSubtasks ?? 0);
-      setStatusMessage(`Poke accepted the test agenda with ${due} due, ${result.counts?.upcomingItems ?? 0} upcoming, and ${result.counts?.undatedTasks ?? 0} active undated task${result.counts?.undatedTasks === 1 ? "" : "s"}. It should now reply in your current Poke conversation.`);
+      setStatusMessage(result.channels?.push
+        ? `Sticky sent the test agenda to your phone with ${due} due, ${result.counts?.upcomingItems ?? 0} upcoming, and ${result.counts?.undatedTasks ?? 0} active undated task${result.counts?.undatedTasks === 1 ? "" : "s"}.`
+        : "Poke accepted the test, but Sticky could not reach a registered phone notification device.");
     },
     onError: (error) => setStatusMessage(error.message),
   });
@@ -241,7 +243,7 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
         <div className="connection-row daily-agenda-row">
           <span className="connection-icon agenda"><Clock3 size={20} /></span>
           <div className="connection-copy">
-            <strong>Daily Poke agenda</strong>
+            <strong>Daily agenda</strong>
             <small>{dailyAgenda.isLoading ? "Loading schedule…" : nextAgendaLabel(dailyAgenda.data)}</small>
           </div>
           <label className="daily-agenda-toggle">
@@ -249,13 +251,13 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
               type="checkbox"
               checked={dailyAgendaValues.enabled}
               onChange={(event) => setDailyAgendaDraft({ ...dailyAgendaValues, enabled: event.target.checked })}
-              aria-label="Enable daily Poke agenda"
+              aria-label="Enable daily agenda"
             />
             <span>{dailyAgendaValues.enabled ? "On" : "Off"}</span>
           </label>
         </div>
-        <div className="connection-setup daily-agenda-settings" aria-label="Daily Poke agenda settings">
-          <p>Sticky will text you through Poke with tasks and subtasks due that day, the next three upcoming dated items, then active tasks without a due date.</p>
+        <div className="connection-setup daily-agenda-settings" aria-label="Daily agenda settings">
+          <p>Sticky sends this agenda directly to your phone, then also hands it to Poke: tasks and subtasks due that day, the next three upcoming dated items, then active tasks without a due date.</p>
           <div className="daily-agenda-fields">
             <label>
               <span>Send at</span>
@@ -293,17 +295,17 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
             <button
               type="button"
               className="connection-secondary"
-              disabled={!client || testDailyAgenda.isPending || !dailyAgenda.data?.pokeLinked || !dailyAgenda.data?.pokeDeliveryConfigured}
+              disabled={!client || testDailyAgenda.isPending}
               onClick={() => testDailyAgenda.mutate()}
             >
               <Send size={15} />{testDailyAgenda.isPending ? "Sending…" : "Send test now"}
             </button>
           </div>
           {dailyAgenda.data && !dailyAgenda.data.pokeLinked ? (
-            <p className="daily-agenda-warning"><AlertTriangle size={14} /> Connect Poke above before the daily agenda can reach your text thread.</p>
+            <p className="daily-agenda-warning"><AlertTriangle size={14} /> Sticky can still notify your phone directly; connect Poke above only if you also want the agenda mirrored there.</p>
           ) : null}
           {dailyAgenda.data && !dailyAgenda.data.pokeDeliveryConfigured ? (
-            <p className="daily-agenda-warning"><AlertTriangle size={14} /> Poke outreach needs a Poke Kitchen API key configured in Sticky.</p>
+            <p className="daily-agenda-warning"><AlertTriangle size={14} /> Direct phone notifications still work. Poke mirroring needs a Poke Kitchen API key configured in Sticky.</p>
           ) : null}
           {dailyAgenda.error ? <p className="daily-agenda-warning"><AlertTriangle size={14} /> {dailyAgenda.error.message}</p> : null}
         </div>
