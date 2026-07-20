@@ -11,6 +11,7 @@ type AgendaTask = {
   listName: string;
   title: string;
   dueTime: string | null;
+  dueDate: string | null;
   sortOrder: number;
 };
 
@@ -21,12 +22,26 @@ type AgendaSubtask = {
   parentTaskId: string;
   parentTitle: string;
   title: string;
+  dueDate: string;
+  sortOrder: number;
+};
+
+type UpcomingAgendaItem = {
+  kind: "task" | "subtask";
+  id: string;
+  listId: string;
+  listName: string;
+  title: string;
+  parentTitle: string | null;
+  dueDate: string;
+  dueTime: string | null;
   sortOrder: number;
 };
 
 export type DailyAgendaItems = {
   dueTasks: AgendaTask[];
   dueSubtasks: AgendaSubtask[];
+  upcomingItems: UpcomingAgendaItem[];
   undatedTasks: AgendaTask[];
 };
 
@@ -60,6 +75,15 @@ function timeLabel(time: string | null) {
   return ` at ${displayHour}:${String(minute).padStart(2, "0")} ${suffix}`;
 }
 
+function upcomingDateLabel(date: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${date}T12:00:00Z`));
+}
+
 function compareAgendaItems(
   first: { listId: string; sortOrder: number; title: string },
   second: { listId: string; sortOrder: number; title: string },
@@ -68,6 +92,16 @@ function compareAgendaItems(
   return (listOrder.get(first.listId) ?? 0) - (listOrder.get(second.listId) ?? 0)
     || first.sortOrder - second.sortOrder
     || first.title.localeCompare(second.title);
+}
+
+function compareUpcomingItems(
+  first: UpcomingAgendaItem,
+  second: UpcomingAgendaItem,
+  listOrder: Map<string, number>,
+) {
+  return first.dueDate.localeCompare(second.dueDate)
+    || (first.dueTime ?? "99:99").localeCompare(second.dueTime ?? "99:99")
+    || compareAgendaItems(first, second, listOrder);
 }
 
 export function buildDailyAgendaMessage(
@@ -97,6 +131,21 @@ export function buildDailyAgendaMessage(
     }
   }
 
+  const upcomingItems = items.upcomingItems.slice(0, 3);
+  lines.push("", `NEXT 3 UPCOMING (${upcomingItems.length})`);
+  if (upcomingItems.length === 0) {
+    lines.push("No upcoming dated tasks.");
+  } else {
+    for (const item of upcomingItems) {
+      const prefix = `• ${upcomingDateLabel(item.dueDate)} · ${cleanLine(item.listName)} - `;
+      if (item.kind === "subtask") {
+        lines.push(`${prefix}${cleanLine(item.parentTitle)}\n  ↳ ${cleanLine(item.title)}`);
+      } else {
+        lines.push(`${prefix}${cleanLine(item.title)}${timeLabel(item.dueTime)}`);
+      }
+    }
+  }
+
   lines.push("", `ACTIVE WITHOUT A DUE DATE (${items.undatedTasks.length})`);
   if (items.undatedTasks.length === 0) {
     lines.push("No active undated tasks.");
@@ -123,7 +172,7 @@ export async function loadDailyAgendaItems(userId: string, date: string): Promis
   const [listsResult, tasksResult, subtasksResult] = await Promise.all([
     db.from("lists").select("id,name,sort_order").eq("user_id", userId).is("archived_at", null).order("sort_order").limit(5000),
     db.from("tasks").select("id,list_id,title,due_date,due_time,sort_order,is_completed").eq("user_id", userId).eq("is_completed", false).limit(5000),
-    db.from("subtasks").select("id,task_id,title,due_date,sort_order,is_completed").eq("user_id", userId).eq("is_completed", false).eq("due_date", date).limit(5000),
+    db.from("subtasks").select("id,task_id,title,due_date,sort_order,is_completed").eq("user_id", userId).eq("is_completed", false).not("due_date", "is", null).limit(5000),
   ]);
   const firstError = listsResult.error ?? tasksResult.error ?? subtasksResult.error;
   if (firstError) throw firstError;
@@ -139,6 +188,7 @@ export async function loadDailyAgendaItems(userId: string, date: string): Promis
     listName: listNames.get(String(task.list_id)) ?? "List",
     title: cleanLine(task.title),
     dueTime: task.due_time ? String(task.due_time) : null,
+    dueDate: task.due_date ? String(task.due_date) : null,
     sortOrder: Number(task.sort_order ?? 0),
   });
 
@@ -150,9 +200,9 @@ export async function loadDailyAgendaItems(userId: string, date: string): Promis
     .filter((task) => task.due_date == null)
     .map((task) => mapTask(task))
     .sort((first, second) => compareAgendaItems(first, second, listOrder));
-  const dueSubtasks = (subtasksResult.data ?? []).flatMap((subtask) => {
+  const mappedSubtasks = (subtasksResult.data ?? []).flatMap((subtask) => {
     const parent = tasksById.get(String(subtask.task_id));
-    if (!parent) return [];
+    if (!parent || !subtask.due_date) return [];
     return [{
       id: String(subtask.id),
       listId: String(parent.list_id),
@@ -160,11 +210,32 @@ export async function loadDailyAgendaItems(userId: string, date: string): Promis
       parentTaskId: String(parent.id),
       parentTitle: cleanLine(parent.title),
       title: cleanLine(subtask.title),
+      dueDate: String(subtask.due_date),
       sortOrder: Number(subtask.sort_order ?? 0),
     }];
-  }).sort((first, second) => compareAgendaItems(first, second, listOrder));
+  });
+  const dueSubtasks = mappedSubtasks
+    .filter((subtask) => subtask.dueDate === date)
+    .sort((first, second) => compareAgendaItems(first, second, listOrder));
+  const upcomingItems: UpcomingAgendaItem[] = [
+    ...activeTasks
+      .filter((task) => task.due_date && String(task.due_date) > date)
+      .map((task) => ({
+        kind: "task" as const,
+        ...mapTask(task),
+        dueDate: String(task.due_date),
+        parentTitle: null,
+      })),
+    ...mappedSubtasks
+      .filter((subtask) => subtask.dueDate > date)
+      .map((subtask) => ({
+        kind: "subtask" as const,
+        ...subtask,
+        dueTime: null,
+      })),
+  ].sort((first, second) => compareUpcomingItems(first, second, listOrder)).slice(0, 3);
 
-  return { dueTasks, dueSubtasks, undatedTasks };
+  return { dueTasks, dueSubtasks, upcomingItems, undatedTasks };
 }
 
 async function claimDelivery(userId: string, deliveryKey: string) {
@@ -233,6 +304,7 @@ export async function deliverDailyAgenda(userId: string, input: DailyAgendaDeliv
     const counts = {
       dueTasks: items.dueTasks.length,
       dueSubtasks: items.dueSubtasks.length,
+      upcomingItems: items.upcomingItems.length,
       undatedTasks: items.undatedTasks.length,
     };
     const { error: deliveryError } = await db.from("notification_deliveries").update({

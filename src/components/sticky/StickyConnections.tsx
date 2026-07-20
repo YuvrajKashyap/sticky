@@ -134,13 +134,13 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
     onError: (error) => setStatusMessage(error.message),
   });
   const testDailyAgenda = useMutation({
-    mutationFn: () => client!.request<{ delivered?: boolean; counts?: { dueTasks: number; dueSubtasks: number; undatedTasks: number } }>("/api/v1/daily-agenda/test", {
+    mutationFn: () => client!.request<{ delivered?: boolean; counts?: { dueTasks: number; dueSubtasks: number; upcomingItems: number; undatedTasks: number } }>("/api/v1/daily-agenda/test", {
       method: "POST",
       body: "{}",
     }),
     onSuccess: (result) => {
       const due = (result.counts?.dueTasks ?? 0) + (result.counts?.dueSubtasks ?? 0);
-      setStatusMessage(`Test agenda sent to Poke with ${due} due and ${result.counts?.undatedTasks ?? 0} active undated task${result.counts?.undatedTasks === 1 ? "" : "s"}.`);
+      setStatusMessage(`Test agenda sent to Poke with ${due} due, ${result.counts?.upcomingItems ?? 0} upcoming, and ${result.counts?.undatedTasks ?? 0} active undated task${result.counts?.undatedTasks === 1 ? "" : "s"}.`);
     },
     onError: (error) => setStatusMessage(error.message),
   });
@@ -255,7 +255,7 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
           </label>
         </div>
         <div className="connection-setup daily-agenda-settings" aria-label="Daily Poke agenda settings">
-          <p>Sticky will text you through Poke with tasks and subtasks due that day, followed by active tasks without a due date.</p>
+          <p>Sticky will text you through Poke with tasks and subtasks due that day, the next three upcoming dated items, then active tasks without a due date.</p>
           <div className="daily-agenda-fields">
             <label>
               <span>Send at</span>
