@@ -4010,32 +4010,78 @@ mark.find-highlight {
   transform: translateY(-1px);
 }
 
+.subtask-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  box-shadow: inset 0 0 0 1px var(--line);
+  overflow: hidden;
+}
+
+.subtask-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent-deep) 0%, var(--accent-bright) 100%);
+  box-shadow: 0 0 10px 0 var(--accent);
+  transition: width 0.4s var(--ease-out);
+}
+
 .subtask-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 8px;
 }
 
 .subtask-schedule-help {
-  margin: -2px 0 2px;
+  margin: 0;
+}
+
+.subtask-empty {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 13px;
+  border-radius: 12px;
+  background: var(--surface-sunken);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--ink-faint);
+  font-size: 0.8rem;
+  font-weight: 700;
 }
 
 .subtask-row {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 2px;
-  border-radius: 9px;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 11px 9px;
+  border-radius: 12px;
+  background: var(--surface-sunken);
+  box-shadow: inset 0 0 0 1px var(--line);
+  transition: box-shadow var(--speed-fast) var(--ease-out), background var(--speed-fast) var(--ease-out);
 }
 
-.subtask-row:hover {
-  background: var(--surface-sunken);
+.subtask-row:hover,
+.subtask-row:focus-within {
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
+.subtask-row.done {
+  background: color-mix(in srgb, var(--surface-sunken) 60%, transparent);
 }
 
 .subtask-row.dragging {
   background: var(--accent-soft);
-  box-shadow: var(--shadow-lift);
+  box-shadow: inset 0 0 0 1px var(--accent), var(--shadow-lift);
   z-index: 10;
+}
+
+.subtask-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
 }
 
 .subtask-check {
@@ -4043,8 +4089,9 @@ mark.find-highlight {
   align-items: center;
   justify-content: center;
   flex: none;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
+  margin-top: 3px;
   border-radius: 50%;
   color: #fff;
   box-shadow: inset 0 0 0 2px var(--line-strong);
@@ -4063,14 +4110,15 @@ mark.find-highlight {
 }
 
 .subtask-title {
-  flex: 1;
+  width: 100%;
   min-width: 0;
   border: 0;
   background: transparent;
-  padding: 5px 4px;
-  font-weight: 600;
-  font-size: 0.86rem;
-  border-radius: 7px;
+  padding: 3px 5px;
+  font-weight: 700;
+  font-size: 0.92rem;
+  line-height: 1.35;
+  border-radius: 8px;
 }
 
 .subtask-title:focus {
@@ -4084,24 +4132,89 @@ mark.find-highlight {
   color: var(--ink-faint);
 }
 
-.subtask-date {
-  flex: none;
-  width: 126px;
+.subtask-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
   min-width: 0;
-  border: 0;
-  border-radius: 7px;
-  padding: 5px 6px;
-  background: transparent;
-  color: var(--ink-muted);
-  font-size: 0.74rem;
-  font-weight: 700;
 }
 
-.subtask-date:focus,
-.subtask-date:hover {
-  outline: none;
+/* The date chip: a glass pill with the native date input stretched invisibly
+   over it, so tapping anywhere on the pill opens the picker. */
+.subtask-date-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: var(--ink-faint);
   background: var(--surface-raised);
-  box-shadow: inset 0 0 0 1.5px var(--line-strong);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: 0.72rem;
+  font-weight: 800;
+  transition: color var(--speed-fast) var(--ease-out), background var(--speed-fast) var(--ease-out),
+    box-shadow var(--speed-fast) var(--ease-out);
+}
+
+.subtask-date-chip:hover,
+.subtask-date-chip:focus-within {
+  color: var(--accent-ink);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.subtask-date-chip.set {
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.subtask-date-chip.overdue {
+  color: var(--danger-ink);
+  background: var(--danger-soft);
+  box-shadow: inset 0 0 0 1px rgba(217, 80, 63, 0.4);
+}
+
+.subtask-date-label {
+  white-space: nowrap;
+}
+
+.subtask-date {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.subtask-date::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.subtask-overdue-tag {
+  flex: none;
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--danger-ink);
+}
+
+.subtask-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
 }
 
 .subtask-move,
@@ -4111,13 +4224,18 @@ mark.find-highlight {
   align-items: center;
   justify-content: center;
   flex: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
   color: var(--ink-faint);
   opacity: 0;
   transition: opacity var(--speed-fast) var(--ease-out), background var(--speed-fast) var(--ease-out),
     color var(--speed-fast) var(--ease-out);
+}
+
+.subtask-move:disabled {
+  opacity: 0 !important;
+  pointer-events: none;
 }
 
 .subtask-row:hover .subtask-move,
@@ -6911,6 +7029,54 @@ mark.find-highlight {
     padding-bottom: calc(28px + var(--safe-b));
   }
 
+  /* Subtasks on the phone: thumb-sized targets, tools always lit */
+  .subtask-form input {
+    min-height: 46px;
+    font-size: 1rem;
+  }
+
+  .subtask-form button {
+    width: 46px;
+    border-radius: 12px;
+  }
+
+  .subtask-row {
+    padding: 12px 12px 10px;
+    gap: 12px;
+  }
+
+  .subtask-check {
+    width: 26px;
+    height: 26px;
+    margin-top: 4px;
+  }
+
+  .subtask-main {
+    gap: 9px;
+  }
+
+  .subtask-title {
+    font-size: 1rem;
+  }
+
+  .subtask-date-chip {
+    min-height: 34px;
+    padding: 5px 13px;
+    font-size: 0.78rem;
+  }
+
+  .subtask-move,
+  .subtask-drag,
+  .subtask-delete {
+    width: 34px;
+    height: 34px;
+    opacity: 1;
+  }
+
+  .subtask-move:disabled {
+    opacity: 0.25 !important;
+  }
+
   /* Full-screen overlays (overview, pulse, calendar sheets) dodge the notch */
   .calendar-layout {
     padding-bottom: calc(var(--dock-h) + var(--safe-b) + 24px);
@@ -6962,6 +7128,21 @@ mark.find-highlight {
   .board-add-task:active {
     transform: scale(0.99);
     border-color: var(--accent);
+  }
+
+  /* No hover on touch — subtask tools must always be reachable */
+  .subtask-move,
+  .subtask-drag,
+  .subtask-delete {
+    opacity: 1;
+  }
+
+  .subtask-move:disabled {
+    opacity: 0.25 !important;
+  }
+
+  .subtask-check:active {
+    transform: scale(0.92);
   }
 }
 

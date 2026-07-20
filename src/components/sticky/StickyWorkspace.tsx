@@ -6203,12 +6203,24 @@ function TaskDetailsPanel({
           <div className="mini-section-title">
             <ListChecks size={16} />
             Subtasks
-            <strong>{subtasks.filter((subtask) => !subtask.isCompleted).length}</strong>
+            {subtasks.length ? (
+              <strong>
+                {subtasks.filter((subtask) => subtask.isCompleted).length}/{subtasks.length} done
+              </strong>
+            ) : null}
           </div>
 
-          <p className="helper-copy subtask-schedule-help">
-            Give each step its own date. The task deadline automatically stays on or after the latest step.
-          </p>
+          {subtasks.length ? (
+            <div className="subtask-progress" aria-hidden="true">
+              <span
+                style={{
+                  width: `${Math.round(
+                    (subtasks.filter((subtask) => subtask.isCompleted).length / subtasks.length) * 100,
+                  )}%`,
+                }}
+              />
+            </div>
+          ) : null}
 
           <form className="subtask-form" onSubmit={submitSubtask}>
             <label className="sr-only" htmlFor={subtaskTitleId}>
@@ -6259,6 +6271,17 @@ function TaskDetailsPanel({
               </AnimatePresence>
             </div>
           </SortableContext>
+
+          {subtasks.length ? (
+            <p className="helper-copy subtask-schedule-help">
+              Give each step its own date - the task deadline stays on or after the latest step.
+            </p>
+          ) : !subtasksBlockedByRepeat ? (
+            <div className="subtask-empty">
+              <ListChecks size={18} />
+              <span>No steps yet - break this task down.</span>
+            </div>
+          ) : null}
         </section>
 
         <div className="details-actions">
@@ -6347,11 +6370,15 @@ function SortableSubtaskRow({
     }
   }
 
+  const isOverdue = Boolean(
+    subtask.dueDate && !subtask.isCompleted && subtask.dueDate < localDateKey(),
+  );
+
   return (
     <motion.div
       ref={sortable.setNodeRef}
       style={style}
-      className={`subtask-row ${sortable.isDragging ? "dragging" : ""}`}
+      className={`subtask-row${subtask.isCompleted ? " done" : ""}${sortable.isDragging ? " dragging" : ""}`}
       layout
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
@@ -6371,67 +6398,84 @@ function SortableSubtaskRow({
       >
         <DrawnCheck checked={subtask.isCompleted} size={13} />
       </button>
-      <input
-        value={titleDraft}
-        onChange={(event) => setTitleDraft(event.target.value)}
-        onBlur={saveTitleDraft}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            event.currentTarget.blur();
-          }
-          if (event.key === "Escape") {
-            event.preventDefault();
-            event.stopPropagation();
-            setTitleDraft(subtask.title);
-            event.currentTarget.blur();
-          }
-        }}
-        aria-label={`Subtask title: ${subtask.title}`}
-        className={`subtask-title${subtask.isCompleted ? " done" : ""}`}
-      />
-      <input
-        type="date"
-        value={subtask.dueDate ?? ""}
-        onChange={(event) => onUpdate({ dueDate: event.target.value || null })}
-        aria-label={`Due date for subtask: ${subtask.title}`}
-        className="subtask-date"
-      />
-      <button
-        className="subtask-move"
-        type="button"
-        onClick={onMoveUp}
-        disabled={!canMoveUp}
-        aria-label={`Move ${subtask.title} up`}
-      >
-        <ChevronUp size={14} />
-      </button>
-      <button
-        className="subtask-move"
-        type="button"
-        onClick={onMoveDown}
-        disabled={!canMoveDown}
-        aria-label={`Move ${subtask.title} down`}
-      >
-        <ChevronDown size={14} />
-      </button>
-      <button
-        className="subtask-drag"
-        type="button"
-        {...sortable.attributes}
-        {...sortable.listeners}
-        aria-label={`Reorder subtask: ${subtask.title}`}
-      >
-        <GripVertical size={15} />
-      </button>
-      <button
-        className="subtask-delete"
-        type="button"
-        onClick={onDelete}
-        aria-label={`Delete subtask: ${subtask.title}`}
-      >
-        <X size={14} />
-      </button>
+      <div className="subtask-main">
+        <input
+          value={titleDraft}
+          onChange={(event) => setTitleDraft(event.target.value)}
+          onBlur={saveTitleDraft}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              event.currentTarget.blur();
+            }
+            if (event.key === "Escape") {
+              event.preventDefault();
+              event.stopPropagation();
+              setTitleDraft(subtask.title);
+              event.currentTarget.blur();
+            }
+          }}
+          aria-label={`Subtask title: ${subtask.title}`}
+          className={`subtask-title${subtask.isCompleted ? " done" : ""}`}
+        />
+        <div className="subtask-meta">
+          <span
+            className={`subtask-date-chip${subtask.dueDate ? " set" : ""}${isOverdue ? " overdue" : ""}`}
+          >
+            <CalendarDays size={12} />
+            <span className="subtask-date-label">
+              {subtask.dueDate
+                ? format(new Date(`${subtask.dueDate}T00:00:00`), "EEE, MMM d")
+                : "Add date"}
+            </span>
+            <input
+              type="date"
+              value={subtask.dueDate ?? ""}
+              onChange={(event) => onUpdate({ dueDate: event.target.value || null })}
+              aria-label={`Due date for subtask: ${subtask.title}`}
+              className="subtask-date"
+            />
+          </span>
+          {isOverdue ? <span className="subtask-overdue-tag">Overdue</span> : null}
+          <div className="subtask-tools">
+            <button
+              className="subtask-move"
+              type="button"
+              onClick={onMoveUp}
+              disabled={!canMoveUp}
+              aria-label={`Move ${subtask.title} up`}
+            >
+              <ChevronUp size={14} />
+            </button>
+            <button
+              className="subtask-move"
+              type="button"
+              onClick={onMoveDown}
+              disabled={!canMoveDown}
+              aria-label={`Move ${subtask.title} down`}
+            >
+              <ChevronDown size={14} />
+            </button>
+            <button
+              className="subtask-drag"
+              type="button"
+              {...sortable.attributes}
+              {...sortable.listeners}
+              aria-label={`Reorder subtask: ${subtask.title}`}
+            >
+              <GripVertical size={15} />
+            </button>
+            <button
+              className="subtask-delete"
+              type="button"
+              onClick={onDelete}
+              aria-label={`Delete subtask: ${subtask.title}`}
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
     </motion.div>
   );
 }
