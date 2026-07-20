@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { ActorContext, StickyScope } from "@sticky/contracts";
-import { destructiveConfirmationSchema } from "@sticky/contracts";
+import { destructiveConfirmationSchema, recurrenceScheduleSchema } from "@sticky/contracts";
 import { requireDestructiveConfirmation, requireScope, resolveReminderTime, StickyDomainError } from "@sticky/domain";
 import { createMcpHonoApp } from "@modelcontextprotocol/hono";
 import { McpServer, WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/server";
@@ -189,6 +189,9 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
   server.registerTool("get_task", { description: "Get one Sticky task by id.", inputSchema: z.object({ taskId: id }), annotations: { readOnlyHint: true } },
     async ({ taskId }) => { const current = actor(); requireScope(current, "tasks:read"); return result({ task: await getRuntime().repository.getTask(current, taskId) }); });
 
+  server.registerTool("list_task_recurrences", { description: "List Sticky task recurrence rules. A rule is attached to the current active occurrence and is separate from reminders. Optionally filter by one task id.", inputSchema: z.object({ taskId: id.optional() }), annotations: { readOnlyHint: true } },
+    async ({ taskId }) => { const current = actor(); requireScope(current, "tasks:read"); return result({ recurrences: await getRuntime().repository.listTaskRecurrenceRules(current, taskId) }); });
+
   server.registerTool("list_subtasks", { description: "List the real Sticky subtasks under one task, including each subtask's own due date, completion state, order, and version. Use this before changing, completing, moving, or deleting a subtask. These are Sticky subtasks, never Google Tasks.", inputSchema: z.object({ taskId: id, includeCompleted: z.boolean().default(true) }), annotations: { readOnlyHint: true } },
     async ({ taskId, includeCompleted }) => { const current = actor(); requireScope(current, "tasks:read"); return result({ subtasks: await getRuntime().repository.listSubtasks(current, taskId, includeCompleted) }); });
 
@@ -296,13 +299,46 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
     lists: await getRuntime().repository.reorderLists(current, input.listIds),
   })));
 
-  server.registerTool("create_task", { description: "Create a Sticky task and, when requested, all of its Sticky subtasks in the same call. Always include the subtasks array when the user's request names a task plus subtasks; do not create only the parent or send the user to Google Tasks. Every subtask can have its own dueDate. Sticky automatically keeps the parent task due on or after the latest subtask due date.", inputSchema: z.object({ listId: id, title: z.string().trim().min(1).max(180), details: z.string().max(20_000).default(""), dueDate: z.iso.date().nullable().default(null), dueTime: z.string().nullable().default(null), timezone: z.string().default("America/Chicago"), subtasks: z.array(z.object({ title: z.string().trim().min(1).max(160), dueDate: z.iso.date().nullable().default(null) })).max(100).default([]) }) },
+  server.registerTool("create_task", { description: "Create a Sticky task and either all of its Sticky subtasks or its recurrence in the same call. For a repeating task, set recurrence and make startsOn the first due date; dueTime is the local occurrence time. Use daysOfWeek 0=Sunday through 6=Saturday. Never substitute a reminder for recurrence. Repeating tasks cannot have subtasks.", inputSchema: z.object({ listId: id, title: z.string().trim().min(1).max(180), details: z.string().max(20_000).default(""), dueDate: z.iso.date().nullable().default(null), dueTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/).nullable().default(null), timezone: z.string().default("America/Chicago"), subtasks: z.array(z.object({ title: z.string().trim().min(1).max(160), dueDate: z.iso.date().nullable().default(null) })).max(100).default([]), recurrence: recurrenceScheduleSchema.nullable().default(null) }).superRefine((input, context) => {
+    if (input.recurrence && input.subtasks.length > 0) context.addIssue({ code: "custom", path: ["subtasks"], message: "A repeating Sticky task cannot have subtasks." });
+  }) },
     async (input) => mutationResult("create_task", input, async (current) => {
-      const taskInput = { ...input, color: "sun" as const };
-      return input.subtasks.length
-        ? getRuntime().repository.createTaskWithSubtasks(current, taskInput)
-        : { task: await getRuntime().repository.createTask(current, taskInput), subtasks: [] };
+      const taskInput = {
+        ...input,
+        dueDate: input.recurrence?.startsOn ?? input.dueDate,
+        timezone: input.recurrence?.timezone ?? input.timezone,
+        color: "sun" as const,
+      };
+      if (input.subtasks.length) return getRuntime().repository.createTaskWithSubtasks(current, taskInput);
+      const task = await getRuntime().repository.createTask(current, taskInput);
+      if (!input.recurrence) return { task, subtasks: [], recurrence: null };
+      try {
+        const recurrence = await getRuntime().repository.setTaskRecurrence(current, task.id, input.recurrence, input.dueTime);
+        return { task: await getRuntime().repository.getTask(current, task.id), subtasks: [], recurrence };
+      } catch (error) {
+        try {
+          await getRuntime().repository.deleteTask(current, task.id);
+        } catch (cleanupError) {
+          console.error("Sticky could not clean up a task after recurrence creation failed", {
+            taskId: task.id,
+            cleanupError: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+          });
+        }
+        throw error;
+      }
     }));
+
+  server.registerTool("set_task_recurrence", { description: "Create or replace the recurrence on an existing active Sticky task. This schedules its first occurrence on schedule.startsOn, preserves its current due time unless dueTime is supplied, and supports daily, weekly, monthly, yearly, or custom repetition. Use daysOfWeek 0=Sunday through 6=Saturday. This is recurrence, not a reminder; recurring tasks cannot have subtasks.", inputSchema: z.object({ taskId: id, schedule: recurrenceScheduleSchema, dueTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/).nullable().optional() }) },
+    async ({ taskId, schedule, dueTime }) => mutationResult("set_task_recurrence", { taskId, schedule, dueTime }, async (current) => ({
+      recurrence: await getRuntime().repository.setTaskRecurrence(current, taskId, schedule, dueTime),
+      task: await getRuntime().repository.getTask(current, taskId),
+    })));
+
+  server.registerTool("set_task_recurrence_paused", { description: "Pause or resume a Sticky task's recurrence without deleting the task or its schedule.", inputSchema: z.object({ taskId: id, paused: z.boolean() }) },
+    async (input) => mutationResult("set_task_recurrence_paused", input, async (current) => ({ recurrence: await getRuntime().repository.setTaskRecurrencePaused(current, input.taskId, input.paused) })));
+
+  server.registerTool("remove_task_recurrence", { description: "Stop a Sticky task from repeating by deleting only its recurrence rule. The current task remains. Use only when the user explicitly asks to stop or remove repetition.", inputSchema: z.object({ taskId: id }), annotations: { destructiveHint: true } },
+    async (input) => mutationResult("remove_task_recurrence", input, async (current) => { await getRuntime().repository.removeTaskRecurrence(current, input.taskId); return { removed: true, taskId: input.taskId }; }));
 
   if (options.includeDirectGoogle) {
     server.registerTool("create_google_task", { description: "Create a task directly in Google Tasks. This never creates a Sticky task.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), title: z.string().trim().min(1).max(1_000), notes: z.string().max(20_000).default(""), dueDate: z.iso.date().nullable().default(null), parentId: z.string().min(1).max(1_000).optional(), previousId: z.string().min(1).max(1_000).optional() }) },
@@ -359,10 +395,10 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
   server.registerTool("move_task", { description: "Move a task to another Sticky list.", inputSchema: z.object({ taskId: id, targetListId: id, version }) },
     async (input) => mutationResult("move_task", input, async (current) => ({ task: await getRuntime().repository.moveTask(current, input.taskId, input.targetListId, input.version) })));
 
-  server.registerTool("complete_task", { description: "Mark a Sticky task complete. The record version is optional; when omitted, Sticky safely uses the current version.", inputSchema: z.object({ taskId: id, version: version.optional() }) },
+  server.registerTool("complete_task", { description: "Mark a Sticky task complete. If it repeats, Sticky atomically creates the next scheduled occurrence and moves the recurrence rule to it. The record version is optional; when omitted, Sticky safely uses the current version.", inputSchema: z.object({ taskId: id, version: version.optional() }) },
     async (input) => mutationResult("complete_task", input, async (current) => {
       const currentVersion = input.version ?? (await getRuntime().repository.getTask(current, input.taskId)).version;
-      return { task: await getRuntime().repository.setTaskCompleted(current, input.taskId, true, currentVersion) };
+      return getRuntime().repository.completeTaskWithRecurrence(current, input.taskId, currentVersion);
     }));
 
   server.registerTool("restore_task", { description: "Restore a completed Sticky task. The record version is optional; when omitted, Sticky safely uses the current version.", inputSchema: z.object({ taskId: id, version: version.optional() }) },
@@ -472,11 +508,11 @@ export function createMcpApp() {
   app.all("/", async (c) => {
     const isPoke = actor().actorId.startsWith("poke:");
     const server = new McpServer(
-      { name: isPoke ? "Sticky Focused Workspace" : "Sticky", version: "1.3.0" },
+      { name: isPoke ? "Sticky Focused Workspace" : "Sticky", version: "1.4.0" },
       {
         instructions: isPoke
-          ? "Sticky is the user's canonical focused task and planning system. Use this server only for Sticky tasks, Sticky subtasks, Sticky Calendar, reminders, and the guarded one-time Google Tasks-to-Sticky transfer tools. Finish every requested part of a compound Sticky request in order and report each result. When one request names a new task and its subtasks, pass the subtasks directly to create_task so the whole hierarchy is created; never create only the parent, claim subtasks are unavailable, or redirect Sticky subtasks to Google Tasks. Sticky subtasks are first-class: you can list, add, rename, independently date, complete, restore, reorder, and delete them. Their due dates are scheduled steps, while the parent task due date is the final deadline and Sticky keeps it on or after the latest subtask. You can create Sticky lists, move or fully reorder them, archive them, and explicitly delete them with their contents; do not claim those tools are unavailable when they are present. For left/right list requests, read list_lists and use move_list. A title such as 'Google test' inside a Sticky list is still Sticky data and does not make the list a Google Tasks list. Use Poke's own Google integration for routine Google Tasks and Google Calendar reads or changes. Google and Sticky are separate systems: never sync, mirror, or import them automatically. A transfer must start with preview_google_tasks_to_sticky and must receive a new explicit user confirmation before the matching copy or move tool. Moving also requires explicit approval to delete Google originals after Sticky verifies every copy. Tasks and calendar events are distinct: due dates are deadlines while events reserve time. Read the relevant Sticky record before changing it. When the user explicitly asks to delete a named Sticky item in the current message, that request can supply the confirmation summary required by the matching destructive tool; never infer destructive approval."
-          : "Sticky is the user's canonical focused task and planning system. This server exposes separate Sticky and live Google tools plus a guarded one-time Google Tasks-to-Sticky transfer. Never sync, import, mirror, or copy between the systems automatically. A transfer must start with preview_google_tasks_to_sticky and receive a new explicit user confirmation before the matching copy or move tool. Use Sticky tools for Sticky data and google-prefixed tools for Google data. Tasks and calendar events are distinct: due dates are deadlines while events reserve time. Read the relevant source before changing it and request explicit confirmation before destructive actions.",
+          ? "Sticky is the user's canonical focused task and planning system. Use this server only for Sticky tasks, Sticky subtasks, recurring tasks, Sticky Calendar, reminders, and the guarded one-time Google Tasks-to-Sticky transfer tools. Finish every requested part of a compound Sticky request in order and report each result. Recurring Sticky tasks are first-class: create them by passing recurrence directly to create_task, or use set_task_recurrence on an existing active task. You can list, change, pause, resume, and remove recurrence. Weekly days use 0=Sunday through 6=Saturday, startsOn is the first due date, dueTime is the local occurrence time, and the default timezone is America/Chicago. Recurrence and reminders are different: never replace a requested recurring task with a reminder or claim recurrence is unsupported. Completing a recurring task creates its next occurrence automatically. Repeating tasks cannot contain subtasks. When one request names a new non-recurring task and its subtasks, pass the subtasks directly to create_task so the whole hierarchy is created; never create only the parent, claim subtasks are unavailable, or redirect Sticky subtasks to Google Tasks. Sticky subtasks are first-class: you can list, add, rename, independently date, complete, restore, reorder, and delete them. Their due dates are scheduled steps, while the parent task due date is the final deadline and Sticky keeps it on or after the latest subtask. You can create Sticky lists, move or fully reorder them, archive them, and explicitly delete them with their contents; do not claim those tools are unavailable when they are present. For left/right list requests, read list_lists and use move_list. A title such as 'Google test' inside a Sticky list is still Sticky data and does not make the list a Google Tasks list. Use Poke's own Google integration for routine Google Tasks and Google Calendar reads or changes. Google and Sticky are separate systems: never sync, mirror, or import them automatically. A transfer must start with preview_google_tasks_to_sticky and must receive a new explicit user confirmation before the matching copy or move tool. Moving also requires explicit approval to delete Google originals after Sticky verifies every copy. Tasks and calendar events are distinct: due dates are deadlines while events reserve time. Read the relevant Sticky record before changing it. When the user explicitly asks to delete a named Sticky item in the current message, that request can supply the confirmation summary required by the matching destructive tool; never infer destructive approval."
+          : "Sticky is the user's canonical focused task and planning system. This server exposes first-class Sticky tasks, subtasks, recurring tasks, calendar events, separate live Google tools, and a guarded one-time Google Tasks-to-Sticky transfer. Recurrence is separate from reminders: create repeating tasks with create_task.recurrence, use startsOn as the first due date, and use daysOfWeek 0=Sunday through 6=Saturday. Completing a recurring task creates its next occurrence. Repeating tasks cannot have subtasks. Never sync, import, mirror, or copy between Sticky and Google automatically. A transfer must start with preview_google_tasks_to_sticky and receive a new explicit user confirmation before the matching copy or move tool. Use Sticky tools for Sticky data and google-prefixed tools for Google data. Tasks and calendar events are distinct: due dates are deadlines while events reserve time. Read the relevant source before changing it and request explicit confirmation before destructive actions.",
       },
     );
     registerTools(server, { includeDirectGoogle: !isPoke });

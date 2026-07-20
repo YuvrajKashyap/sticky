@@ -56,6 +56,12 @@ describe("Sticky MCP source isolation", () => {
     expect(tools.has("move_subtask")).toBe(true);
     expect(tools.has("reorder_subtasks")).toBe(true);
     expect(tools.has("delete_subtask")).toBe(true);
+    expect(tools.has("list_task_recurrences")).toBe(true);
+    expect(tools.has("set_task_recurrence")).toBe(true);
+    expect(tools.has("set_task_recurrence_paused")).toBe(true);
+    expect(tools.has("remove_task_recurrence")).toBe(true);
+    expect(tools.get("create_task")?.description).toContain("recurrence");
+    expect(tools.get("complete_task")?.description).toContain("next scheduled occurrence");
     expect(tools.get("add_subtask")?.description).toContain("never claim the integration cannot create subtasks");
     expect(tools.get("create_task")?.description).toContain("all of its Sticky subtasks");
     expect(tools.has("move_list")).toBe(true);
@@ -106,6 +112,12 @@ describe("Sticky MCP source isolation", () => {
     expect(tools.has("move_subtask")).toBe(true);
     expect(tools.has("reorder_subtasks")).toBe(true);
     expect(tools.has("delete_subtask")).toBe(true);
+    expect(tools.has("list_task_recurrences")).toBe(true);
+    expect(tools.has("set_task_recurrence")).toBe(true);
+    expect(tools.has("set_task_recurrence_paused")).toBe(true);
+    expect(tools.has("remove_task_recurrence")).toBe(true);
+    expect(tools.get("create_task")?.description).toContain("Never substitute a reminder for recurrence");
+    expect(tools.get("complete_task")?.description).toContain("next scheduled occurrence");
     expect(tools.has("move_list")).toBe(true);
     expect(tools.has("reorder_lists")).toBe(true);
     expect(tools.has("delete_list")).toBe(true);

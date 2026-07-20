@@ -1,4 +1,4 @@
-import type { CalendarDto, CalendarEventDto, ListDto, ReminderDto, SubtaskDto, TaskDto } from "@sticky/contracts";
+import type { CalendarDto, CalendarEventDto, ListDto, RecurrenceRuleDto, ReminderDto, SubtaskDto, TaskDto } from "@sticky/contracts";
 
 export type DataRow = Record<string, unknown>;
 
@@ -49,6 +49,26 @@ export function mapSubtaskRow(row: DataRow): SubtaskDto {
     completedAt: row.completed_at ? String(row.completed_at) : null,
     sortOrder: Number(row.sort_order),
     version: Number(row.version ?? 1),
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+  };
+}
+
+export function mapRecurrenceRuleRow(row: DataRow): RecurrenceRuleDto {
+  return {
+    id: String(row.id),
+    userId: String(row.user_id),
+    taskId: String(row.task_id),
+    frequency: row.frequency as RecurrenceRuleDto["frequency"],
+    intervalCount: Number(row.interval_count),
+    daysOfWeek: Array.isArray(row.days_of_week) ? row.days_of_week.map(Number) : [],
+    monthDay: row.month_day == null ? null : Number(row.month_day),
+    startsOn: String(row.starts_on),
+    endType: row.end_type as RecurrenceRuleDto["endType"],
+    endDate: row.end_date ? String(row.end_date) : null,
+    occurrenceCount: row.occurrence_count == null ? null : Number(row.occurrence_count),
+    timezone: String(row.timezone),
+    paused: Boolean(row.paused),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };

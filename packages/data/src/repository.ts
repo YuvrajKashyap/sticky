@@ -9,6 +9,8 @@ import type {
   CreateSubtaskInput,
   CreateTaskInput,
   ListDto,
+  RecurrenceRuleDto,
+  RecurrenceScheduleInput,
   ReminderDto,
   SubtaskDto,
   TaskDto,
@@ -18,9 +20,9 @@ import type {
   UpdateSubtaskInput,
   UpdateTaskInput,
 } from "@sticky/contracts";
-import { assertVersion, conflict, StickyDomainError } from "@sticky/domain";
+import { assertVersion, conflict, nextOccurrenceCount, nextRecurrenceDate, StickyDomainError } from "@sticky/domain";
 import type { StickySupabaseClient } from "./client";
-import { mapCalendarEventRow, mapCalendarRow, mapListRow, mapReminderRow, mapSubtaskRow, mapTaskRow, type DataRow } from "./mappers";
+import { mapCalendarEventRow, mapCalendarRow, mapListRow, mapRecurrenceRuleRow, mapReminderRow, mapSubtaskRow, mapTaskRow, type DataRow } from "./mappers";
 
 type QueryError = { code?: string; message: string; details?: string | null };
 
@@ -234,6 +236,136 @@ export class StickyRepository {
     const task = mapTaskRow(data as DataRow);
     await this.writeActivity(activity(actor, completed ? "task.completed" : "task.restored", id, task.listId));
     return task;
+  }
+
+  async completeTaskWithRecurrence(
+    actor: ActorContext,
+    id: string,
+    version: number,
+  ): Promise<{ task: TaskDto; nextTask: TaskDto | null; recurrence: RecurrenceRuleDto | null }> {
+    const task = await this.getTask(actor, id);
+    assertVersion(version, task.version, "Task");
+    const recurrence = await this.getTaskRecurrence(actor, id);
+    if (!recurrence) {
+      return { task: await this.setTaskCompleted(actor, id, true, version), nextTask: null, recurrence: null };
+    }
+
+    const nextDueDate = nextRecurrenceDate(recurrence, task);
+    const nextTaskId = nextDueDate ? crypto.randomUUID() : null;
+    const nextCount = nextDueDate ? nextOccurrenceCount(recurrence) : null;
+    const { error } = await this.db.rpc("complete_task_with_recurrence", {
+      p_task_id: id,
+      p_next_task_id: nextTaskId,
+      p_next_due_date: nextDueDate,
+      p_next_due_time: nextDueDate ? task.dueTime : null,
+      p_next_occurrence_count: nextCount,
+      p_request_user_id: actor.userId,
+    });
+    throwQuery(error, "Sticky could not complete that recurring task.");
+    const completedTask = await this.getTask(actor, id);
+    const nextTask = nextTaskId ? await this.getTask(actor, nextTaskId) : null;
+    const nextRule = nextTaskId ? await this.getTaskRecurrence(actor, nextTaskId) : recurrence;
+    await this.writeActivity(activity(actor, "task.completed", id, task.listId, {
+      recurring: true,
+      nextTaskId,
+      nextDueDate,
+    }));
+    return { task: completedTask, nextTask, recurrence: nextRule };
+  }
+
+  async listTaskRecurrenceRules(actor: ActorContext, taskId?: string): Promise<RecurrenceRuleDto[]> {
+    let query = this.db.from("task_recurrence_rules").select("*").eq("user_id", actor.userId).order("created_at");
+    if (taskId) query = query.eq("task_id", taskId);
+    const { data, error } = await query;
+    throwQuery(error);
+    return ((data ?? []) as DataRow[]).map(mapRecurrenceRuleRow);
+  }
+
+  async getTaskRecurrence(actor: ActorContext, taskId: string): Promise<RecurrenceRuleDto | null> {
+    const { data, error } = await this.db.from("task_recurrence_rules").select("*")
+      .eq("task_id", taskId).eq("user_id", actor.userId).maybeSingle();
+    throwQuery(error);
+    return data ? mapRecurrenceRuleRow(data as DataRow) : null;
+  }
+
+  async setTaskRecurrence(
+    actor: ActorContext,
+    taskId: string,
+    input: RecurrenceScheduleInput,
+    dueTime?: string | null,
+  ): Promise<RecurrenceRuleDto> {
+    const task = await this.getTask(actor, taskId);
+    if (task.isCompleted) {
+      throw new StickyDomainError("validation_error", "Restore the task before adding recurrence.", 422);
+    }
+    const subtasks = await this.listSubtasks(actor, taskId, true);
+    if (subtasks.length > 0) {
+      throw new StickyDomainError(
+        "validation_error",
+        "Repeating Sticky tasks cannot have subtasks. Remove the subtasks before adding recurrence.",
+        422,
+      );
+    }
+
+    const nextDueTime = dueTime === undefined ? task.dueTime : dueTime;
+    if (task.dueDate !== input.startsOn || task.dueTime !== nextDueTime || task.timezone !== input.timezone) {
+      const { data: scheduledTask, error: scheduleError } = await this.db.from("tasks").update({
+        due_date: input.startsOn,
+        due_time: nextDueTime,
+        timezone: input.timezone,
+      }).eq("id", taskId).eq("user_id", actor.userId).eq("version", task.version).select("id").maybeSingle();
+      throwQuery(scheduleError, "Sticky could not schedule the first occurrence.");
+      if (!scheduledTask) throw conflict("Task changed somewhere else. Refresh and try again.");
+    }
+
+    const existing = await this.getTaskRecurrence(actor, taskId);
+    const values = {
+      user_id: actor.userId,
+      task_id: taskId,
+      frequency: input.frequency,
+      interval_count: input.intervalCount,
+      days_of_week: input.daysOfWeek,
+      month_day: input.monthDay,
+      starts_on: input.startsOn,
+      end_type: input.endType,
+      end_date: input.endDate,
+      occurrence_count: input.occurrenceCount,
+      timezone: input.timezone,
+      paused: input.paused,
+    };
+    const result = existing
+      ? await this.db.from("task_recurrence_rules").update(values)
+        .eq("id", existing.id).eq("user_id", actor.userId).select("*").single()
+      : await this.db.from("task_recurrence_rules").insert(values).select("*").single();
+    throwQuery(result.error, "Sticky could not save that recurrence.");
+    const rule = mapRecurrenceRuleRow(result.data as DataRow);
+    await this.writeActivity(activity(actor, existing ? "recurrence.updated" : "recurrence.created", taskId, task.listId, {
+      frequency: rule.frequency,
+      intervalCount: rule.intervalCount,
+    }));
+    return rule;
+  }
+
+  async setTaskRecurrencePaused(actor: ActorContext, taskId: string, paused: boolean): Promise<RecurrenceRuleDto> {
+    const task = await this.getTask(actor, taskId);
+    const existing = await this.getTaskRecurrence(actor, taskId);
+    if (!existing) throw new StickyDomainError("not_found", "That task does not have a recurrence rule.", 404);
+    const { data, error } = await this.db.from("task_recurrence_rules").update({ paused })
+      .eq("id", existing.id).eq("user_id", actor.userId).select("*").single();
+    throwQuery(error, "Sticky could not change that recurrence.");
+    const rule = mapRecurrenceRuleRow(data as DataRow);
+    await this.writeActivity(activity(actor, paused ? "recurrence.paused" : "recurrence.resumed", taskId, task.listId));
+    return rule;
+  }
+
+  async removeTaskRecurrence(actor: ActorContext, taskId: string): Promise<void> {
+    const task = await this.getTask(actor, taskId);
+    const existing = await this.getTaskRecurrence(actor, taskId);
+    if (!existing) throw new StickyDomainError("not_found", "That task does not have a recurrence rule.", 404);
+    const { error } = await this.db.from("task_recurrence_rules").delete()
+      .eq("id", existing.id).eq("user_id", actor.userId);
+    throwQuery(error, "Sticky could not remove that recurrence.");
+    await this.writeActivity(activity(actor, "recurrence.deleted", taskId, task.listId));
   }
 
   async deleteTask(actor: ActorContext, id: string): Promise<void> {
