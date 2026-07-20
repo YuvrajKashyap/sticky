@@ -19,8 +19,10 @@ import type {
   UpdateListInput,
   UpdateSubtaskInput,
   UpdateTaskInput,
+  UpdateWorkspacePreferencesInput,
+  WorkspacePreferencesDto,
 } from "@sticky/contracts";
-import { assertVersion, conflict, nextOccurrenceCount, nextRecurrenceDate, StickyDomainError } from "@sticky/domain";
+import { assertVersion, conflict, nextOccurrenceCount, nextRecurrenceDate, recurrenceCatchUpTarget, StickyDomainError } from "@sticky/domain";
 import type { StickySupabaseClient } from "./client";
 import { mapCalendarEventRow, mapCalendarRow, mapListRow, mapRecurrenceRuleRow, mapReminderRow, mapSubtaskRow, mapTaskRow, type DataRow } from "./mappers";
 
@@ -46,6 +48,20 @@ function activity(actor: ActorContext, action: string, taskId?: string, listId?:
     source: actor.actorType === "human" ? "web" : actor.actorType,
     request_id: actor.requestId,
     idempotency_key: actor.idempotencyKey,
+  };
+}
+
+function mapWorkspacePreferencesRow(row: DataRow): WorkspacePreferencesDto {
+  const completedOpenByList = row.completed_open_by_list && typeof row.completed_open_by_list === "object" && !Array.isArray(row.completed_open_by_list)
+    ? Object.fromEntries(Object.entries(row.completed_open_by_list as Record<string, unknown>).map(([key, value]) => [key, Boolean(value)]))
+    : {};
+  return {
+    completedOpenByList,
+    density: row.density as WorkspacePreferencesDto["density"],
+    colorMode: row.color_mode as WorkspacePreferencesDto["colorMode"],
+    boardStyle: row.board_style as WorkspacePreferencesDto["boardStyle"],
+    taskViewFilter: row.task_view_filter as WorkspacePreferencesDto["taskViewFilter"],
+    taskSortMode: row.task_sort_mode as WorkspacePreferencesDto["taskSortMode"],
   };
 }
 
@@ -213,14 +229,33 @@ export class StickyRepository {
     const current = await this.getTask(actor, id);
     assertVersion(version, current.version, "Task");
     await this.getList(actor, targetListId);
-    const sortOrder = await this.nextOrder("tasks", actor.userId, targetListId);
-    const { data, error } = await this.db.from("tasks").update({ list_id: targetListId, sort_order: sortOrder })
-      .eq("id", id).eq("user_id", actor.userId).eq("version", version).select("*").maybeSingle();
-    throwQuery(error);
-    if (!data) throw conflict("Task changed somewhere else. Refresh and try again.");
-    const task = mapTaskRow(data as DataRow);
+    const { error } = await this.db.rpc("move_task", {
+      p_task_id: id,
+      p_target_list_id: targetListId,
+      p_request_user_id: actor.userId,
+    });
+    throwQuery(error, "Sticky could not move that task.");
+    const task = await this.getTask(actor, id);
     await this.writeActivity(activity(actor, "task.moved", id, targetListId, { fromListId: current.listId }));
     return task;
+  }
+
+  async reorderTasks(actor: ActorContext, listId: string, taskIds: string[]): Promise<TaskDto[]> {
+    await this.getList(actor, listId);
+    const current = await this.listTasks(actor, { listId });
+    const currentIds = current.map((task) => task.id);
+    const requested = new Set(taskIds);
+    if (requested.size !== taskIds.length || taskIds.length !== currentIds.length || currentIds.some((id) => !requested.has(id))) {
+      throw new StickyDomainError("validation_error", "Pass every active task in this list exactly once.", 422);
+    }
+    const { error } = await this.db.rpc("reorder_tasks", {
+      p_list_id: listId,
+      p_task_ids: taskIds,
+      p_request_user_id: actor.userId,
+    });
+    throwQuery(error, "Sticky could not reorder those tasks.");
+    await this.writeActivity(activity(actor, "tasks.reordered", undefined, listId, { taskIds }));
+    return this.listTasks(actor, { listId });
   }
 
   async setTaskCompleted(actor: ActorContext, id: string, completed: boolean, version: number): Promise<TaskDto> {
@@ -368,6 +403,138 @@ export class StickyRepository {
     await this.writeActivity(activity(actor, "recurrence.deleted", taskId, task.listId));
   }
 
+  async advanceRecurringTask(
+    actor: ActorContext,
+    taskId: string,
+    throughDate: string,
+  ): Promise<{ task: TaskDto; recurrence: RecurrenceRuleDto; skippedCount: number; advanced: boolean }> {
+    const task = await this.getTask(actor, taskId);
+    const recurrence = await this.getTaskRecurrence(actor, taskId);
+    if (!recurrence) throw new StickyDomainError("not_found", "That task does not have a recurrence rule.", 404);
+    const target = recurrenceCatchUpTarget(recurrence, task, throughDate);
+    if (!target) return { task, recurrence, skippedCount: 0, advanced: false };
+
+    const { error } = await this.db.rpc("advance_recurring_task", {
+      p_task_id: taskId,
+      p_next_due_date: target.dueDate,
+      p_next_occurrence_count: target.occurrenceCount,
+      p_request_user_id: actor.userId,
+    });
+    throwQuery(error, "Sticky could not advance that recurring task.");
+    const [advancedTask, advancedRecurrence] = await Promise.all([
+      this.getTask(actor, taskId),
+      this.getTaskRecurrence(actor, taskId),
+    ]);
+    if (!advancedRecurrence) throw new StickyDomainError("internal_error", "Sticky advanced the task but lost its recurrence rule.", 500);
+    await this.writeActivity(activity(actor, "recurrence.advanced", taskId, task.listId, {
+      throughDate,
+      dueDate: target.dueDate,
+      skippedCount: target.skippedCount,
+    }));
+    return { task: advancedTask, recurrence: advancedRecurrence, skippedCount: target.skippedCount, advanced: true };
+  }
+
+  async undoRecurringCompletion(
+    actor: ActorContext,
+    completedTaskId: string,
+    generatedTaskId: string,
+  ): Promise<{ task: TaskDto; recurrence: RecurrenceRuleDto }> {
+    const [completedTask, generatedTask, recurrence] = await Promise.all([
+      this.getTask(actor, completedTaskId),
+      this.getTask(actor, generatedTaskId),
+      this.getTaskRecurrence(actor, generatedTaskId),
+    ]);
+    if (!completedTask.isCompleted || generatedTask.isCompleted) {
+      throw new StickyDomainError("validation_error", "Undo requires the completed occurrence and its active generated occurrence.", 422);
+    }
+    if (!recurrence) throw new StickyDomainError("not_found", "The generated task does not have the recurrence rule.", 404);
+    const restoredOccurrenceCount = recurrence.endType === "after_count" && recurrence.occurrenceCount !== null
+      ? recurrence.occurrenceCount + 1
+      : recurrence.occurrenceCount;
+    const { error } = await this.db.rpc("undo_recurring_completion", {
+      p_task_id: completedTaskId,
+      p_generated_task_id: generatedTaskId,
+      p_recurrence_rule_id: recurrence.id,
+      p_occurrence_count: restoredOccurrenceCount,
+      p_request_user_id: actor.userId,
+    });
+    throwQuery(error, "Sticky could not undo that recurring completion.");
+    const [task, restoredRecurrence] = await Promise.all([
+      this.getTask(actor, completedTaskId),
+      this.getTaskRecurrence(actor, completedTaskId),
+    ]);
+    if (!restoredRecurrence) throw new StickyDomainError("internal_error", "Sticky restored the task but lost its recurrence rule.", 500);
+    await this.writeActivity(activity(actor, "recurrence.completion_undone", completedTaskId, task.listId, { generatedTaskId }));
+    return { task, recurrence: restoredRecurrence };
+  }
+
+  async duplicateTask(
+    actor: ActorContext,
+    taskId: string,
+    title?: string,
+  ): Promise<{ task: TaskDto; subtasks: SubtaskDto[]; recurrence: RecurrenceRuleDto | null }> {
+    const [source, sourceSubtasks, sourceRecurrence] = await Promise.all([
+      this.getTask(actor, taskId),
+      this.listSubtasks(actor, taskId, true),
+      this.getTaskRecurrence(actor, taskId),
+    ]);
+    const task = await this.createTask(actor, {
+      listId: source.listId,
+      title: title ?? `${source.title} copy`,
+      details: source.details,
+      color: source.color,
+      dueDate: source.dueDate,
+      dueTime: source.dueTime,
+      timezone: source.timezone,
+    });
+
+    try {
+      let subtasks: SubtaskDto[] = [];
+      if (sourceSubtasks.length > 0) {
+        const rows = sourceSubtasks.map((subtask, index) => ({
+          id: crypto.randomUUID(),
+          user_id: actor.userId,
+          task_id: task.id,
+          title: subtask.title,
+          due_date: subtask.dueDate,
+          is_completed: false,
+          completed_at: null,
+          sort_order: (index + 1) * 1000,
+        }));
+        const inserted = await this.db.from("subtasks").insert(rows).select("*");
+        throwQuery(inserted.error, "Sticky could not duplicate those subtasks.");
+        subtasks = ((inserted.data ?? []) as DataRow[]).map(mapSubtaskRow).sort((left, right) => left.sortOrder - right.sortOrder);
+      }
+
+      let recurrence: RecurrenceRuleDto | null = null;
+      if (sourceRecurrence && subtasks.length === 0) {
+        const inserted = await this.db.from("task_recurrence_rules").insert({
+          id: crypto.randomUUID(),
+          user_id: actor.userId,
+          task_id: task.id,
+          frequency: sourceRecurrence.frequency,
+          interval_count: sourceRecurrence.intervalCount,
+          days_of_week: sourceRecurrence.daysOfWeek,
+          month_day: sourceRecurrence.monthDay,
+          starts_on: sourceRecurrence.startsOn,
+          end_type: sourceRecurrence.endType,
+          end_date: sourceRecurrence.endDate,
+          occurrence_count: sourceRecurrence.occurrenceCount,
+          timezone: sourceRecurrence.timezone,
+          paused: sourceRecurrence.paused,
+        }).select("*").single();
+        throwQuery(inserted.error, "Sticky could not duplicate that recurrence.");
+        recurrence = mapRecurrenceRuleRow(inserted.data as DataRow);
+      }
+      await this.writeActivity(activity(actor, "task.duplicated", task.id, task.listId, { sourceTaskId: taskId }));
+      return { task, subtasks, recurrence };
+    } catch (error) {
+      const cleanup = await this.db.from("tasks").delete().eq("id", task.id).eq("user_id", actor.userId);
+      if (cleanup.error) console.error("Sticky could not clean up a partial duplicate", { taskId: task.id, cleanup: cleanup.error.message });
+      throw error;
+    }
+  }
+
   async deleteTask(actor: ActorContext, id: string): Promise<void> {
     const task = await this.getTask(actor, id);
     const { error } = await this.db.from("tasks").delete().eq("id", id).eq("user_id", actor.userId);
@@ -376,6 +543,19 @@ export class StickyRepository {
       deletedTaskId: id,
       listId: task.listId,
     }));
+  }
+
+  async clearCompletedTasks(actor: ActorContext, listId: string): Promise<string[]> {
+    await this.getList(actor, listId);
+    const completed = (await this.listTasks(actor, { listId, includeCompleted: true })).filter((task) => task.isCompleted);
+    const { error } = await this.db.rpc("clear_completed_tasks", {
+      p_list_id: listId,
+      p_request_user_id: actor.userId,
+    });
+    throwQuery(error, "Sticky could not clear those completed tasks.");
+    const deletedTaskIds = completed.map((task) => task.id);
+    await this.writeActivity(activity(actor, "tasks.completed_cleared", undefined, listId, { deletedTaskIds }));
+    return deletedTaskIds;
   }
 
   async listSubtasks(actor: ActorContext, taskId?: string, includeCompleted = true): Promise<SubtaskDto[]> {
@@ -488,6 +668,37 @@ export class StickyRepository {
     const { data, error } = await query;
     throwQuery(error);
     return ((data ?? []) as DataRow[]).map(mapReminderRow);
+  }
+
+  async getWorkspacePreferences(actor: ActorContext): Promise<WorkspacePreferencesDto> {
+    const { data, error } = await this.db.from("user_preferences")
+      .select("completed_open_by_list,density,color_mode,board_style,task_view_filter,task_sort_mode")
+      .eq("user_id", actor.userId)
+      .maybeSingle();
+    throwQuery(error);
+    if (!data) throw new StickyDomainError("not_found", "Sticky could not find your workspace preferences.", 404);
+    return mapWorkspacePreferencesRow(data as DataRow);
+  }
+
+  async updateWorkspacePreferences(actor: ActorContext, input: UpdateWorkspacePreferencesInput): Promise<WorkspacePreferencesDto> {
+    const values: Record<string, unknown> = {};
+    if (input.completedOpenByList !== undefined) {
+      const current = await this.getWorkspacePreferences(actor);
+      values.completed_open_by_list = { ...current.completedOpenByList, ...input.completedOpenByList };
+    }
+    if (input.density !== undefined) values.density = input.density;
+    if (input.colorMode !== undefined) values.color_mode = input.colorMode;
+    if (input.boardStyle !== undefined) values.board_style = input.boardStyle;
+    if (input.taskViewFilter !== undefined) values.task_view_filter = input.taskViewFilter;
+    if (input.taskSortMode !== undefined) values.task_sort_mode = input.taskSortMode;
+    const { data, error } = await this.db.from("user_preferences").update(values)
+      .eq("user_id", actor.userId)
+      .select("completed_open_by_list,density,color_mode,board_style,task_view_filter,task_sort_mode")
+      .maybeSingle();
+    throwQuery(error, "Sticky could not save those workspace preferences.");
+    if (!data) throw new StickyDomainError("not_found", "Sticky could not find your workspace preferences.", 404);
+    await this.writeActivity(activity(actor, "preferences.updated", undefined, undefined, { fields: Object.keys(values) }));
+    return mapWorkspacePreferencesRow(data as DataRow);
   }
 
   async listCalendars(actor: ActorContext, includeArchived = false): Promise<CalendarDto[]> {

@@ -74,3 +74,29 @@ export function nextOccurrenceCount(rule: RecurrenceRuleDto): number | null {
   if (rule.endType !== "after_count" || rule.occurrenceCount === null) return rule.occurrenceCount;
   return Math.max(1, rule.occurrenceCount - 1);
 }
+
+export function recurrenceCatchUpTarget(
+  rule: RecurrenceRuleDto,
+  task: TaskDto,
+  targetDate: string,
+): { dueDate: string; occurrenceCount: number | null; skippedCount: number } | null {
+  if (!task.dueDate || task.dueDate >= targetDate || rule.paused) return null;
+
+  let workingRule = rule;
+  let workingTask = task;
+  let skippedCount = 0;
+
+  for (let index = 0; index < 730; index += 1) {
+    const dueDate = nextRecurrenceDate(workingRule, workingTask);
+    if (!dueDate) return null;
+
+    skippedCount += 1;
+    const occurrenceCount = nextOccurrenceCount(workingRule);
+    workingRule = { ...workingRule, occurrenceCount };
+    workingTask = { ...workingTask, dueDate };
+
+    if (dueDate >= targetDate) return { dueDate, occurrenceCount, skippedCount };
+  }
+
+  return null;
+}

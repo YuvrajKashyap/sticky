@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RecurrenceRuleDto, TaskDto } from "@sticky/contracts";
-import { nextDailyAgendaOccurrence, nextOccurrenceCount, nextRecurrenceDate, resolveFieldConflict, resolveReminderTime, toGoogleTask } from "./index";
+import { nextDailyAgendaOccurrence, nextOccurrenceCount, nextRecurrenceDate, recurrenceCatchUpTarget, resolveFieldConflict, resolveReminderTime, toGoogleTask } from "./index";
 
 const recurringTask: TaskDto = {
   id: "5f1b0634-c870-4b14-a1c7-d9304bd6f564",
@@ -91,6 +91,20 @@ describe("task recurrence", () => {
     const finalRule = { ...weeklyRule, endType: "after_count" as const, occurrenceCount: 1 };
     expect(nextRecurrenceDate(finalRule, recurringTask)).toBeNull();
     expect(nextOccurrenceCount({ ...finalRule, occurrenceCount: 2 })).toBe(1);
+  });
+
+  it("catches an overdue weekly task up to the first occurrence on or after the target date", () => {
+    expect(recurrenceCatchUpTarget(weeklyRule, recurringTask, "2026-08-05")).toEqual({
+      dueDate: "2026-08-10",
+      occurrenceCount: null,
+      skippedCount: 3,
+    });
+  });
+
+  it("does not advance current, paused, or exhausted recurring tasks", () => {
+    expect(recurrenceCatchUpTarget(weeklyRule, recurringTask, "2026-07-20")).toBeNull();
+    expect(recurrenceCatchUpTarget({ ...weeklyRule, paused: true }, recurringTask, "2026-08-05")).toBeNull();
+    expect(recurrenceCatchUpTarget({ ...weeklyRule, endType: "after_count", occurrenceCount: 1 }, recurringTask, "2026-08-05")).toBeNull();
   });
 });
 

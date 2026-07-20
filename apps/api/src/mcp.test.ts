@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { createMcpApp, moveListId, moveSubtaskId, resolveMcpIdempotencyKey } from "./mcp";
+import { createMcpApp, moveListId, moveSubtaskId, moveTaskId, resolveMcpIdempotencyKey } from "./mcp";
+import { POKE_MANUAL_CAPABILITIES } from "./poke-capabilities";
 import { hashCredential, setRuntimeForTests } from "./runtime";
 import { pushOutboxEvent } from "./services/google";
 
@@ -100,8 +101,10 @@ describe("Sticky MCP source isolation", () => {
     });
 
     expect(response.status).toBe(200);
-    const body = await response.json() as { result: { tools: Array<{ name: string; description: string }> } };
+    const body = await response.json() as { result: { tools: Array<{ name: string; description: string; inputSchema: { required?: string[] } }> } };
     const tools = new Map(body.result.tools.map((tool) => [tool.name, tool]));
+    const requiredParityTools = new Set(POKE_MANUAL_CAPABILITIES.flatMap((capability) => capability.tools));
+    expect([...requiredParityTools].filter((tool) => !tools.has(tool))).toEqual([]);
     expect(tools.has("list_tasks")).toBe(true);
     expect(tools.has("create_task")).toBe(true);
     expect(tools.has("list_subtasks")).toBe(true);
@@ -130,6 +133,10 @@ describe("Sticky MCP source isolation", () => {
     expect(tools.has("complete_google_task")).toBe(false);
     expect(tools.has("list_google_calendar_events")).toBe(false);
     expect(tools.has("create_google_calendar_event")).toBe(false);
+    expect(tools.get("update_task")?.inputSchema.required).not.toContain("version");
+    expect(tools.get("move_task")?.inputSchema.required).not.toContain("version");
+    expect(tools.get("update_calendar_event")?.inputSchema.required).not.toContain("version");
+    expect(tools.get("archive_list")?.inputSchema.required).not.toContain("version");
   });
 
   it("returns 405 for the optional GET stream instead of timing out on Vercel", async () => {
@@ -181,6 +188,17 @@ describe("Sticky MCP source isolation", () => {
     expect(moveSubtaskId(original, "research", "ship", "after")).toEqual([
       "prototype", "ship", "research", "review",
     ]);
+  });
+
+  it("moves a Sticky task immediately before or after another active task", () => {
+    const original = ["first", "second", "third", "fourth"];
+    expect(moveTaskId(original, "third", "first", "before")).toEqual(["third", "first", "second", "fourth"]);
+    expect(moveTaskId(original, "first", "third", "after")).toEqual(["second", "third", "first", "fourth"]);
+  });
+
+  it("rejects invalid Sticky task moves", () => {
+    expect(() => moveTaskId(["one", "two"], "one", "one", "before")).toThrow("different Sticky tasks");
+    expect(() => moveTaskId(["one", "two"], "missing", "two", "after")).toThrow("not found in the list");
   });
 
   it("rejects invalid Sticky subtask moves", () => {
