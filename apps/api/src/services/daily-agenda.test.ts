@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { pokeApiPayload, pokeApiRequestInit, pokeNotificationInstruction } from "./notifications";
-import { buildDailyAgendaMessage, type DailyAgendaItems } from "./daily-agenda";
+import { buildDailyAgendaMessage, selectDailyAgendaItems, type DailyAgendaItems } from "./daily-agenda";
 
 const items: DailyAgendaItems = {
   dueTasks: [{
@@ -55,6 +55,23 @@ const items: DailyAgendaItems = {
 };
 
 describe("daily Poke agenda", () => {
+  it("never repeats items due today in the next three upcoming section", () => {
+    const selected = selectDailyAgendaItems(
+      "2026-07-20",
+      [{ id: "list-pa", name: "PA", sort_order: 1000 }],
+      [
+        { id: "today", list_id: "list-pa", title: "Weekly staff meeting", due_date: "2026-07-20", due_time: "16:30:00", sort_order: 1000 },
+        { id: "tomorrow", list_id: "list-pa", title: "Prepare agenda", due_date: "2026-07-21", due_time: null, sort_order: 2000 },
+        { id: "sunday", list_id: "list-pa", title: "Submit PA weekly report", due_date: "2026-07-26", due_time: "23:59:00", sort_order: 3000 },
+      ],
+      [],
+    );
+
+    expect(selected.dueTasks.map((task) => task.id)).toEqual(["today"]);
+    expect(selected.upcomingItems.map((task) => task.id)).toEqual(["tomorrow", "sunday"]);
+    expect(selected.upcomingItems.some((task) => task.id === "today")).toBe(false);
+  });
+
   it("puts due items first, the next three dated items second, and active undated tasks last", () => {
     const message = buildDailyAgendaMessage("2026-07-19", "America/Chicago", items, {
       siteUrl: "https://sticky.example.com",

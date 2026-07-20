@@ -167,20 +167,15 @@ export function buildDailyAgendaMessage(
   return lines.join("\n");
 }
 
-export async function loadDailyAgendaItems(userId: string, date: string): Promise<DailyAgendaItems> {
-  const { db } = getRuntime();
-  const [listsResult, tasksResult, subtasksResult] = await Promise.all([
-    db.from("lists").select("id,name,sort_order").eq("user_id", userId).is("archived_at", null).order("sort_order").limit(5000),
-    db.from("tasks").select("id,list_id,title,due_date,due_time,sort_order,is_completed").eq("user_id", userId).eq("is_completed", false).limit(5000),
-    db.from("subtasks").select("id,task_id,title,due_date,sort_order,is_completed").eq("user_id", userId).eq("is_completed", false).not("due_date", "is", null).limit(5000),
-  ]);
-  const firstError = listsResult.error ?? tasksResult.error ?? subtasksResult.error;
-  if (firstError) throw firstError;
-
-  const lists = listsResult.data ?? [];
+export function selectDailyAgendaItems(
+  date: string,
+  lists: Array<Record<string, unknown>>,
+  tasks: Array<Record<string, unknown>>,
+  subtasks: Array<Record<string, unknown>>,
+): DailyAgendaItems {
   const listNames = new Map(lists.map((list) => [String(list.id), cleanLine(list.name)]));
   const listOrder = new Map(lists.map((list, index) => [String(list.id), Number(list.sort_order ?? index)]));
-  const activeTasks = (tasksResult.data ?? []).filter((task) => listNames.has(String(task.list_id)));
+  const activeTasks = tasks.filter((task) => listNames.has(String(task.list_id)));
   const tasksById = new Map(activeTasks.map((task) => [String(task.id), task]));
   const mapTask = (task: Record<string, unknown>): AgendaTask => ({
     id: String(task.id),
@@ -200,7 +195,7 @@ export async function loadDailyAgendaItems(userId: string, date: string): Promis
     .filter((task) => task.due_date == null)
     .map((task) => mapTask(task))
     .sort((first, second) => compareAgendaItems(first, second, listOrder));
-  const mappedSubtasks = (subtasksResult.data ?? []).flatMap((subtask) => {
+  const mappedSubtasks = subtasks.flatMap((subtask) => {
     const parent = tasksById.get(String(subtask.task_id));
     if (!parent || !subtask.due_date) return [];
     return [{
@@ -236,6 +231,23 @@ export async function loadDailyAgendaItems(userId: string, date: string): Promis
   ].sort((first, second) => compareUpcomingItems(first, second, listOrder)).slice(0, 3);
 
   return { dueTasks, dueSubtasks, upcomingItems, undatedTasks };
+}
+
+export async function loadDailyAgendaItems(userId: string, date: string): Promise<DailyAgendaItems> {
+  const { db } = getRuntime();
+  const [listsResult, tasksResult, subtasksResult] = await Promise.all([
+    db.from("lists").select("id,name,sort_order").eq("user_id", userId).is("archived_at", null).order("sort_order").limit(5000),
+    db.from("tasks").select("id,list_id,title,due_date,due_time,sort_order,is_completed").eq("user_id", userId).eq("is_completed", false).limit(5000),
+    db.from("subtasks").select("id,task_id,title,due_date,sort_order,is_completed").eq("user_id", userId).eq("is_completed", false).not("due_date", "is", null).limit(5000),
+  ]);
+  const firstError = listsResult.error ?? tasksResult.error ?? subtasksResult.error;
+  if (firstError) throw firstError;
+  return selectDailyAgendaItems(
+    date,
+    (listsResult.data ?? []) as Array<Record<string, unknown>>,
+    (tasksResult.data ?? []) as Array<Record<string, unknown>>,
+    (subtasksResult.data ?? []) as Array<Record<string, unknown>>,
+  );
 }
 
 async function claimDelivery(userId: string, deliveryKey: string) {

@@ -20,7 +20,7 @@ export const POKE_MANUAL_CAPABILITIES = [
   { area: "subtasks", action: "complete and restore a subtask", tools: ["complete_subtask", "restore_subtask"] },
   { area: "subtasks", action: "move or fully reorder subtasks", tools: ["move_subtask", "reorder_subtasks"] },
   { area: "subtasks", action: "permanently delete a subtask", tools: ["delete_subtask"] },
-  { area: "recurrence", action: "list, create, edit, pause, resume, and remove recurrence", tools: ["list_task_recurrences", "set_task_recurrence", "set_task_recurrence_paused", "remove_task_recurrence"] },
+  { area: "recurrence", action: "list, create, edit, pause, resume, and remove recurrence", tools: ["list_task_recurrences", "create_recurring_task", "make_task_recurring", "set_task_recurrence", "set_task_recurrence_paused", "remove_task_recurrence"] },
   { area: "recurrence", action: "advance overdue recurring tasks", tools: ["advance_recurring_tasks"] },
   { area: "recurrence", action: "undo a recurring completion", tools: ["undo_recurring_completion"] },
   { area: "calendar", action: "list calendars and inspect events", tools: ["list_calendars", "list_calendar_events", "get_calendar_event"] },

@@ -58,6 +58,8 @@ describe("Sticky MCP source isolation", () => {
     expect(tools.has("reorder_subtasks")).toBe(true);
     expect(tools.has("delete_subtask")).toBe(true);
     expect(tools.has("list_task_recurrences")).toBe(true);
+    expect(tools.has("create_recurring_task")).toBe(true);
+    expect(tools.has("make_task_recurring")).toBe(true);
     expect(tools.has("set_task_recurrence")).toBe(true);
     expect(tools.has("set_task_recurrence_paused")).toBe(true);
     expect(tools.has("remove_task_recurrence")).toBe(true);
@@ -116,6 +118,13 @@ describe("Sticky MCP source isolation", () => {
     expect(tools.has("reorder_subtasks")).toBe(true);
     expect(tools.has("delete_subtask")).toBe(true);
     expect(tools.has("list_task_recurrences")).toBe(true);
+    expect(tools.has("create_recurring_task")).toBe(true);
+    expect(tools.get("create_recurring_task")?.description).toContain("Always use this tool");
+    expect(tools.get("create_recurring_task")?.inputSchema.required).toEqual(expect.arrayContaining([
+      "listId", "title", "frequency", "startsOn",
+    ]));
+    expect(tools.get("create_recurring_task")?.inputSchema.required).not.toContain("schedule");
+    expect(tools.has("make_task_recurring")).toBe(true);
     expect(tools.has("set_task_recurrence")).toBe(true);
     expect(tools.has("set_task_recurrence_paused")).toBe(true);
     expect(tools.has("remove_task_recurrence")).toBe(true);
