@@ -77,6 +77,33 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
     timezone: dailyAgenda.data?.timezone ?? "America/Chicago",
   };
 
+  const registerThisDeviceForPush = async () => {
+    if (!client || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+      throw new Error("Push notifications are not available here. Open the installed Sticky app on your iPhone and try again.");
+    }
+    const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    if (!publicKey) throw new Error("Sticky push keys are not configured yet.");
+    const permission = Notification.permission === "granted"
+      ? "granted"
+      : await Notification.requestPermission();
+    if (permission !== "granted") {
+      throw new Error("Sticky notifications are blocked on this iPhone. Allow notifications for Sticky, then try again.");
+    }
+    const registration = await navigator.serviceWorker.ready;
+    await registration.update();
+    const existing = await registration.pushManager.getSubscription();
+    const subscription = existing ?? await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey),
+    });
+    const json = subscription.toJSON();
+    await client.request("/api/v1/push-subscriptions", {
+      method: "POST",
+      body: JSON.stringify({ endpoint: subscription.endpoint, keys: json.keys, deviceName: navigator.platform, userAgent: navigator.userAgent }),
+    });
+    return registration;
+  };
+
   const createPokeCredential = useMutation({
     mutationFn: () => client!.request<{ token: string; mcpUrl: string }>("/api/v1/credentials", {
       method: "POST",
@@ -134,10 +161,21 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
     onError: (error) => setStatusMessage(error.message),
   });
   const testDailyAgenda = useMutation({
-    mutationFn: () => client!.request<{ delivered?: boolean; channels?: { push: boolean; poke: boolean }; counts?: { dueTasks: number; dueSubtasks: number; upcomingItems: number; undatedTasks: number } }>("/api/v1/daily-agenda/test", {
-      method: "POST",
-      body: "{}",
-    }),
+    mutationFn: async () => {
+      const registration = await registerThisDeviceForPush();
+      const result = await client!.request<{ delivered?: boolean; channels?: { push: boolean; poke: boolean }; counts?: { dueTasks: number; dueSubtasks: number; upcomingItems: number; undatedTasks: number } }>("/api/v1/daily-agenda/test", {
+        method: "POST",
+        body: "{}",
+      });
+      await registration.showNotification("Sticky notifications are working", {
+        body: "Your daily agenda is connected to this iPhone.",
+        icon: "/icon.svg",
+        badge: "/icon.svg",
+        tag: "sticky-notification-proof",
+        data: { url: "/?view=today" },
+      });
+      return result;
+    },
     onSuccess: (result) => {
       const due = (result.counts?.dueTasks ?? 0) + (result.counts?.dueSubtasks ?? 0);
       setStatusMessage(result.channels?.push
@@ -147,20 +185,7 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
     onError: (error) => setStatusMessage(error.message),
   });
   const enablePush = useMutation({
-    mutationFn: async () => {
-      if (!client || !("serviceWorker" in navigator) || !("PushManager" in window)) throw new Error("Push notifications are not available in this browser.");
-      const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      if (!publicKey) throw new Error("Sticky push keys are not configured yet.");
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") throw new Error("Notification permission was not granted.");
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) });
-      const json = subscription.toJSON();
-      return client.request("/api/v1/push-subscriptions", {
-        method: "POST",
-        body: JSON.stringify({ endpoint: subscription.endpoint, keys: json.keys, deviceName: navigator.platform, userAgent: navigator.userAgent }),
-      });
-    },
+    mutationFn: registerThisDeviceForPush,
     onSuccess: () => setStatusMessage("Notifications enabled on this device."),
     onError: (error) => setStatusMessage(error.message),
   });
