@@ -86,6 +86,8 @@ test("connected settings and task reminders stay integrated with the workspace",
   await expect(connections.getByText("Google Tasks")).toHaveCount(0);
   await expect(connections.getByText("Poke", { exact: true })).toBeVisible();
   await expect(connections.getByRole("button", { name: "Create private connection" })).toBeVisible();
+  await expect(connections.getByText("Codex", { exact: true })).toBeVisible();
+  await expect(connections.getByRole("button", { name: "Create Codex connection" })).toBeVisible();
   await expect(connections.getByText("Daily agenda", { exact: true })).toBeVisible();
   await expect(connections.getByLabel("Enable daily agenda")).toBeChecked();
   await expect(connections.getByLabel("Daily agenda time", { exact: true })).toHaveValue("06:00");

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, BellRing, Bird, CalendarSync, Check, Clock3, Copy, ExternalLink, KeyRound, RefreshCw, Send, Smartphone, Unplug, X } from "lucide-react";
+import { AlertTriangle, BellRing, Bird, Bot, CalendarSync, Check, Clock3, Copy, ExternalLink, KeyRound, RefreshCw, Send, Smartphone, Unplug, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { createStickyPlatformClient } from "@/lib/sticky/api-client";
 
@@ -47,6 +47,7 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
   const client = useMemo(() => createStickyPlatformClient(), []);
   const queryClient = useQueryClient();
   const [pokeConnection, setPokeConnection] = useState<McpConnection | null>(null);
+  const [codexConnection, setCodexConnection] = useState<McpConnection | null>(null);
   const [littlebirdConnection, setLittlebirdConnection] = useState<McpConnection | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [googleSyncStep, setGoogleSyncStep] = useState<0 | 1 | 2>(0);
@@ -121,6 +122,27 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
     onSuccess: () => {
       setPokeConnection(null);
       setStatusMessage("Poke disconnected from Sticky.");
+      void queryClient.invalidateQueries({ queryKey: ["credentials"] });
+    },
+    onError: (error) => setStatusMessage(error.message),
+  });
+  const createCodexCredential = useMutation({
+    mutationFn: () => client!.request<{ token: string; mcpUrl: string }>("/api/v1/credentials", {
+      method: "POST",
+      body: JSON.stringify({ name: "Codex", provider: "codex", providerUserId: null, scopes: AGENT_SCOPES }),
+    }),
+    onSuccess: ({ token, mcpUrl }) => {
+      setCodexConnection({ token, mcpUrl });
+      setStatusMessage("Your private Codex connection is ready. Copy the key below, then return to Codex and say \"copied.\"");
+      void queryClient.invalidateQueries({ queryKey: ["credentials"] });
+    },
+    onError: (error) => setStatusMessage(error.message),
+  });
+  const disconnectCodex = useMutation({
+    mutationFn: (id: string) => client!.request(`/api/v1/credentials/${id}`, { method: "DELETE", body: "{}" }),
+    onSuccess: () => {
+      setCodexConnection(null);
+      setStatusMessage("Codex disconnected from Sticky.");
       void queryClient.invalidateQueries({ queryKey: ["credentials"] });
     },
     onError: (error) => setStatusMessage(error.message),
@@ -221,6 +243,8 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
   if (!open) return null;
   const pokeCredential = credentials.data?.credentials.find((item) => item.provider === "poke" && !item.revoked_at);
   const pokeConnected = Boolean(pokeCredential?.last_used_at);
+  const codexCredential = credentials.data?.credentials.find((item) => item.provider === "codex" && !item.revoked_at);
+  const codexConnected = Boolean(codexCredential?.last_used_at);
   const littlebirdCredential = credentials.data?.credentials.find((item) => item.provider === "littlebird" && !item.revoked_at);
   const littlebirdConnected = Boolean(littlebirdCredential?.last_used_at);
   const googleAccount = integrations.data?.integrations.find((item) => ["google_workspace", "google_tasks"].includes(item.provider) && item.status !== "revoked");
@@ -261,6 +285,47 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
             <div className="connection-setup-actions">
               <button type="button" className="connection-secondary" onClick={() => void navigator.clipboard.writeText(pokeConnection.mcpUrl)}><Copy size={15} />Copy server URL</button>
               <button type="button" className="connection-primary" onClick={() => { if (pokeConnectUrl) window.open(pokeConnectUrl, "_blank", "noopener,noreferrer"); }}><ExternalLink size={15} />Connect in Poke</button>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="connection-row">
+          <span className="connection-icon codex"><Bot size={20} /></span>
+          <div className="connection-copy">
+            <strong>Codex</strong>
+            <small>{codexConnected ? "Connected to separate Sticky and live Google tools" : codexCredential ? "Connection key created" : "Let Codex read and manage Sticky plus live Google"}</small>
+          </div>
+          {codexCredential ? <button type="button" className="connection-icon-button" onClick={() => disconnectCodex.mutate(codexCredential.id)} aria-label="Disconnect Codex"><Unplug size={16} /></button> : null}
+        </div>
+        {!codexCredential ? (
+          <div className="connection-inline-form">
+            <button type="button" className="connection-primary" disabled={createCodexCredential.isPending} onClick={() => createCodexCredential.mutate()}>
+              <KeyRound size={15} />{createCodexCredential.isPending ? "Creating..." : "Create Codex connection"}
+            </button>
+          </div>
+        ) : null}
+        {codexConnection ? (
+          <div className="connection-setup">
+            <p>This key gives Codex separate Sticky and live Google tools without importing either system into the other. Copy it once, return to your Codex task, and say <strong>copied</strong>. Codex will finish the private setup on this computer; the key will not be shown again.</p>
+            <div className="connection-token">
+              <code>{codexConnection.token}</code>
+              <button
+                type="button"
+                onClick={() => void navigator.clipboard.writeText(codexConnection.token).then(
+                  () => setStatusMessage("Codex key copied. Return to your Codex task and say \"copied.\""),
+                  () => setStatusMessage("Sticky could not copy the key. Select it manually before leaving this screen."),
+                )}
+                aria-label="Copy Codex connection key"
+              >
+                <Copy size={15} />
+              </button>
+            </div>
+            <div className="connection-setup-actions">
+              <button type="button" className="connection-primary" onClick={() => void navigator.clipboard.writeText(codexConnection.token).then(
+                () => setStatusMessage("Codex key copied. Return to your Codex task and say \"copied.\""),
+                () => setStatusMessage("Sticky could not copy the key. Select it manually before leaving this screen."),
+              )}><Copy size={15} />Copy key for Codex</button>
+              <button type="button" className="connection-secondary" onClick={() => void navigator.clipboard.writeText(codexConnection.mcpUrl)}><Copy size={15} />Copy server URL</button>
             </div>
           </div>
         ) : null}
