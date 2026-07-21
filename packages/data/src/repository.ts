@@ -22,7 +22,7 @@ import type {
   UpdateWorkspacePreferencesInput,
   WorkspacePreferencesDto,
 } from "@sticky/contracts";
-import { assertVersion, conflict, nextOccurrenceCount, nextRecurrenceDate, recurrenceCatchUpTarget, StickyDomainError } from "@sticky/domain";
+import { assertVersion, conflict, nextOccurrenceCount, nextRecurrenceDate, parentDueDateIssue, recurrenceCatchUpTarget, StickyDomainError } from "@sticky/domain";
 import type { StickySupabaseClient } from "./client";
 import { mapCalendarEventRow, mapCalendarRow, mapListRow, mapRecurrenceRuleRow, mapReminderRow, mapSubtaskRow, mapTaskRow, type DataRow } from "./mappers";
 
@@ -209,12 +209,36 @@ export class StickyRepository {
   async updateTask(actor: ActorContext, id: string, input: UpdateTaskInput): Promise<TaskDto> {
     const current = await this.getTask(actor, id);
     assertVersion(input.version, current.version, "Task");
+    if (input.dueDate !== undefined) {
+      const subtasks = await this.listSubtasks(actor, id, true);
+      const issue = parentDueDateIssue(input.dueDate, subtasks.map((subtask) => subtask.dueDate));
+      if (issue?.code === "undated_child") {
+        throw new StickyDomainError(
+          "validation_error",
+          "A parent task cannot have a due date while any of its subtasks has no due date.",
+          422,
+        );
+      }
+      if (issue?.code === "child_after_parent") {
+        throw new StickyDomainError(
+          "validation_error",
+          `The parent task due date cannot be before its latest subtask due date (${issue.latestChildDue}).`,
+          422,
+        );
+      }
+    }
     const values: Record<string, unknown> = {};
     if (input.title !== undefined) values.title = input.title;
     if (input.details !== undefined) values.details = input.details;
     if (input.color !== undefined) values.color = input.color;
-    if (input.dueDate !== undefined) values.due_date = input.dueDate;
-    if (input.dueTime !== undefined) values.due_time = input.dueTime;
+    if (input.dueDate !== undefined) {
+      values.due_date = input.dueDate;
+      if (input.dueDate === null) values.due_time = null;
+    }
+    if (input.dueTime !== undefined) {
+      const effectiveDueDate = input.dueDate !== undefined ? input.dueDate : current.dueDate;
+      values.due_time = effectiveDueDate === null ? null : input.dueTime;
+    }
     if (input.timezone !== undefined) values.timezone = input.timezone;
     const { data, error } = await this.db.from("tasks").update(values)
       .eq("id", id).eq("user_id", actor.userId).eq("version", input.version).select("*").maybeSingle();

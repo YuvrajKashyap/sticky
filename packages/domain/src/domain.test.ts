@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RecurrenceRuleDto, TaskDto } from "@sticky/contracts";
-import { nextDailyAgendaOccurrence, nextOccurrenceCount, nextRecurrenceDate, recurrenceCatchUpTarget, resolveFieldConflict, resolveReminderTime, toGoogleTask } from "./index";
+import { nextDailyAgendaOccurrence, nextOccurrenceCount, nextRecurrenceDate, parentDueDateIssue, reconcileParentDueDate, recurrenceCatchUpTarget, resolveFieldConflict, resolveReminderTime, toGoogleTask } from "./index";
 
 const recurringTask: TaskDto = {
   id: "5f1b0634-c870-4b14-a1c7-d9304bd6f564",
@@ -105,6 +105,26 @@ describe("task recurrence", () => {
     expect(recurrenceCatchUpTarget(weeklyRule, recurringTask, "2026-07-20")).toBeNull();
     expect(recurrenceCatchUpTarget({ ...weeklyRule, paused: true }, recurringTask, "2026-08-05")).toBeNull();
     expect(recurrenceCatchUpTarget({ ...weeklyRule, endType: "after_count", occurrenceCount: 1 }, recurringTask, "2026-08-05")).toBeNull();
+  });
+});
+
+describe("task hierarchy due dates", () => {
+  it("clears a dated parent when any child has no due date", () => {
+    expect(reconcileParentDueDate("2026-07-31", ["2026-07-25", null])).toBeNull();
+    expect(parentDueDateIssue("2026-07-31", ["2026-07-25", null])).toEqual({ code: "undated_child" });
+  });
+
+  it("extends an already-dated parent to its latest child", () => {
+    expect(reconcileParentDueDate("2026-07-25", ["2026-07-24", "2026-07-30"])).toBe("2026-07-30");
+    expect(parentDueDateIssue("2026-07-25", ["2026-07-24", "2026-07-30"])).toEqual({
+      code: "child_after_parent",
+      latestChildDue: "2026-07-30",
+    });
+  });
+
+  it("never invents a parent date when all children become dated", () => {
+    expect(reconcileParentDueDate(null, ["2026-07-24", "2026-07-30"])).toBeNull();
+    expect(parentDueDateIssue(null, ["2026-07-24", "2026-07-30"])).toBeNull();
   });
 });
 

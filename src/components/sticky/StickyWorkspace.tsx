@@ -55,6 +55,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
+import { parentDueDateIssue, reconcileParentDueDate } from "@sticky/domain";
 import { createStickyPlatformClient } from "@/lib/sticky/api-client";
 import { listToDb, recurrenceToDb, subtaskToDb, taskToDb } from "@/lib/sticky/mappers";
 import { mapList, mapSubtask, mapTask } from "@/lib/sticky/mappers";
@@ -3039,15 +3040,23 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   }
 
   function updateTask(taskId: string, patch: Partial<StickyTask>, save = true) {
-    if (patch.dueDate !== undefined) {
-      const latestSubtaskDue = workspace.subtasks
-        .filter((subtask) => subtask.taskId === taskId && subtask.dueDate)
-        .reduce<string | null>((latest, subtask) => !latest || subtask.dueDate! > latest ? subtask.dueDate : latest, null);
-
-      if (latestSubtaskDue && (!patch.dueDate || patch.dueDate < latestSubtaskDue)) {
+    const normalizedPatch = patch.dueDate === null ? { ...patch, dueTime: null } : patch;
+    if (normalizedPatch.dueDate !== undefined) {
+      const issue = parentDueDateIssue(
+        normalizedPatch.dueDate,
+        workspace.subtasks.filter((subtask) => subtask.taskId === taskId).map((subtask) => subtask.dueDate),
+      );
+      if (issue?.code === "undated_child") {
+        pushToast({
+          title: "Date every step first",
+          body: "This task has an undated subtask, so the parent must stay undated.",
+        });
+        return;
+      }
+      if (issue?.code === "child_after_parent") {
         pushToast({
           title: "Task deadline stays after its steps",
-          body: `This task has a subtask due ${humanDate(latestSubtaskDue)}. Move that step first, or choose the same/later task date.`,
+          body: `This task has a subtask due ${humanDate(issue.latestChildDue)}. Move that step first, or choose the same/later task date.`,
         });
         return;
       }
@@ -3056,7 +3065,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     const before = workspace;
     const updatedAt = nowIso();
     const nextTasks = workspace.tasks.map((task) =>
-      task.id === taskId ? { ...task, ...patch, updatedAt } : task,
+      task.id === taskId ? { ...task, ...normalizedPatch, updatedAt } : task,
     );
     setWorkspace({ ...workspace, tasks: nextTasks });
 
@@ -3069,7 +3078,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       () =>
         supabase!
           .from("tasks")
-          .update(taskToDb({ ...patch, updatedAt } as Partial<StickyTask>))
+          .update(taskToDb({ ...normalizedPatch, updatedAt } as Partial<StickyTask>))
           .eq("id", taskId),
       before,
     );
@@ -3666,7 +3675,15 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       updatedAt: nowIso(),
     };
 
-    setWorkspace({ ...workspace, subtasks: [...workspace.subtasks, subtask] });
+    setWorkspace({
+      ...workspace,
+      tasks: task.dueDate !== null || task.dueTime !== null
+        ? workspace.tasks.map((candidate) => candidate.id === task.id
+          ? { ...candidate, dueDate: null, dueTime: null, updatedAt: subtask.updatedAt }
+          : candidate)
+        : workspace.tasks,
+      subtasks: [...workspace.subtasks, subtask],
+    });
     void persist(
       "Subtask",
       () => supabase!.from("subtasks").insert(subtaskInsertPayload(subtask)),
@@ -3680,20 +3697,29 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     const parentTask = currentSubtask
       ? workspace.tasks.find((task) => task.id === currentSubtask.taskId)
       : null;
-    const shouldExtendParent = Boolean(
-      patch.dueDate && parentTask && (!parentTask.dueDate || parentTask.dueDate < patch.dueDate),
-    );
     const updatedAt = nowIso();
+    const nextSubtasks = workspace.subtasks.map((subtask) =>
+      subtask.id === subtaskId ? { ...subtask, ...patch, updatedAt } : subtask,
+    );
+    const nextParentDueDate = parentTask && patch.dueDate !== undefined
+      ? reconcileParentDueDate(
+        parentTask.dueDate,
+        nextSubtasks.filter((subtask) => subtask.taskId === parentTask.id).map((subtask) => subtask.dueDate),
+      )
+      : parentTask?.dueDate ?? null;
+    const shouldUpdateParent = Boolean(
+      parentTask
+      && patch.dueDate !== undefined
+      && (parentTask.dueDate !== nextParentDueDate || (nextParentDueDate === null && parentTask.dueTime !== null)),
+    );
     setWorkspace({
       ...workspace,
-      tasks: shouldExtendParent
+      tasks: shouldUpdateParent
         ? workspace.tasks.map((task) => task.id === parentTask!.id
-          ? { ...task, dueDate: patch.dueDate!, updatedAt }
+          ? { ...task, dueDate: nextParentDueDate, dueTime: nextParentDueDate === null ? null : task.dueTime, updatedAt }
           : task)
         : workspace.tasks,
-      subtasks: workspace.subtasks.map((subtask) =>
-        subtask.id === subtaskId ? { ...subtask, ...patch, updatedAt } : subtask,
-      ),
+      subtasks: nextSubtasks,
     });
 
     if (!save) {

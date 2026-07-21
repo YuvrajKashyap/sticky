@@ -66,6 +66,9 @@ describe("Sticky MCP source isolation", () => {
     expect(tools.get("create_task")?.description).toContain("recurrence");
     expect(tools.get("complete_task")?.description).toContain("next scheduled occurrence");
     expect(tools.get("add_subtask")?.description).toContain("never claim the integration cannot create subtasks");
+    expect(tools.get("add_subtask")?.description).toContain("An undated subtask clears the parent due date");
+    expect(tools.get("update_subtask")?.description).toContain("does not invent a parent date");
+    expect(tools.get("update_task")?.description).toContain("only when every subtask is dated");
     expect(tools.get("create_task")?.description).toContain("all of its Sticky subtasks");
     expect(tools.has("move_list")).toBe(true);
     expect(tools.has("reorder_lists")).toBe(true);

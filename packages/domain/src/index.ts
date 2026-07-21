@@ -5,3 +5,4 @@ export * from "./errors";
 export * from "./google";
 export * from "./reminders";
 export * from "./recurrence";
+export * from "./task-hierarchy";

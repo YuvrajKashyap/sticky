@@ -1090,15 +1090,19 @@ test.describe("Sticky workspace", () => {
       ).toBeVisible();
       const subtaskDueDate = editedSubtaskRow.getByLabel("Due date for subtask: Edited subtask");
       const parentDueDate = details.locator('input[aria-label="Due date"]');
+      await expect(parentDueDate).toHaveValue("");
       await subtaskDueDate.fill("2035-10-15");
       await expect(subtaskDueDate).toHaveValue("2035-10-15");
-      await expect(parentDueDate).toHaveValue("2035-10-15");
+      await expect(parentDueDate).toHaveValue("");
       await parentDueDate.fill("2035-10-14");
-      await expect(parentDueDate).toHaveValue("2035-10-15");
+      await expect(parentDueDate).toHaveValue("");
       await expect(page.getByText("Task deadline stays after its steps")).toBeVisible();
+      await parentDueDate.fill("2035-10-15");
+      await expect(parentDueDate).toHaveValue("2035-10-15");
 
       await newSubtaskTitle.fill("Second subtask");
       await addSubtaskButton.click();
+      await expect(parentDueDate).toHaveValue("");
       const subtaskRows = details.locator(".subtask-row");
       await expect(
         subtaskRows.nth(0).getByRole("button", { name: /Move Edited subtask up/ }),
@@ -1617,8 +1621,8 @@ test.describe("Sticky workspace", () => {
       await expect(page.locator(".toast", { hasText: "Task duplicated" })).toBeVisible();
       await expect(details.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Reusable setup copy");
       await expect(details.getByRole("textbox", { name: "Details" })).toHaveValue("Keep the checklist and schedule.");
-      await expect(details.locator('input[aria-label="Due date"]')).toHaveValue(tomorrow);
-      await expect(details.locator('input[aria-label="Due time"]')).toHaveValue("09:00");
+      await expect(details.locator('input[aria-label="Due date"]')).toHaveValue("");
+      await expect(details.locator('input[aria-label="Due time"]')).toHaveValue("");
       await expect(details.locator(".subtask-row")).toHaveCount(2);
       await expect(details.locator(".subtask-check.done")).toHaveCount(0);
       await expect(details.locator(".subtask-title").first()).toHaveValue("First copied subtask");
@@ -1626,7 +1630,7 @@ test.describe("Sticky workspace", () => {
       await page.reload();
       const copiedCard = page.locator(".task-card", { hasText: "Reusable setup copy" });
       await expect(copiedCard).toBeVisible();
-      await expect(copiedCard).toContainText(`${shortDateLabel(tomorrow)} at 09:00`);
+      await expect(copiedCard).not.toContainText(`${shortDateLabel(tomorrow)} at 09:00`);
 
       await copiedCard.click();
       await details.getByRole("button", { name: "Duplicate Reusable setup copy" }).click();
