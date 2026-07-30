@@ -4955,8 +4955,15 @@ function StickyBoardColumn({
         {...sortable.attributes}
         {...sortable.listeners}
         aria-label={`Reorder list ${list.name}`}
+        onClick={(event) => {
+          if ((event.target as HTMLElement).closest(".column-header-actions")) {
+            return;
+          }
+
+          onActivate();
+        }}
       >
-        <button className="column-title-button" type="button" onClick={onActivate}>
+        <button className="column-title-button" type="button">
           <h2>
             <HighlightText text={list.name} query={searchQuery} />
           </h2>

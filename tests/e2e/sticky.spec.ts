@@ -807,6 +807,29 @@ test.describe("Sticky workspace", () => {
     });
   });
 
+  test("clicking any board column header selects that list", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "board header selection is a desktop interaction");
+
+    await expectNoConsoleErrors(page, async () => {
+      await page.goto("/");
+      const columns = page.locator(".board-column");
+      const columnCount = await columns.count();
+      expect(columnCount).toBeGreaterThan(1);
+
+      for (let index = 0; index < columnCount; index += 1) {
+        const column = columns.nth(index);
+        const header = column.locator(".column-header");
+        await header.click({ position: { x: 150, y: 24 } });
+        await expect(column).toHaveClass(/active/);
+      }
+
+      const selectedColumn = columns.nth(columnCount - 1);
+      await columns.nth(0).locator(".column-menu").click();
+      await expect(selectedColumn).toHaveClass(/active/);
+      await page.getByRole("button", { name: "Close list editor" }).click();
+    });
+  });
+
   test("lists can be archived and restored from the sidebar", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "sidebar archive controls use desktop hover actions");
 
