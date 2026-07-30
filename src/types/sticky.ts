@@ -18,7 +18,7 @@ export type RecurrenceEndType = "never" | "on_date" | "after_count";
 
 export type AppMode = "supabase" | "demo";
 
-export type StickyTaskViewFilter = "all" | "today" | "due" | "overdue" | "recurring" | "subtasks";
+export type StickyTaskViewFilter = "all" | "today" | "due" | "undated" | "overdue" | "recurring" | "subtasks";
 
 export type StickyTaskSortMode = "custom" | "due";
 

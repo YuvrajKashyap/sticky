@@ -26,6 +26,7 @@ import {
   Archive,
   Bell,
   CalendarDays,
+  CalendarOff,
   Check,
   ChevronDown,
   ChevronRight,
@@ -240,11 +241,20 @@ const TASK_VIEW_LABELS: Record<StickyTaskViewFilter, string> = {
   all: "All",
   today: "Today",
   due: "Scheduled",
+  undated: "Undated",
   overdue: "Overdue",
   recurring: "Repeating",
   subtasks: "Subtasks",
 };
-const TASK_VIEW_ORDER: StickyTaskViewFilter[] = ["all", "today", "due", "overdue", "recurring", "subtasks"];
+const TASK_VIEW_ORDER: StickyTaskViewFilter[] = [
+  "all",
+  "today",
+  "due",
+  "undated",
+  "overdue",
+  "recurring",
+  "subtasks",
+];
 const TASK_SORT_LABELS: Record<StickyTaskSortMode, string> = {
   custom: "Custom",
   due: "Due date",
@@ -1586,20 +1596,31 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       .sort(bySortOrder);
   }, [activeListId, workspace.tasks]);
 
+  const taskFilterScopeTasks = useMemo(() => {
+    if (activeListId) {
+      return activeListTasks;
+    }
+
+    return workspace.tasks
+      .filter((task) => visibleBoardListIds.has(task.listId) && !task.isCompleted)
+      .sort(bySortOrder);
+  }, [activeListId, activeListTasks, visibleBoardListIds, workspace.tasks]);
+
   const taskFilterCounts = useMemo(() => {
     const todayKey = localDateKey();
 
     return {
-      all: activeListTasks.length,
-      today: activeListTasks.filter((task) => task.dueDate === todayKey).length,
-      due: activeListTasks.filter((task) => Boolean(task.dueDate)).length,
-      overdue: activeListTasks.filter((task) => task.dueDate && task.dueDate < todayKey).length,
-      recurring: activeListTasks.filter((task) => recurrenceByTask.has(task.id)).length,
-      subtasks: activeListTasks.filter((task) =>
+      all: taskFilterScopeTasks.length,
+      today: taskFilterScopeTasks.filter((task) => task.dueDate === todayKey).length,
+      due: taskFilterScopeTasks.filter((task) => Boolean(task.dueDate)).length,
+      undated: taskFilterScopeTasks.filter((task) => !task.dueDate).length,
+      overdue: taskFilterScopeTasks.filter((task) => task.dueDate && task.dueDate < todayKey).length,
+      recurring: taskFilterScopeTasks.filter((task) => recurrenceByTask.has(task.id)).length,
+      subtasks: taskFilterScopeTasks.filter((task) =>
         (subtasksByTask.get(task.id) ?? []).some((subtask) => !subtask.isCompleted),
       ).length,
     };
-  }, [activeListTasks, recurrenceByTask, subtasksByTask]);
+  }, [recurrenceByTask, subtasksByTask, taskFilterScopeTasks]);
 
   const activeTasks = useMemo(() => {
     const todayKey = localDateKey();
@@ -1611,6 +1632,10 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
       if (taskViewFilter === "today") {
         return task.dueDate === todayKey;
+      }
+
+      if (taskViewFilter === "undated") {
+        return !task.dueDate;
       }
 
       if (taskViewFilter === "overdue") {
@@ -1758,6 +1783,10 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
         if (taskViewFilter === "today") {
           return task.dueDate === todayKey;
+        }
+
+        if (taskViewFilter === "undated") {
+          return !task.dueDate;
         }
 
         if (taskViewFilter === "overdue") {
@@ -2116,7 +2145,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       id: `view-${filter}`,
       kind: "action" as const,
       title: `Show ${TASK_VIEW_LABELS[filter].toLowerCase()} tasks`,
-      detail: `${taskFilterCounts[filter]} in ${activeList?.name ?? "current list"}`,
+      detail: `${taskFilterCounts[filter]} in ${activeList?.name ?? "All tasks"}`,
       keywords: `view filter ${filter} ${TASK_VIEW_LABELS[filter]}`,
       run: () => setTaskViewFilter(filter),
     })),
@@ -4501,6 +4530,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                   {filter === "all" ? <Layers3 size={15} /> : null}
                   {filter === "today" ? <Sun size={15} /> : null}
                   {filter === "due" ? <CalendarDays size={15} /> : null}
+                  {filter === "undated" ? <CalendarOff size={15} /> : null}
                   {filter === "overdue" ? <TriangleAlert size={15} /> : null}
                   {filter === "recurring" ? <Repeat2 size={15} /> : null}
                   {filter === "subtasks" ? <ListChecks size={15} /> : null}

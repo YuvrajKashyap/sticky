@@ -710,6 +710,13 @@ test.describe("Sticky workspace", () => {
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await expect(page.locator(".list-tab.active")).toHaveCount(1);
       await expect(page.locator(".board-column.active")).toHaveCount(1);
+      await expect(page.getByRole("button", { name: "Current task view: All, 4 tasks" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Show task view: Today, 2 tasks" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Show task view: Scheduled, 2 tasks" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Show task view: Undated, 2 tasks" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Show task view: Overdue, 0 tasks" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Show task view: Repeating, 1 task" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Show task view: Subtasks, 2 tasks" })).toBeVisible();
 
       await expect
         .poll(() =>
@@ -790,6 +797,13 @@ test.describe("Sticky workspace", () => {
       await page.reload();
       await expect(page.locator(".list-tab.active")).toHaveCount(0);
       await expect(page.locator(".board-column.active")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Current task view: All, 30 tasks" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Show task view: Today, 2 tasks" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Show task view: Scheduled, 2 tasks" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Show task view: Undated, 28 tasks" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Show task view: Overdue, 0 tasks" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Show task view: Repeating, 1 task" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Show task view: Subtasks, 2 tasks" })).toBeVisible();
     });
   });
 
@@ -1280,7 +1294,7 @@ test.describe("Sticky workspace", () => {
       await page.getByLabel("Quick add task").fill("Mobile capture");
       await quickAddButton(page, "reminders").click();
       await expect(page.getByText("Mobile capture")).toBeVisible();
-      for (const label of ["Scheduled", "Repeating", "Subtasks"]) {
+      for (const label of ["Scheduled", "Undated", "Repeating", "Subtasks"]) {
         await expectNoInlineClip(page.locator(".task-filter-bar button", { hasText: label }).locator("span"));
       }
       const mobileDetails = page.getByRole("complementary", { name: "Task details", exact: true });
@@ -1415,7 +1429,7 @@ test.describe("Sticky workspace", () => {
     });
   });
 
-  test("task view filters cover overdue, repeating, and subtasks without corrupting custom order", async ({ page }, testInfo) => {
+  test("task view filters cover undated, overdue, repeating, and subtasks without corrupting custom order", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "view filter coverage runs in the desktop project");
 
     await expectNoConsoleErrors(page, async () => {
@@ -1450,6 +1464,16 @@ test.describe("Sticky workspace", () => {
         }),
       ).toBeDisabled();
       await expect(page.getByText(/Reordering is locked while filters or due-date sorting are active/)).toBeVisible();
+
+      await runCommand(page, "show undated tasks");
+      await expect(taskViews.getByRole("button", { name: "Current task view: Undated, 2 tasks" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      await expect(activeRegion.getByText("Tighten the details panel")).toBeVisible();
+      await expect(activeRegion.getByText("Review the launch checklist")).toBeVisible();
+      await expect(activeRegion.getByText("Daily planning pass")).toHaveCount(0);
+      await expect(activeRegion.getByText(overdueTitle)).toHaveCount(0);
 
       await runCommand(page, "show repeating tasks");
       await expect(taskViews.getByRole("button", { name: "Current task view: Repeating, 1 task" })).toHaveAttribute(
