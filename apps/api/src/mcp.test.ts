@@ -76,6 +76,10 @@ describe("Sticky MCP source isolation", () => {
     expect(tools.get("delete_list")?.description).toContain("never deletes a Google Tasks list");
     expect(tools.has("create_calendar_event")).toBe(true);
     expect(tools.has("get_daily_agenda_preview")).toBe(true);
+    expect(tools.has("delete_reminder")).toBe(true);
+    expect(tools.get("schedule_reminder")?.description).toContain("automatic 10-minute reminder");
+    expect(tools.get("schedule_reminder")?.description).toContain("explicit Poke reminder");
+    expect(tools.get("schedule_reminder")?.inputSchema.required).not.toContain("channels");
     expect(tools.get("get_daily_agenda_preview")?.description).toContain("every active task and subtask without a due date");
     expect(tools.get("list_google_tasks")?.description).toContain("without copying them into Sticky");
     expect(tools.get("create_google_task")?.description).toContain("never creates a Sticky task");
@@ -140,6 +144,9 @@ describe("Sticky MCP source isolation", () => {
     expect(tools.has("delete_list")).toBe(true);
     expect(tools.has("list_calendar_events")).toBe(true);
     expect(tools.has("get_daily_agenda_preview")).toBe(true);
+    expect(tools.has("delete_reminder")).toBe(true);
+    expect(tools.get("schedule_reminder")?.description).toContain("automatic 10-minute reminder");
+    expect(tools.get("schedule_reminder")?.inputSchema.required).not.toContain("channels");
     expect(tools.get("get_daily_agenda_preview")?.description).toContain("Relay the returned message exactly");
     expect(tools.get("update_daily_agenda_settings")?.description).toContain("do not create a separate reminder");
     expect(tools.has("preview_google_tasks_to_sticky")).toBe(true);

@@ -6068,6 +6068,40 @@ mark.find-highlight {
   letter-spacing: 0.06em;
 }
 
+.scheduled-reminder-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scheduled-reminder-actions button {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  place-items: center;
+  color: var(--ink-muted);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    color 140ms ease,
+    background 140ms ease,
+    transform 140ms ease;
+}
+
+.scheduled-reminder-actions button:hover:not(:disabled) {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  transform: translateY(-1px);
+}
+
+.scheduled-reminder-actions button:disabled {
+  cursor: wait;
+  opacity: 0.45;
+}
+
 .reminder-message {
   font-size: 0.78rem;
   font-weight: 700;

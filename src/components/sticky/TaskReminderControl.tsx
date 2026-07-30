@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { BellRing, CalendarDays, Clock3, Send, Smartphone } from "lucide-react";
+import { BellRing, Bot, CalendarDays, Clock3, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { createStickyPlatformClient } from "@/lib/sticky/api-client";
 import type { StickyTask } from "@/types/sticky";
@@ -15,7 +15,14 @@ import {
 } from "./CaptureScheduler";
 import { springs } from "./motion";
 
-type Reminder = { id: string; remindAt: string; channels: Array<"push" | "poke">; status: string; version: number };
+type Reminder = {
+  id: string;
+  remindAt: string;
+  channels: ["poke"];
+  isDefault: boolean;
+  status: string;
+  version: number;
+};
 
 export function TaskReminderControl({ task }: { task: StickyTask }) {
   const client = useMemo(() => createStickyPlatformClient(), []);
@@ -23,7 +30,6 @@ export function TaskReminderControl({ task }: { task: StickyTask }) {
   const [customDate, setCustomDate] = useState("");
   const [customTime, setCustomTime] = useState("");
   const [openPanel, setOpenPanel] = useState<"date" | "time" | null>(null);
-  const [channels, setChannels] = useState<Array<"push" | "poke">>(["push"]);
   const [message, setMessage] = useState<string | null>(null);
   const reminders = useQuery({
     queryKey: ["reminders", task.id],
@@ -31,7 +37,10 @@ export function TaskReminderControl({ task }: { task: StickyTask }) {
     queryFn: () => client!.request<{ reminders: Reminder[] }>(`/api/v1/reminders?taskId=${task.id}`),
   });
   const createReminder = useMutation({
-    mutationFn: (body: object) => client!.request(`/api/v1/tasks/${task.id}/reminders`, { method: "POST", body: JSON.stringify({ ...body, channels }) }),
+    mutationFn: (body: object) => client!.request(`/api/v1/tasks/${task.id}/reminders`, {
+      method: "POST",
+      body: JSON.stringify({ ...body, channels: ["poke"] }),
+    }),
     onSuccess: () => {
       setMessage("Reminder scheduled.");
       setCustomDate("");
@@ -41,12 +50,21 @@ export function TaskReminderControl({ task }: { task: StickyTask }) {
     },
     onError: (error) => setMessage(error.message),
   });
+  const deleteReminder = useMutation({
+    mutationFn: (reminderId: string) =>
+      client!.request(`/api/v1/reminders/${reminderId}`, {
+        method: "DELETE",
+        body: "{}",
+      }),
+    onSuccess: () => {
+      setMessage("Reminder deleted.");
+      void queryClient.invalidateQueries({ queryKey: ["reminders", task.id] });
+    },
+    onError: (error) => setMessage(error.message),
+  });
   const canUseRelative = Boolean(task.dueDate && task.dueTime);
   const customReady = Boolean(customDate && customTime);
-
-  function toggleChannel(channel: "push" | "poke") {
-    setChannels((current) => current.includes(channel) ? (current.length === 1 ? current : current.filter((item) => item !== channel)) : [...current, channel]);
-  }
+  const activeReminders = reminders.data?.reminders.filter((reminder) => reminder.status === "scheduled") ?? [];
 
   function addCustomReminder() {
     if (!customReady) {
@@ -57,11 +75,10 @@ export function TaskReminderControl({ task }: { task: StickyTask }) {
 
   return (
     <section className="reminder-card" aria-label="Task reminders">
-      <div className="mini-section-title"><BellRing size={16} />Reminder{reminders.data?.reminders.length ? <strong>{reminders.data.reminders.length}</strong> : null}</div>
-      <div className="reminder-channel-picker" aria-label="Reminder channels">
-        <button type="button" className={channels.includes("push") ? "active" : ""} aria-pressed={channels.includes("push")} onClick={() => toggleChannel("push")}><Smartphone size={14} />Push</button>
-        <button type="button" className={channels.includes("poke") ? "active" : ""} aria-pressed={channels.includes("poke")} onClick={() => toggleChannel("poke")}><Send size={14} />Poke</button>
-      </div>
+      <div className="mini-section-title"><BellRing size={16} />Agent reminder{activeReminders.length ? <strong>{activeReminders.length}</strong> : null}</div>
+      <p className="helper-copy">
+        <Bot size={14} /> Timed tasks automatically message you through Poke 10 minutes before they are due. End-of-day tasks are excluded. Choosing another time replaces that default.
+      </p>
       <div className="reminder-presets">
         {[{ label: "10 min", minutes: 10 }, { label: "1 hour", minutes: 60 }, { label: "1 day", minutes: 1440 }].map((preset) => <button key={preset.minutes} type="button" disabled={!canUseRelative} onClick={() => createReminder.mutate({ kind: "relative", relativeMinutes: preset.minutes })}>{preset.label}</button>)}
       </div>
@@ -100,7 +117,31 @@ export function TaskReminderControl({ task }: { task: StickyTask }) {
         </AnimatePresence>
       </div>
       {!canUseRelative ? <p className="helper-copy">Add a due time to use reminder presets.</p> : null}
-      {reminders.data?.reminders.map((reminder) => <div className="scheduled-reminder" key={reminder.id}><span>{new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(reminder.remindAt))}</span><small>{reminder.channels.join(" + ")}</small></div>)}
+      {activeReminders.map((reminder) => {
+        const reminderTime = new Intl.DateTimeFormat(undefined, {
+          dateStyle: "medium",
+          timeStyle: "short",
+        }).format(new Date(reminder.remindAt));
+
+        return (
+          <div className="scheduled-reminder" key={reminder.id}>
+            <span>{reminderTime}</span>
+            <div className="scheduled-reminder-actions">
+              <small>{reminder.isDefault ? "Automatic · Poke" : "Custom · Poke"}</small>
+              {!reminder.isDefault ? (
+                <button
+                  type="button"
+                  onClick={() => deleteReminder.mutate(reminder.id)}
+                  disabled={deleteReminder.isPending && deleteReminder.variables === reminder.id}
+                  aria-label={`Delete reminder scheduled for ${reminderTime}`}
+                >
+                  <Trash2 size={14} />
+                </button>
+              ) : null}
+            </div>
+          </div>
+        );
+      })}
       {message ? <p className="reminder-message" role="status">{message}</p> : null}
     </section>
   );

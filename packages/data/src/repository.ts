@@ -670,7 +670,13 @@ export class StickyRepository {
     await this.writeActivity(activity(actor, "subtask.deleted", subtask.taskId, undefined, { deletedSubtaskId: id }));
   }
 
-  async createReminder(actor: ActorContext, taskId: string, input: CreateReminderInput, remindAt: Date): Promise<ReminderDto> {
+  async createReminder(
+    actor: ActorContext,
+    taskId: string,
+    input: CreateReminderInput,
+    remindAt: Date,
+    options: { isDefault?: boolean } = {},
+  ): Promise<ReminderDto> {
     await this.getTask(actor, taskId);
     const { data, error } = await this.db.from("task_reminders").insert({
       user_id: actor.userId,
@@ -679,10 +685,14 @@ export class StickyRepository {
       remind_at: remindAt.toISOString(),
       relative_minutes: input.kind === "relative" ? input.relativeMinutes : null,
       channels: input.channels,
+      is_default: options.isDefault ?? false,
     }).select("*").single();
     throwQuery(error);
     const reminder = mapReminderRow(data as DataRow);
-    await this.writeActivity(activity(actor, "reminder.created", taskId, undefined, { reminderId: reminder.id }));
+    await this.writeActivity(activity(actor, options.isDefault ? "reminder.default_created" : "reminder.created", taskId, undefined, {
+      reminderId: reminder.id,
+      relativeMinutes: reminder.relativeMinutes,
+    }));
     return reminder;
   }
 
@@ -692,6 +702,80 @@ export class StickyRepository {
     const { data, error } = await query;
     throwQuery(error);
     return ((data ?? []) as DataRow[]).map(mapReminderRow);
+  }
+
+  async listScheduledReminders(actor: ActorContext, taskId: string): Promise<ReminderDto[]> {
+    const { data, error } = await this.db.from("task_reminders")
+      .select("*")
+      .eq("user_id", actor.userId)
+      .eq("task_id", taskId)
+      .eq("status", "scheduled")
+      .order("created_at", { ascending: false });
+    throwQuery(error);
+    return ((data ?? []) as DataRow[]).map(mapReminderRow);
+  }
+
+  async rescheduleReminder(
+    actor: ActorContext,
+    id: string,
+    input: CreateReminderInput,
+    remindAt: Date,
+    options: { isDefault?: boolean } = {},
+  ): Promise<ReminderDto> {
+    const { data, error } = await this.db.from("task_reminders").update({
+      kind: input.kind,
+      remind_at: remindAt.toISOString(),
+      relative_minutes: input.kind === "relative" ? input.relativeMinutes : null,
+      channels: input.channels,
+      is_default: options.isDefault ?? false,
+      status: "scheduled",
+      workflow_run_id: null,
+      last_error: null,
+    }).eq("id", id).eq("user_id", actor.userId).select("*").maybeSingle();
+    throwQuery(error, "Sticky could not reschedule that reminder.");
+    if (!data) throw new StickyDomainError("not_found", "Sticky could not find that reminder.", 404);
+    const reminder = mapReminderRow(data as DataRow);
+    await this.writeActivity(activity(actor, options.isDefault ? "reminder.default_rescheduled" : "reminder.rescheduled", reminder.taskId, undefined, {
+      reminderId: reminder.id,
+      relativeMinutes: reminder.relativeMinutes,
+    }));
+    return reminder;
+  }
+
+  async cancelScheduledReminders(
+    actor: ActorContext,
+    taskId: string,
+    options: { onlyDefault?: boolean } = {},
+  ): Promise<string[]> {
+    let query = this.db.from("task_reminders")
+      .update({ status: "cancelled", last_error: null })
+      .eq("user_id", actor.userId)
+      .eq("task_id", taskId)
+      .eq("status", "scheduled");
+    if (options.onlyDefault) query = query.eq("is_default", true);
+    const { data, error } = await query.select("id");
+    throwQuery(error, "Sticky could not replace that reminder.");
+    const reminderIds = ((data ?? []) as DataRow[]).map((row) => String(row.id));
+    if (reminderIds.length) {
+      await this.writeActivity(activity(actor, "reminders.cancelled", taskId, undefined, { reminderIds }));
+    }
+    return reminderIds;
+  }
+
+  async deleteReminder(actor: ActorContext, id: string): Promise<void> {
+    const { data, error } = await this.db.from("task_reminders")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", actor.userId)
+      .select("task_id")
+      .maybeSingle();
+    throwQuery(error, "Sticky could not delete that reminder.");
+    if (!data) {
+      throw new StickyDomainError("not_found", "Sticky could not find that reminder.", 404);
+    }
+    await this.writeActivity(activity(actor, "reminder.deleted", String(data.task_id), undefined, {
+      deletedReminderId: id,
+    }));
   }
 
   async getWorkspacePreferences(actor: ActorContext): Promise<WorkspacePreferencesDto> {
@@ -903,7 +987,16 @@ export class StickyRepository {
   }
 
   async snoozeReminder(actor: ActorContext, id: string, version: number, remindAt: string): Promise<ReminderDto> {
-    const { data, error } = await this.db.from("task_reminders").update({ remind_at: remindAt, status: "scheduled", workflow_run_id: null })
+    const { data, error } = await this.db.from("task_reminders").update({
+      kind: "absolute",
+      remind_at: remindAt,
+      relative_minutes: null,
+      channels: ["poke"],
+      is_default: false,
+      status: "scheduled",
+      workflow_run_id: null,
+      last_error: null,
+    })
       .eq("id", id).eq("user_id", actor.userId).eq("version", version).select("*").maybeSingle();
     throwQuery(error);
     if (!data) throw conflict("Reminder changed somewhere else. Refresh and try again.");

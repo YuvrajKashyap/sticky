@@ -288,6 +288,38 @@ function normalizeWorkspacePreferences(data: StickyWorkspaceData): StickyWorkspa
     },
   };
 }
+
+function normalizeWorkspaceForInitialLoad(
+  data: StickyWorkspaceData,
+  initialLaunchIntent?: StickyLaunchIntent,
+): StickyWorkspaceData {
+  const normalized = normalizeWorkspacePreferences(data);
+  const savedCaptureListId = normalized.userState.selectedListId;
+  const captureListId =
+    savedCaptureListId &&
+    normalized.lists.some(
+      (list) => list.id === savedCaptureListId && !list.archivedAt,
+    )
+      ? savedCaptureListId
+      : normalized.lists
+          .filter((list) => !list.archivedAt)
+          .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt))[0]?.id ??
+        null;
+
+  return {
+    ...normalized,
+    userState: {
+      ...normalized.userState,
+      // Normal launches always open the aggregate All tasks board. The
+      // dedicated capture shortcut is the one intentional exception because
+      // its input needs a concrete destination list.
+      selectedListId:
+        initialLaunchIntent === "capture"
+          ? captureListId
+          : null,
+    },
+  };
+}
 const WEEKDAYS = [
   { label: "S", short: "Sun", name: "Sunday", value: 0 },
   { label: "M", short: "Mon", name: "Monday", value: 1 },
@@ -460,6 +492,17 @@ function taskFindText(task: StickyTask, subtasks: StickySubtask[], dueLabel: str
   return [task.title, task.details, dueLabel, ...subtasks.map((subtask) => subtask.title)]
     .filter(Boolean)
     .join(" ");
+}
+
+function taskOrActiveSubtaskIsDueOn(
+  task: StickyTask,
+  subtasks: StickySubtask[],
+  dateKey: string,
+) {
+  return (
+    task.dueDate === dateKey ||
+    subtasks.some((subtask) => !subtask.isCompleted && subtask.dueDate === dateKey)
+  );
 }
 
 function isPanBlockedTarget(target: EventTarget | null) {
@@ -1036,7 +1079,9 @@ function saveStatus(saveState: SaveState, mode: AppMode, demoReady: boolean) {
 }
 
 export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunchIntent }: StickyWorkspaceProps) {
-  const [workspace, setWorkspace] = useState(initialData);
+  const [workspace, setWorkspace] = useState(() =>
+    normalizeWorkspaceForInitialLoad(initialData, initialLaunchIntent),
+  );
   const [demoReady, setDemoReady] = useState(mode !== "demo");
   const [quickTitle, setQuickTitle] = useState("");
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -1306,13 +1351,18 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     const stored = window.localStorage.getItem(DEMO_STORAGE_KEY);
     if (stored) {
       try {
-        setWorkspace(normalizeWorkspacePreferences(JSON.parse(stored) as StickyWorkspaceData));
+        setWorkspace(
+          normalizeWorkspaceForInitialLoad(
+            JSON.parse(stored) as StickyWorkspaceData,
+            initialLaunchIntent,
+          ),
+        );
       } catch {
         window.localStorage.removeItem(DEMO_STORAGE_KEY);
       }
     }
     setDemoReady(true);
-  }, [mode]);
+  }, [initialLaunchIntent, mode]);
 
   useEffect(() => {
     if (mode === "demo" && demoReady) {
@@ -1611,7 +1661,9 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
     return {
       all: taskFilterScopeTasks.length,
-      today: taskFilterScopeTasks.filter((task) => task.dueDate === todayKey).length,
+      today: taskFilterScopeTasks.filter((task) =>
+        taskOrActiveSubtaskIsDueOn(task, subtasksByTask.get(task.id) ?? [], todayKey),
+      ).length,
       due: taskFilterScopeTasks.filter((task) => Boolean(task.dueDate)).length,
       undated: taskFilterScopeTasks.filter((task) => !task.dueDate).length,
       overdue: taskFilterScopeTasks.filter((task) => task.dueDate && task.dueDate < todayKey).length,
@@ -1631,7 +1683,11 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       }
 
       if (taskViewFilter === "today") {
-        return task.dueDate === todayKey;
+        return taskOrActiveSubtaskIsDueOn(
+          task,
+          subtasksByTask.get(task.id) ?? [],
+          todayKey,
+        );
       }
 
       if (taskViewFilter === "undated") {
@@ -1782,7 +1838,11 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
         }
 
         if (taskViewFilter === "today") {
-          return task.dueDate === todayKey;
+          return taskOrActiveSubtaskIsDueOn(
+            task,
+            subtasksByTask.get(task.id) ?? [],
+            todayKey,
+          );
         }
 
         if (taskViewFilter === "undated") {
@@ -2659,7 +2719,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       updateUserState({ selectedListId: task.listId, searchQuery: "" });
     }
 
-    if (taskViewFilter !== "all") {
+    if (taskViewFilter !== "all" && taskViewFilter !== "today") {
       setTaskViewFilter("all");
     }
 
@@ -4703,6 +4763,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           task={selectedTask}
           lists={unarchivedLists}
           subtasks={selectedTaskSubtasks}
+          subtaskViewFilter={taskViewFilter === "today" ? "today" : "all"}
           recurrenceRule={selectedTaskRecurrence}
           catchUpTarget={selectedTaskCatchUp}
           pulse={workspacePulse}
@@ -5744,6 +5805,7 @@ function TaskDetailsPanel({
   task,
   lists,
   subtasks,
+  subtaskViewFilter,
   recurrenceRule,
   catchUpTarget,
   pulse,
@@ -5766,6 +5828,7 @@ function TaskDetailsPanel({
   task: StickyTask | null;
   lists: StickyList[];
   subtasks: StickySubtask[];
+  subtaskViewFilter: "all" | "today";
   recurrenceRule: StickyRecurrenceRule | null;
   catchUpTarget: ReturnType<typeof recurrenceCatchUpTarget>;
   pulse: WorkspacePulse;
@@ -5795,6 +5858,13 @@ function TaskDetailsPanel({
   const canRepeat = subtasks.length === 0;
   const recurrenceBlockedBySubtasks = !recurrenceRule && !canRepeat;
   const subtasksBlockedByRepeat = !canHaveSubtasks;
+  const visibleSubtasks =
+    subtaskViewFilter === "today"
+      ? subtasks.filter(
+          (subtask) => !subtask.isCompleted && subtask.dueDate === localDateKey(),
+        )
+      : subtasks;
+  const subtaskReorderLocked = subtaskViewFilter !== "all";
 
   useEffect(() => {
     setNewSubtaskTitle("");
@@ -6266,46 +6336,54 @@ function TaskDetailsPanel({
           <div className="mini-section-title">
             <ListChecks size={16} />
             Subtasks
-            {subtasks.length ? (
+            {visibleSubtasks.length ? (
               <strong>
-                {subtasks.filter((subtask) => subtask.isCompleted).length}/{subtasks.length} done
+                {subtaskViewFilter === "today"
+                  ? `${visibleSubtasks.length} due today`
+                  : `${visibleSubtasks.filter((subtask) => subtask.isCompleted).length}/${visibleSubtasks.length} done`}
               </strong>
             ) : null}
           </div>
 
-          {subtasks.length ? (
+          {visibleSubtasks.length && subtaskViewFilter === "all" ? (
             <div className="subtask-progress" aria-hidden="true">
               <span
                 style={{
                   width: `${Math.round(
-                    (subtasks.filter((subtask) => subtask.isCompleted).length / subtasks.length) * 100,
+                    (visibleSubtasks.filter((subtask) => subtask.isCompleted).length / visibleSubtasks.length) * 100,
                   )}%`,
                 }}
               />
             </div>
           ) : null}
 
-          <form className="subtask-form" onSubmit={submitSubtask}>
-            <label className="sr-only" htmlFor={subtaskTitleId}>
-              New subtask title
-            </label>
-            <input
-              id={subtaskTitleId}
-              value={newSubtaskTitle}
-              onChange={(event) => setNewSubtaskTitle(event.target.value)}
-              placeholder={canHaveSubtasks ? "Add subtask" : "Subtasks are disabled for repeats"}
-              disabled={subtasksBlockedByRepeat}
-              aria-describedby={subtasksBlockedByRepeat ? subtaskRestrictionId : undefined}
-            />
-            <button
-              type="submit"
-              disabled={!newSubtaskTitle.trim() || subtasksBlockedByRepeat}
-              aria-label="Add subtask"
-              aria-describedby={subtasksBlockedByRepeat ? subtaskRestrictionId : undefined}
-            >
-              <Plus size={16} />
-            </button>
-          </form>
+          {subtaskViewFilter === "all" ? (
+            <form className="subtask-form" onSubmit={submitSubtask}>
+              <label className="sr-only" htmlFor={subtaskTitleId}>
+                New subtask title
+              </label>
+              <input
+                id={subtaskTitleId}
+                value={newSubtaskTitle}
+                onChange={(event) => setNewSubtaskTitle(event.target.value)}
+                placeholder={canHaveSubtasks ? "Add subtask" : "Subtasks are disabled for repeats"}
+                disabled={subtasksBlockedByRepeat}
+                aria-describedby={subtasksBlockedByRepeat ? subtaskRestrictionId : undefined}
+              />
+              <button
+                type="submit"
+                disabled={!newSubtaskTitle.trim() || subtasksBlockedByRepeat}
+                aria-label="Add subtask"
+                aria-describedby={subtasksBlockedByRepeat ? subtaskRestrictionId : undefined}
+              >
+                <Plus size={16} />
+              </button>
+            </form>
+          ) : (
+            <p className="helper-copy">
+              Showing active subtasks due today. Switch to All to add or reorder subtasks.
+            </p>
+          )}
 
           {subtasksBlockedByRepeat ? (
             <p className="helper-copy" id={subtaskRestrictionId}>
@@ -6314,17 +6392,18 @@ function TaskDetailsPanel({
           ) : null}
 
           <SortableContext
-            items={subtasks.map((subtask) => subtask.id)}
+            items={visibleSubtasks.map((subtask) => subtask.id)}
             strategy={verticalListSortingStrategy}
           >
             <div className="subtask-list">
               <AnimatePresence initial={false}>
-                {subtasks.map((subtask, index) => (
+                {visibleSubtasks.map((subtask, index) => (
                   <SortableSubtaskRow
                     key={subtask.id}
                     subtask={subtask}
-                    canMoveUp={index > 0}
-                    canMoveDown={index < subtasks.length - 1}
+                    reorderLocked={subtaskReorderLocked}
+                    canMoveUp={!subtaskReorderLocked && index > 0}
+                    canMoveDown={!subtaskReorderLocked && index < visibleSubtasks.length - 1}
                     onUpdate={(patch) => onUpdateSubtask(subtask.id, patch)}
                     onMoveUp={() => onMoveSubtask(subtask.id, -1)}
                     onMoveDown={() => onMoveSubtask(subtask.id, 1)}
@@ -6335,14 +6414,20 @@ function TaskDetailsPanel({
             </div>
           </SortableContext>
 
-          {subtasks.length ? (
+          {visibleSubtasks.length ? (
             <p className="helper-copy subtask-schedule-help">
-              Give each step its own date - the task deadline stays on or after the latest step.
+              {subtaskViewFilter === "today"
+                ? "Only today's active subtasks are shown in this view."
+                : "Give each step its own date - the task deadline stays on or after the latest step."}
             </p>
           ) : !subtasksBlockedByRepeat ? (
             <div className="subtask-empty">
               <ListChecks size={18} />
-              <span>No steps yet - break this task down.</span>
+              <span>
+                {subtaskViewFilter === "today"
+                  ? "No active subtasks are due today."
+                  : "No steps yet - break this task down."}
+              </span>
             </div>
           ) : null}
         </section>
@@ -6395,6 +6480,7 @@ function TaskDetailsPanel({
 
 function SortableSubtaskRow({
   subtask,
+  reorderLocked,
   canMoveUp,
   canMoveDown,
   onUpdate,
@@ -6403,6 +6489,7 @@ function SortableSubtaskRow({
   onDelete,
 }: {
   subtask: StickySubtask;
+  reorderLocked: boolean;
   canMoveUp: boolean;
   canMoveDown: boolean;
   onUpdate: (patch: Partial<StickySubtask>) => void;
@@ -6411,7 +6498,11 @@ function SortableSubtaskRow({
   onDelete: () => void;
 }) {
   const [titleDraft, setTitleDraft] = useState(subtask.title);
-  const sortable = useSortable({ id: subtask.id, data: { type: "subtask" } });
+  const sortable = useSortable({
+    id: subtask.id,
+    data: { type: "subtask" },
+    disabled: reorderLocked,
+  });
   const style = {
     transform: CSS.Transform.toString(sortable.transform),
     transition: sortable.transition,
@@ -6522,6 +6613,7 @@ function SortableSubtaskRow({
             <button
               className="subtask-drag"
               type="button"
+              disabled={reorderLocked}
               {...sortable.attributes}
               {...sortable.listeners}
               aria-label={`Reorder subtask: ${subtask.title}`}

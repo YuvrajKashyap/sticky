@@ -1,14 +1,5 @@
-import webpush from "web-push";
 import { reminderDeliveryKey } from "@sticky/domain";
 import { getRuntime } from "../runtime";
-
-function configureWebPush() {
-  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  const privateKey = process.env.VAPID_PRIVATE_KEY;
-  const subject = process.env.VAPID_SUBJECT ?? "mailto:sticky@yuvrajkashyap.com";
-  if (!publicKey || !privateKey) throw new Error("Web push keys are not configured.");
-  webpush.setVapidDetails(subject, publicKey, privateKey);
-}
 
 export async function deliverReminder(reminderId: string, expectedRemindAt: string) {
   const { db } = getRuntime();
@@ -41,14 +32,13 @@ export async function deliverReminder(reminderId: string, expectedRemindAt: stri
     const { data: delivery, error } = await deliveryQuery.select("id").maybeSingle();
     if (error || !delivery) throw error ?? new Error("Could not start reminder delivery.");
     try {
-      const receipt = channel === "poke"
-        ? await sendPokeMessage(
-            pokeNotificationInstruction(
-              `Reminder: ${String(task.title)}\n\nOpen Sticky: ${process.env.NEXT_PUBLIC_SITE_URL}/?task=${String(task.id)}`,
-            ),
-            reminder.user_id,
-          )
-        : await sendPush(reminder.user_id, task);
+      if (channel !== "poke") throw new Error(`Unsupported reminder channel: ${channel}.`);
+      const receipt = await sendPokeMessage(
+        pokeNotificationInstruction(
+          `Reminder: ${String(task.title)}\n\nOpen Sticky: ${process.env.NEXT_PUBLIC_SITE_URL}/?task=${String(task.id)}`,
+        ),
+        reminder.user_id,
+      );
       await db.from("notification_deliveries").update({ status: "delivered", delivered_at: new Date().toISOString(), provider_receipt: receipt })
         .eq("id", delivery.id);
       results.push({ channel, status: "delivered" });
@@ -114,45 +104,4 @@ export async function sendPokeMessage(
   const receipt = await response.json() as Record<string, unknown>;
   if (receipt.success !== true) throw new Error("Poke did not accept the message.");
   return receipt;
-}
-
-type WebPushMessage = {
-  title: string;
-  body: string;
-  url: string;
-  tag?: string;
-  taskId?: string;
-};
-
-export async function sendWebPushMessage(userId: string, message: WebPushMessage) {
-  configureWebPush();
-  const { db } = getRuntime();
-  const { data: subscriptions } = await db.from("push_subscriptions").select("*").eq("user_id", userId).eq("is_active", true);
-  if (!subscriptions?.length) throw new Error("No active web notification device is registered.");
-  const receipts = [];
-  for (const subscription of subscriptions ?? []) {
-    try {
-      const result = await webpush.sendNotification({
-        endpoint: subscription.endpoint,
-        keys: { p256dh: subscription.p256dh, auth: subscription.auth_secret },
-      }, JSON.stringify(message));
-      receipts.push({ endpoint: subscription.endpoint, statusCode: result.statusCode });
-      await db.from("push_subscriptions").update({ last_success_at: new Date().toISOString(), last_error: null }).eq("id", subscription.id);
-    } catch (error) {
-      const statusCode = typeof error === "object" && error && "statusCode" in error ? Number(error.statusCode) : 0;
-      await db.from("push_subscriptions").update({ is_active: ![404, 410].includes(statusCode), last_error: error instanceof Error ? error.message : "Push failed" }).eq("id", subscription.id);
-      if (![404, 410].includes(statusCode)) throw error;
-    }
-  }
-  if (!receipts.length) throw new Error("No registered notification device accepted the message.");
-  return { receipts };
-}
-
-async function sendPush(userId: string, task: Record<string, unknown>) {
-  return sendWebPushMessage(userId, {
-    title: "Sticky reminder",
-    body: String(task.title),
-    url: `/?task=${String(task.id)}`,
-    taskId: String(task.id),
-  });
 }

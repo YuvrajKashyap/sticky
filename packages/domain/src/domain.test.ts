@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest";
 import type { RecurrenceRuleDto, TaskDto } from "@sticky/contracts";
-import { nextDailyAgendaOccurrence, nextOccurrenceCount, nextRecurrenceDate, parentDueDateIssue, reconcileParentDueDate, recurrenceCatchUpTarget, resolveFieldConflict, resolveReminderTime, toGoogleTask } from "./index";
+import {
+  isEndOfDayDueTime,
+  nextDailyAgendaOccurrence,
+  nextOccurrenceCount,
+  nextRecurrenceDate,
+  parentDueDateIssue,
+  reconcileParentDueDate,
+  recurrenceCatchUpTarget,
+  resolveFieldConflict,
+  resolveReminderTime,
+  taskUsesAutomaticReminder,
+  toGoogleTask,
+} from "./index";
 
 const recurringTask: TaskDto = {
   id: "5f1b0634-c870-4b14-a1c7-d9304bd6f564",
@@ -42,10 +54,36 @@ const weeklyRule: RecurrenceRuleDto = {
 describe("reminder scheduling", () => {
   it("subtracts a relative offset across a DST boundary", () => {
     const result = resolveReminderTime(
-      { kind: "relative", relativeMinutes: 60, channels: ["push"] },
+      { kind: "relative", relativeMinutes: 60, channels: ["poke"] },
       { dueDate: "2026-11-01", dueTime: "09:00", timezone: "America/Chicago" },
     );
     expect(result.toISOString()).toBe("2026-11-01T14:00:00.000Z");
+  });
+
+  it("treats 11:59 PM as end of day and excludes it from automatic reminders", () => {
+    expect(isEndOfDayDueTime("23:59")).toBe(true);
+    expect(isEndOfDayDueTime("23:59:00")).toBe(true);
+    expect(taskUsesAutomaticReminder({
+      dueDate: "2026-07-30",
+      dueTime: "23:59",
+      timezone: "America/Chicago",
+      isCompleted: false,
+    })).toBe(false);
+  });
+
+  it("automatically reminds active tasks with a real due time", () => {
+    expect(taskUsesAutomaticReminder({
+      dueDate: "2026-07-30",
+      dueTime: "16:30",
+      timezone: "America/Chicago",
+      isCompleted: false,
+    })).toBe(true);
+    expect(taskUsesAutomaticReminder({
+      dueDate: "2026-07-30",
+      dueTime: "16:30",
+      timezone: "America/Chicago",
+      isCompleted: true,
+    })).toBe(false);
   });
 });
 

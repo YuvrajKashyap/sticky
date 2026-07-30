@@ -23,8 +23,8 @@ one installable web app.
   pause, end-date, occurrence-count, and catch-up behavior.
 - **Move quickly:** keyboard shortcuts, a command center, workspace search,
   smart date parsing, duplication, undo, and a data-driven command deck.
-- **Stay connected:** private reminders, web push, Realtime invalidation, a
-  scoped API, and an MCP surface for agent access.
+- **Stay connected:** automatic Poke reminders, Realtime invalidation, a scoped
+  API, and an MCP surface for agent access.
 - **Install it:** PWA metadata, shortcuts, service-worker support, generated
   social cards, and desktop/mobile layouts.
 
@@ -101,8 +101,8 @@ interviews.
 5. Configure the local and production Auth redirect URLs.
 6. Run `npm run dev`.
 
-Provider credentials are optional. Poke and web-push controls remain visibly
-disconnected until their server-side configuration is present.
+Provider credentials are optional. Poke delivery remains visibly disconnected
+until its server-side configuration is present.
 
 ## Verification
 

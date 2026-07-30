@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import type { ActorContext } from "@sticky/contracts";
+import { reconcileTaskReminder } from "../../../../../apps/api/src/services/reminder-policy";
 import { mapRecurrenceRule, mapTask } from "@/lib/sticky/mappers";
 import { localDateKey, recurrenceCatchUpTarget, zonedDateKey } from "@/lib/sticky/recurrence";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -38,6 +40,20 @@ function parseTodayOverride(value: string | null) {
   }
 
   return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "invalid";
+}
+
+function workflowActor(userId: string): ActorContext {
+  return {
+    userId,
+    actorType: "workflow",
+    actorId: "recurrence-catch-up",
+    credentialId: null,
+    scopes: new Set(["tasks:read", "tasks:write"]),
+    requestId: crypto.randomUUID(),
+    idempotencyKey: null,
+    providerUserId: null,
+    accessToken: null,
+  };
 }
 
 export async function GET(request: NextRequest) {
@@ -84,6 +100,30 @@ export async function GET(request: NextRequest) {
   }
 
   const runDate = new Date();
+  const reminderTasksResult = await supabase
+    .from("tasks")
+    .select("id,user_id")
+    .eq("is_completed", false)
+    .not("due_date", "is", null)
+    .not("due_time", "is", null)
+    .limit(limit);
+  if (reminderTasksResult.error) {
+    return jsonResponse({ ok: false, error: reminderTasksResult.error.message }, 500);
+  }
+  let remindersReconciled = 0;
+  const reminderErrors: WorkerError[] = [];
+  for (const row of reminderTasksResult.data ?? []) {
+    try {
+      await reconcileTaskReminder(workflowActor(String(row.user_id)), String(row.id));
+      remindersReconciled += 1;
+    } catch (error) {
+      reminderErrors.push({
+        taskId: String(row.id),
+        message: error instanceof Error ? error.message : "Reminder reconciliation failed.",
+      });
+    }
+  }
+
   const maxLookupDate = localDateKey(new Date(runDate.getTime() + 86_400_000));
   const recurrenceResult = await supabase
     .from("task_recurrence_rules")
@@ -112,7 +152,8 @@ export async function GET(request: NextRequest) {
       eligible: 0,
       advanced: 0,
       skipped: 0,
-      errors: [],
+      remindersReconciled,
+      errors: reminderErrors,
     });
   }
 
@@ -139,7 +180,7 @@ export async function GET(request: NextRequest) {
   const rulesByTask = new Map(
     recurrenceRows.map((rule) => [rule.task_id, mapRecurrenceRule(rule)]),
   );
-  const errors: WorkerError[] = [];
+  const errors: WorkerError[] = [...reminderErrors];
   let eligible = 0;
   let advanced = 0;
   let skipped = 0;
@@ -179,6 +220,14 @@ export async function GET(request: NextRequest) {
 
     if (data === true) {
       advanced += 1;
+      try {
+        await reconcileTaskReminder(workflowActor(task.userId), task.id);
+      } catch (error) {
+        errors.push({
+          taskId: task.id,
+          message: error instanceof Error ? error.message : "Reminder reconciliation failed.",
+        });
+      }
     } else {
       skipped += 1;
     }
@@ -192,6 +241,7 @@ export async function GET(request: NextRequest) {
       advanced,
       skipped,
       missedRepeats,
+      remindersReconciled,
       errors,
     },
     errors.length ? 207 : 200,

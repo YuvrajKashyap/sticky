@@ -7,6 +7,21 @@ type DueTask = {
   timezone: string;
 };
 
+export const DEFAULT_AGENT_REMINDER_MINUTES = 10;
+
+export function isEndOfDayDueTime(dueTime: string | null): boolean {
+  return dueTime?.slice(0, 5) === "23:59";
+}
+
+export function taskUsesAutomaticReminder(task: DueTask & { isCompleted?: boolean }): boolean {
+  return Boolean(
+    !task.isCompleted
+    && task.dueDate
+    && task.dueTime
+    && !isEndOfDayDueTime(task.dueTime),
+  );
+}
+
 function zonedParts(date: Date, timezone: string) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,

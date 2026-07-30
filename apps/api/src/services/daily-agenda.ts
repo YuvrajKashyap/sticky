@@ -1,6 +1,6 @@
 import { nextDailyAgendaOccurrence } from "@sticky/domain";
 import { getRuntime } from "../runtime";
-import { pokeNotificationInstruction, sendPokeMessage, sendWebPushMessage } from "./notifications";
+import { pokeNotificationInstruction, sendPokeMessage } from "./notifications";
 
 const MAX_ITEMS_PER_SECTION = 50;
 const DELIVERY_STALE_AFTER_MS = 5 * 60_000;
@@ -276,7 +276,7 @@ async function claimDelivery(userId: string, deliveryKey: string) {
   const attempt = await db.from("notification_deliveries").insert({
     user_id: userId,
     reminder_id: null,
-    channel: "push",
+    channel: "poke",
     delivery_key: deliveryKey,
     status: "delivering",
     attempt_count: 1,
@@ -322,34 +322,16 @@ export async function deliverDailyAgenda(userId: string, input: DailyAgendaDeliv
     }
   }
 
-  const deliveryKey = input.deliveryKey ?? `daily-agenda:${userId}:${input.date}:push`;
+  const deliveryKey = input.deliveryKey ?? `daily-agenda:${userId}:${input.date}:poke`;
   const claim = await claimDelivery(userId, deliveryKey);
   if (!claim.delivery) return { skipped: claim.skipped, continue: true };
 
   try {
     const items = await loadDailyAgendaItems(userId, input.date);
     const message = buildDailyAgendaMessage(input.date, input.timezone, items, { test: input.test });
-    const [pushResult, pokeResult] = await Promise.allSettled([
-      sendWebPushMessage(userId, {
-        title: input.test ? "Sticky agenda test" : "Your Sticky agenda",
-        body: message,
-        url: "/?view=today",
-        tag: `sticky-daily-agenda-${input.date}`,
-      }),
-      sendPokeMessage(pokeNotificationInstruction(message), userId),
-    ]);
-    if (pushResult.status === "rejected" && pokeResult.status === "rejected") {
-      const pushError = pushResult.reason instanceof Error ? pushResult.reason.message : "Push failed";
-      const pokeError = pokeResult.reason instanceof Error ? pokeResult.reason.message : "Poke failed";
-      throw new Error(`Daily agenda delivery failed (Sticky notification: ${pushError}; Poke: ${pokeError}).`);
-    }
+    const pokeReceipt = await sendPokeMessage(pokeNotificationInstruction(message), userId);
     const channelReceipts = {
-      push: pushResult.status === "fulfilled"
-        ? { accepted: true, receipt: pushResult.value }
-        : { accepted: false, error: pushResult.reason instanceof Error ? pushResult.reason.message : "Push failed" },
-      poke: pokeResult.status === "fulfilled"
-        ? { accepted: true, receipt: pokeResult.value }
-        : { accepted: false, error: pokeResult.reason instanceof Error ? pokeResult.reason.message : "Poke failed" },
+      poke: { accepted: true, receipt: pokeReceipt },
     };
     const counts = {
       dueTasks: items.dueTasks.length,
@@ -377,8 +359,7 @@ export async function deliverDailyAgenda(userId: string, input: DailyAgendaDeliv
     return {
       delivered: true,
       channels: {
-        push: channelReceipts.push.accepted,
-        poke: channelReceipts.poke.accepted,
+        poke: true,
       },
       counts,
       continue: true,

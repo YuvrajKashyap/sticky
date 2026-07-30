@@ -92,6 +92,6 @@ export async function sendDailyAgendaTest(actor: ActorContext) {
     date,
     timezone: settings.timezone,
     test: true,
-    deliveryKey: `daily-agenda-test:${actor.userId}:${actor.idempotencyKey ?? actor.requestId}:push`,
+    deliveryKey: `daily-agenda-test:${actor.userId}:${actor.idempotencyKey ?? actor.requestId}:poke`,
   });
 }

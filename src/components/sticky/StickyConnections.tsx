@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, BellRing, Bird, Bot, CalendarSync, Check, Clock3, Copy, ExternalLink, KeyRound, RefreshCw, Send, Smartphone, Unplug, X } from "lucide-react";
+import { AlertTriangle, Bird, Bot, CalendarSync, Check, Clock3, Copy, ExternalLink, KeyRound, RefreshCw, Send, Unplug, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { createStickyPlatformClient } from "@/lib/sticky/api-client";
 
@@ -23,12 +23,6 @@ type DailyAgendaSettings = {
 };
 
 const AGENT_SCOPES = ["tasks:read", "tasks:write", "tasks:destructive", "calendar:read", "calendar:write", "calendar:destructive"];
-
-function urlBase64ToUint8Array(value: string) {
-  const padding = "=".repeat((4 - (value.length % 4)) % 4);
-  const base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
-  return Uint8Array.from(window.atob(base64), (character) => character.charCodeAt(0));
-}
 
 function nextAgendaLabel(settings: DailyAgendaSettings | undefined) {
   if (!settings?.enabled) return "Off";
@@ -76,33 +70,6 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
     enabled: dailyAgenda.data?.enabled ?? true,
     time: dailyAgenda.data?.time ?? "06:00",
     timezone: dailyAgenda.data?.timezone ?? "America/Chicago",
-  };
-
-  const registerThisDeviceForPush = async () => {
-    if (!client || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
-      throw new Error("Push notifications are not available here. Open the installed Sticky app on your iPhone and try again.");
-    }
-    const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-    if (!publicKey) throw new Error("Sticky push keys are not configured yet.");
-    const permission = Notification.permission === "granted"
-      ? "granted"
-      : await Notification.requestPermission();
-    if (permission !== "granted") {
-      throw new Error("Sticky notifications are blocked on this iPhone. Allow notifications for Sticky, then try again.");
-    }
-    const registration = await navigator.serviceWorker.ready;
-    await registration.update();
-    const existing = await registration.pushManager.getSubscription();
-    const subscription = existing ?? await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey),
-    });
-    const json = subscription.toJSON();
-    await client.request("/api/v1/push-subscriptions", {
-      method: "POST",
-      body: JSON.stringify({ endpoint: subscription.endpoint, keys: json.keys, deviceName: navigator.platform, userAgent: navigator.userAgent }),
-    });
-    return registration;
   };
 
   const createPokeCredential = useMutation({
@@ -183,33 +150,18 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
     onError: (error) => setStatusMessage(error.message),
   });
   const testDailyAgenda = useMutation({
-    mutationFn: async () => {
-      const registration = await registerThisDeviceForPush();
-      const result = await client!.request<{ delivered?: boolean; channels?: { push: boolean; poke: boolean }; counts?: { dueTasks: number; dueSubtasks: number; upcomingItems: number; undatedTasks: number; undatedSubtasks: number } }>("/api/v1/daily-agenda/test", {
+    mutationFn: async () =>
+      client!.request<{ delivered?: boolean; channels?: { poke: boolean }; counts?: { dueTasks: number; dueSubtasks: number; upcomingItems: number; undatedTasks: number; undatedSubtasks: number } }>("/api/v1/daily-agenda/test", {
         method: "POST",
         body: "{}",
-      });
-      await registration.showNotification("Sticky notifications are working", {
-        body: "Your daily agenda is connected to this iPhone.",
-        icon: "/icon.svg",
-        badge: "/icon.svg",
-        tag: "sticky-notification-proof",
-        data: { url: "/?view=today" },
-      });
-      return result;
-    },
+      }),
     onSuccess: (result) => {
       const due = (result.counts?.dueTasks ?? 0) + (result.counts?.dueSubtasks ?? 0);
       const active = (result.counts?.undatedTasks ?? 0) + (result.counts?.undatedSubtasks ?? 0);
-      setStatusMessage(result.channels?.push
-        ? `Sticky sent the test agenda to your phone with ${due} due, ${result.counts?.upcomingItems ?? 0} upcoming, and ${active} active undated item${active === 1 ? "" : "s"}.`
-        : "Poke accepted the test, but Sticky could not reach a registered phone notification device.");
+      setStatusMessage(result.channels?.poke
+        ? `Poke accepted the test agenda with ${due} due, ${result.counts?.upcomingItems ?? 0} upcoming, and ${active} active undated item${active === 1 ? "" : "s"}.`
+        : "Poke did not accept the test agenda.");
     },
-    onError: (error) => setStatusMessage(error.message),
-  });
-  const enablePush = useMutation({
-    mutationFn: registerThisDeviceForPush,
-    onSuccess: () => setStatusMessage("Notifications enabled on this device."),
     onError: (error) => setStatusMessage(error.message),
   });
   const connectGoogle = useMutation({
@@ -393,10 +345,10 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
             </button>
           </div>
           {dailyAgenda.data && !dailyAgenda.data.pokeLinked ? (
-            <p className="daily-agenda-warning"><AlertTriangle size={14} /> Sticky can still notify your phone directly; connect Poke above only if you also want the agenda mirrored there.</p>
+            <p className="daily-agenda-warning"><AlertTriangle size={14} /> Connect Poke above so Sticky has an agent conversation where it can deliver this agenda.</p>
           ) : null}
           {dailyAgenda.data && !dailyAgenda.data.pokeDeliveryConfigured ? (
-            <p className="daily-agenda-warning"><AlertTriangle size={14} /> Direct phone notifications still work. Poke mirroring needs a Poke Kitchen API key configured in Sticky.</p>
+            <p className="daily-agenda-warning"><AlertTriangle size={14} /> Agent delivery needs a Poke Kitchen API key configured in Sticky.</p>
           ) : null}
           {dailyAgenda.error ? <p className="daily-agenda-warning"><AlertTriangle size={14} /> {dailyAgenda.error.message}</p> : null}
         </div>
@@ -457,12 +409,6 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
             )}
           </div>
         ) : null}
-
-        <div className="connection-row">
-          <span className="connection-icon push"><Smartphone size={20} /></span>
-          <div className="connection-copy"><strong>Web notifications</strong><small>{typeof Notification !== "undefined" && Notification.permission === "granted" ? "Enabled" : "This device"}</small></div>
-          <button type="button" className="connection-primary" onClick={() => enablePush.mutate()}><BellRing size={15} />Enable</button>
-        </div>
 
         {statusMessage ? <div className="connection-status" role="status"><Check size={15} /><span>{statusMessage}</span></div> : null}
       </section>

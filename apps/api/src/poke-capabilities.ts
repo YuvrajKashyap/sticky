@@ -27,7 +27,7 @@ export const POKE_MANUAL_CAPABILITIES = [
   { area: "calendar", action: "create, edit, and permanently delete an event", tools: ["create_calendar_event", "update_calendar_event", "delete_calendar_event"] },
   { area: "calendar", action: "time-block a task", tools: ["time_block_task"] },
   { area: "planning", action: "read a task agenda or combined daily plan", tools: ["get_agenda", "get_daily_plan"] },
-  { area: "reminders", action: "list, schedule, and snooze reminders", tools: ["list_reminders", "schedule_reminder", "snooze_reminder"] },
+  { area: "reminders", action: "list the automatic 10-minute Poke reminder, replace it with a requested lead time, snooze it, and remove a custom override", tools: ["list_reminders", "schedule_reminder", "snooze_reminder", "delete_reminder"] },
   { area: "daily agenda", action: "preview, schedule at a selected daily time, enable, disable, and test the canonical three-bucket Poke agenda", tools: ["get_daily_agenda_settings", "get_daily_agenda_preview", "update_daily_agenda_settings", "send_daily_agenda_test"] },
   { area: "preferences", action: "read and change persisted workspace view preferences", tools: ["get_workspace_preferences", "update_workspace_preferences"] },
 ] as const;
@@ -36,7 +36,6 @@ export const INTENTIONALLY_HUMAN_ONLY_CONTROLS = [
   "Create, rotate, revoke, or refresh an agent credential.",
   "Connect or disconnect Google OAuth.",
   "Run the owner-only bulk Google-to-Sticky import override.",
-  "Grant browser notification permission or register the current device for push.",
   "Sign out of Sticky.",
   "Change device-local navigation and visual state such as the selected task, open panel, search box, rail collapse, calendar viewport, or accent hue.",
 ] as const;

@@ -641,9 +641,6 @@ async function checkVercelEnv() {
     "SUPABASE_SECRET_KEY",
     "WORKFLOW_ENABLED",
     "INTEGRATION_ENCRYPTION_KEY",
-    "NEXT_PUBLIC_VAPID_PUBLIC_KEY",
-    "VAPID_PRIVATE_KEY",
-    "VAPID_SUBJECT",
   ];
   const optionalProviderEnv = [
     ["POKE_API_KEY", "Poke reminder delivery is disconnected"],

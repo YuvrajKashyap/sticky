@@ -18,7 +18,7 @@ import {
   updateSubtaskSchema,
   timeBlockTaskSchema,
 } from "@sticky/contracts";
-import { requireDestructiveConfirmation, requireScope, resolveReminderTime, StickyDomainError } from "@sticky/domain";
+import { requireDestructiveConfirmation, requireScope, StickyDomainError } from "@sticky/domain";
 import { start } from "workflow/api";
 import { Hono, type Context } from "hono";
 import { secureHeaders } from "hono/secure-headers";
@@ -39,7 +39,11 @@ import {
   selectGoogleLists,
 } from "./services/google";
 import { deliverReminder } from "./services/notifications";
-import { reminderWorkflow } from "./workflows/reminder";
+import {
+  reconcileTaskReminder,
+  replaceTaskReminder,
+  scheduleReminderWorkflow,
+} from "./services/reminder-policy";
 import { outboxWorkflow } from "./workflows/outbox";
 
 type Env = { Variables: ApiVariables };
@@ -258,6 +262,12 @@ const app = new Hono<Env>();
           idempotency_key: actor.idempotencyKey,
           metadata: { args: body.args },
         });
+        const changedTaskIds = new Set<string>();
+        if (typeof body.args.p_task_id === "string") changedTaskIds.add(body.args.p_task_id);
+        if (body.name === "complete_task_with_recurrence" && typeof body.args.p_next_task_id === "string") {
+          changedTaskIds.add(body.args.p_next_task_id);
+        }
+        for (const taskId of changedTaskIds) await reconcileTaskReminder(actor, taskId);
         return { result: { data: result.data, error: null } };
       }
 
@@ -282,6 +292,9 @@ const app = new Hono<Env>();
       if (result.error) throw new StickyDomainError("internal_error", result.error.message, 500, { databaseCode: result.error.code });
       const changedRows = Array.isArray(result.data) ? result.data as Array<Record<string, unknown>> : [];
       await recordWebCommand(actor, body.table, body.action, changedRows);
+      if (body.table === "tasks" && body.action !== "delete") {
+        for (const row of changedRows) await reconcileTaskReminder(actor, String(row.id));
+      }
       return { result: { data: result.data, error: null } };
     });
   });
@@ -320,12 +333,18 @@ const app = new Hono<Env>();
   app.post("/api/v1/tasks", async (c) => {
     const actor = c.get("actor"); requireScope(actor, "tasks:write");
     const body = await parseJson(c, createTaskSchema);
-    return mutate(c, body, async () => ({ task: await getRuntime().repository.createTask(actor, body) }));
+    return mutate(c, body, async () => {
+      const task = await getRuntime().repository.createTask(actor, body);
+      return { task, reminder: await reconcileTaskReminder(actor, task.id) };
+    });
   });
   app.patch("/api/v1/tasks/:id", async (c) => {
     const actor = c.get("actor"); requireScope(actor, "tasks:write");
     const body = await parseJson(c, updateTaskSchema);
-    return mutate(c, body, async () => ({ task: await getRuntime().repository.updateTask(actor, c.req.param("id"), body) }));
+    return mutate(c, body, async () => {
+      const task = await getRuntime().repository.updateTask(actor, c.req.param("id"), body);
+      return { task, reminder: await reconcileTaskReminder(actor, task.id) };
+    });
   });
   app.post("/api/v1/tasks/:id/move", async (c) => {
     const actor = c.get("actor"); requireScope(actor, "tasks:write");
@@ -335,12 +354,18 @@ const app = new Hono<Env>();
   app.post("/api/v1/tasks/:id/complete", async (c) => {
     const actor = c.get("actor"); requireScope(actor, "tasks:write");
     const body = await parseJson(c, completeTaskSchema);
-    return mutate(c, body, async () => ({ task: await getRuntime().repository.setTaskCompleted(actor, c.req.param("id"), true, body.version) }));
+    return mutate(c, body, async () => {
+      const task = await getRuntime().repository.setTaskCompleted(actor, c.req.param("id"), true, body.version);
+      return { task, reminder: await reconcileTaskReminder(actor, task.id) };
+    });
   });
   app.post("/api/v1/tasks/:id/restore", async (c) => {
     const actor = c.get("actor"); requireScope(actor, "tasks:write");
     const body = await parseJson(c, completeTaskSchema);
-    return mutate(c, body, async () => ({ task: await getRuntime().repository.setTaskCompleted(actor, c.req.param("id"), false, body.version) }));
+    return mutate(c, body, async () => {
+      const task = await getRuntime().repository.setTaskCompleted(actor, c.req.param("id"), false, body.version);
+      return { task, reminder: await reconcileTaskReminder(actor, task.id) };
+    });
   });
   app.delete("/api/v1/tasks/:id", async (c) => {
     const actor = c.get("actor");
@@ -433,31 +458,25 @@ const app = new Hono<Env>();
   app.post("/api/v1/tasks/:id/reminders", async (c) => {
     const actor = c.get("actor"); requireScope(actor, "tasks:write");
     const body = await parseJson(c, createReminderSchema);
-    const task = await getRuntime().repository.getTask(actor, c.req.param("id"));
-    const remindAt = resolveReminderTime(body, task);
-    return mutate(c, body, async () => {
-      const reminder = await getRuntime().repository.createReminder(actor, task.id, body, remindAt);
-      let workflowRunId: string | null = null;
-      if (process.env.WORKFLOW_ENABLED !== "false") {
-        const run = await start(reminderWorkflow, [reminder.id, reminder.remindAt]);
-        workflowRunId = run.runId;
-        await getRuntime().db.from("task_reminders").update({ workflow_run_id: workflowRunId }).eq("id", reminder.id);
-      }
-      return { reminder, workflowRunId };
-    });
+    return mutate(c, body, () => replaceTaskReminder(actor, c.req.param("id"), body));
   });
   app.post("/api/v1/reminders/:id/snooze", async (c) => {
     const actor = c.get("actor"); requireScope(actor, "tasks:write");
     const body = await parseJson(c, snoozeReminderSchema);
     return mutate(c, body, async () => {
       const reminder = await getRuntime().repository.snoozeReminder(actor, c.req.param("id"), body.version, body.remindAt);
-      let workflowRunId: string | null = null;
-      if (process.env.WORKFLOW_ENABLED !== "false") {
-        const run = await start(reminderWorkflow, [reminder.id, reminder.remindAt]);
-        workflowRunId = run.runId;
-        await getRuntime().db.from("task_reminders").update({ workflow_run_id: workflowRunId }).eq("id", reminder.id);
-      }
-      return { reminder, workflowRunId };
+      return { reminder, workflowRunId: await scheduleReminderWorkflow(reminder) };
+    });
+  });
+  app.delete("/api/v1/reminders/:id", async (c) => {
+    const actor = c.get("actor"); requireScope(actor, "tasks:write");
+    const body = await parseJson(c, z.object({}));
+    return mutate(c, body, async () => {
+      const reminder = (await getRuntime().repository.listReminders(actor))
+        .find((item) => item.id === c.req.param("id"));
+      await getRuntime().repository.deleteReminder(actor, c.req.param("id"));
+      const fallback = reminder ? await reconcileTaskReminder(actor, reminder.taskId) : null;
+      return { deleted: true, reminderId: c.req.param("id"), fallback };
     });
   });
 
@@ -481,16 +500,6 @@ const app = new Hono<Env>();
     return mutate(c, body, () => sendDailyAgendaTest(actor));
   });
 
-  app.post("/api/v1/push-subscriptions", async (c) => {
-    const actor = c.get("actor"); requireScope(actor, "tasks:write");
-    const body = await parseJson(c, z.object({ endpoint: z.url(), keys: z.object({ p256dh: z.string().min(1), auth: z.string().min(1) }), deviceName: z.string().max(100).optional(), userAgent: z.string().max(500).optional() }));
-    return mutate(c, body, async () => {
-      const { data, error } = await getRuntime().db.from("push_subscriptions").upsert({ user_id: actor.userId, endpoint: body.endpoint, p256dh: body.keys.p256dh, auth_secret: body.keys.auth, device_name: body.deviceName, user_agent: body.userAgent, is_active: true }, { onConflict: "user_id,endpoint" }).select("id").single();
-      if (error) throw error;
-      return { subscriptionId: data.id };
-    });
-  });
-
   app.get("/api/v1/integrations", async (c) => {
     const actor = c.get("actor"); requireScope(actor, "integrations:read");
     const { data, error } = await getRuntime().db.from("integration_accounts").select("id,provider,provider_email,status,connected_at,last_error,updated_at").eq("user_id", actor.userId);
@@ -501,7 +510,6 @@ const app = new Hono<Env>();
         googleTasks: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
         googleCalendar: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
         pokeDelivery: Boolean(process.env.POKE_API_KEY),
-        webPush: Boolean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY),
       },
     });
   });

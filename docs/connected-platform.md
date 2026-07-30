@@ -33,22 +33,26 @@ idempotency records, and outbox rows have no public policies. Google refresh
 tokens are encrypted with AES-256-GCM using `INTEGRATION_ENCRYPTION_KEY`.
 
 The connected-platform migrations are additive. They add record versions,
-reminders, push subscriptions, delivery receipts, integration mappings and sync
-state, transactional outbox events, scoped API credentials, and richer activity
-metadata without resetting existing lists or tasks.
+reminders, legacy push-subscription storage, delivery receipts, integration
+mappings and sync state, transactional outbox events, scoped API credentials,
+and richer activity metadata without resetting existing lists or tasks. Sticky
+does not expose or deliver web-push reminders.
 
 ## External Activation
 
-Core Sticky and web push can run with the base production environment. Provider
-connections remain visibly disconnected until their credentials are supplied:
+Core Sticky can run with the base production environment. Provider connections
+remain visibly disconnected until their credentials are supplied:
 
 - Google Tasks: intentionally deferred for the current release.
 - Poke task access: a one-time Sticky key connected to
   `https://sticky.yuvrajkashyap.com/api/mcp`. The first authenticated request
   binds that key to the `X-Poke-User-Id` supplied by Poke.
 - Poke reminder delivery: `POKE_API_KEY` from Poke Kitchen.
-- Web push: `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and
-  `VAPID_SUBJECT`.
+
+Every active task with a real due time gets one automatic Poke reminder ten
+minutes before it. `23:59` is treated as end of day and does not create an
+automatic reminder. An explicit relative or absolute reminder replaces that
+default instead of stacking another notification.
 
 Disconnecting an integration stops synchronization or delivery and never
 deletes canonical Sticky data.

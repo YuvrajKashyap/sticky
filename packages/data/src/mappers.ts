@@ -82,6 +82,7 @@ export function mapReminderRow(row: DataRow): ReminderDto {
     remindAt: String(row.remind_at),
     relativeMinutes: row.relative_minutes == null ? null : Number(row.relative_minutes),
     channels: row.channels as ReminderDto["channels"],
+    isDefault: Boolean(row.is_default),
     status: row.status as ReminderDto["status"],
     version: Number(row.version ?? 1),
   };

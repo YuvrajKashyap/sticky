@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { idSchema, versionSchema } from "./api";
 
-export const reminderChannelSchema = z.enum(["push", "poke"]);
+export const reminderChannelSchema = z.literal("poke");
 export const reminderKindSchema = z.enum(["absolute", "relative"]);
 
 export const reminderDtoSchema = z.object({
@@ -11,6 +11,7 @@ export const reminderDtoSchema = z.object({
   remindAt: z.iso.datetime(),
   relativeMinutes: z.number().int().positive().nullable(),
   channels: z.array(reminderChannelSchema).min(1),
+  isDefault: z.boolean(),
   status: z.enum(["scheduled", "delivering", "delivered", "cancelled", "failed"]),
   version: versionSchema,
 });
@@ -19,7 +20,7 @@ export const createReminderSchema = z.object({
   kind: reminderKindSchema,
   remindAt: z.iso.datetime().optional(),
   relativeMinutes: z.number().int().positive().max(525_600).optional(),
-  channels: z.array(reminderChannelSchema).min(1),
+  channels: z.array(reminderChannelSchema).length(1).default(["poke"]),
 }).superRefine((value, ctx) => {
   if (value.kind === "absolute" && !value.remindAt) {
     ctx.addIssue({ code: "custom", path: ["remindAt"], message: "Absolute reminders need a date and time." });

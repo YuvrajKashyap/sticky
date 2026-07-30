@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { ActorContext, StickyScope } from "@sticky/contracts";
 import { destructiveConfirmationSchema, recurrenceEndTypeSchema, recurrenceFrequencySchema, recurrenceScheduleSchema, stickyColorSchema, updateWorkspacePreferencesSchema } from "@sticky/contracts";
-import { requireDestructiveConfirmation, requireScope, resolveReminderTime, StickyDomainError, zonedDateKeyAt } from "@sticky/domain";
+import { requireDestructiveConfirmation, requireScope, StickyDomainError, zonedDateKeyAt } from "@sticky/domain";
 import { createMcpHonoApp } from "@modelcontextprotocol/hono";
 import { McpServer, WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/server";
 import { start } from "workflow/api";
@@ -26,8 +26,12 @@ import {
 import { executeGoogleTaskTransfer, previewGoogleTaskTransfer } from "./services/google-task-transfer";
 import { buildDailyAgendaMessage, loadDailyAgendaItems } from "./services/daily-agenda";
 import { dailyAgendaSettingsSchema, getDailyAgendaSettings, sendDailyAgendaTest, updateDailyAgendaSettings } from "./services/daily-agenda-settings";
+import {
+  reconcileTaskReminder,
+  replaceTaskReminder,
+  scheduleReminderWorkflow,
+} from "./services/reminder-policy";
 import { outboxWorkflow } from "./workflows/outbox";
-import { reminderWorkflow } from "./workflows/reminder";
 
 const actorStorage = new AsyncLocalStorage<ActorContext>();
 
@@ -181,13 +185,6 @@ async function externalMutationResult<T>(tool: string, input: unknown, operation
     });
     throw error;
   }
-}
-
-async function scheduleReminderWorkflow(reminder: { id: string; remindAt: string }) {
-  if (process.env.WORKFLOW_ENABLED === "false") return null;
-  const run = await start(reminderWorkflow, [reminder.id, reminder.remindAt]);
-  await getRuntime().db.from("task_reminders").update({ workflow_run_id: run.runId }).eq("id", reminder.id);
-  return run.runId;
 }
 
 function registerTools(server: McpServer, options: { includeDirectGoogle: boolean }) {
@@ -431,7 +428,11 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
     });
     try {
       const recurrence = await getRuntime().repository.setTaskRecurrence(current, task.id, schedule, input.dueTime);
-      return { task: await getRuntime().repository.getTask(current, task.id), recurrence };
+      return {
+        task: await getRuntime().repository.getTask(current, task.id),
+        recurrence,
+        reminder: await reconcileTaskReminder(current, task.id),
+      };
     } catch (error) {
       try {
         await getRuntime().repository.deleteTask(current, task.id);
@@ -450,13 +451,15 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
     inputSchema: z.object({ taskId: id, dueTime: dueTime.nullable().optional(), ...flatRecurrenceShape }),
   }, async (input) => mutationResult("make_task_recurring", input, async (current) => {
     const schedule = recurrenceScheduleSchema.parse(input);
+    const recurrence = await getRuntime().repository.setTaskRecurrence(current, input.taskId, schedule, input.dueTime);
     return {
-      recurrence: await getRuntime().repository.setTaskRecurrence(current, input.taskId, schedule, input.dueTime),
+      recurrence,
       task: await getRuntime().repository.getTask(current, input.taskId),
+      reminder: await reconcileTaskReminder(current, input.taskId),
     };
   }));
 
-  server.registerTool("create_task", { description: "Create a Sticky task and either all of its Sticky subtasks or its recurrence in the same call. Parent and child due dates follow one rule: any undated subtask forces the parent to stay undated; when every subtask is dated, Sticky never invents a parent date, but an explicitly dated parent is kept on or after its latest subtask. For a repeating task, set recurrence and make startsOn the first due date; dueTime is the local occurrence time. Use daysOfWeek 0=Sunday through 6=Saturday. Never substitute a reminder for recurrence. Repeating tasks cannot have subtasks. When color is omitted, Sticky uses the target list's color.", inputSchema: z.object({ listId: id, title: z.string().trim().min(1).max(180), details: z.string().max(20_000).default(""), color: stickyColorSchema.optional(), dueDate: z.iso.date().nullable().default(null), dueTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/).nullable().default(null), timezone: z.string().default("America/Chicago"), subtasks: z.array(z.object({ title: z.string().trim().min(1).max(160), dueDate: z.iso.date().nullable().default(null) })).max(100).default([]), recurrence: recurrenceScheduleSchema.nullable().default(null) }).superRefine((input, context) => {
+  server.registerTool("create_task", { description: "Create a Sticky task and either all of its Sticky subtasks or its recurrence in the same call. Parent and child due dates follow one rule: any undated subtask forces the parent to stay undated; when every subtask is dated, Sticky never invents a parent date, but an explicitly dated parent is kept on or after its latest subtask. For a repeating task, set recurrence and make startsOn the first due date; dueTime is the local occurrence time. Use daysOfWeek 0=Sunday through 6=Saturday. Never substitute a reminder for recurrence. Repeating tasks cannot have subtasks. When color is omitted, Sticky uses the target list's color. Any non-EOD due time automatically gets one Poke reminder 10 minutes before it unless schedule_reminder explicitly replaces that default.", inputSchema: z.object({ listId: id, title: z.string().trim().min(1).max(180), details: z.string().max(20_000).default(""), color: stickyColorSchema.optional(), dueDate: z.iso.date().nullable().default(null), dueTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/).nullable().default(null), timezone: z.string().default("America/Chicago"), subtasks: z.array(z.object({ title: z.string().trim().min(1).max(160), dueDate: z.iso.date().nullable().default(null) })).max(100).default([]), recurrence: recurrenceScheduleSchema.nullable().default(null) }).superRefine((input, context) => {
     if (input.recurrence && input.subtasks.length > 0) context.addIssue({ code: "custom", path: ["subtasks"], message: "A repeating Sticky task cannot have subtasks." });
   }) },
     async (input) => mutationResult("create_task", input, async (current) => {
@@ -467,12 +470,22 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
         timezone: input.recurrence?.timezone ?? input.timezone,
         color: input.color ?? list.color,
       };
-      if (input.subtasks.length) return getRuntime().repository.createTaskWithSubtasks(current, taskInput);
+      if (input.subtasks.length) {
+        const created = await getRuntime().repository.createTaskWithSubtasks(current, taskInput);
+        return { ...created, recurrence: null, reminder: await reconcileTaskReminder(current, created.task.id) };
+      }
       const task = await getRuntime().repository.createTask(current, taskInput);
-      if (!input.recurrence) return { task, subtasks: [], recurrence: null };
+      if (!input.recurrence) {
+        return { task, subtasks: [], recurrence: null, reminder: await reconcileTaskReminder(current, task.id) };
+      }
       try {
         const recurrence = await getRuntime().repository.setTaskRecurrence(current, task.id, input.recurrence, input.dueTime);
-        return { task: await getRuntime().repository.getTask(current, task.id), subtasks: [], recurrence };
+        return {
+          task: await getRuntime().repository.getTask(current, task.id),
+          subtasks: [],
+          recurrence,
+          reminder: await reconcileTaskReminder(current, task.id),
+        };
       } catch (error) {
         try {
           await getRuntime().repository.deleteTask(current, task.id);
@@ -487,10 +500,14 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
     }));
 
   server.registerTool("set_task_recurrence", { description: "Create or replace the recurrence on an existing active Sticky task. This schedules its first occurrence on schedule.startsOn, preserves its current due time unless dueTime is supplied, and supports daily, weekly, monthly, yearly, or custom repetition. Use daysOfWeek 0=Sunday through 6=Saturday. This is recurrence, not a reminder; recurring tasks cannot have subtasks.", inputSchema: z.object({ taskId: id, schedule: recurrenceScheduleSchema, dueTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/).nullable().optional() }) },
-    async ({ taskId, schedule, dueTime }) => mutationResult("set_task_recurrence", { taskId, schedule, dueTime }, async (current) => ({
-      recurrence: await getRuntime().repository.setTaskRecurrence(current, taskId, schedule, dueTime),
-      task: await getRuntime().repository.getTask(current, taskId),
-    })));
+    async ({ taskId, schedule, dueTime }) => mutationResult("set_task_recurrence", { taskId, schedule, dueTime }, async (current) => {
+      const recurrence = await getRuntime().repository.setTaskRecurrence(current, taskId, schedule, dueTime);
+      return {
+        recurrence,
+        task: await getRuntime().repository.getTask(current, taskId),
+        reminder: await reconcileTaskReminder(current, taskId),
+      };
+    }));
 
   server.registerTool("set_task_recurrence_paused", { description: "Pause or resume a Sticky task's recurrence without deleting the task or its schedule.", inputSchema: z.object({ taskId: id, paused: z.boolean() }) },
     async (input) => mutationResult("set_task_recurrence_paused", input, async (current) => ({ recurrence: await getRuntime().repository.setTaskRecurrencePaused(current, input.taskId, input.paused) })));
@@ -511,7 +528,9 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
       for (const rule of rules) {
         if (requested && !requested.has(rule.taskId)) continue;
         const throughDate = input.throughDate ?? zonedDateKeyAt(new Date(), rule.timezone);
-        results.push(await getRuntime().repository.advanceRecurringTask(current, rule.taskId, throughDate));
+        const advanced = await getRuntime().repository.advanceRecurringTask(current, rule.taskId, throughDate);
+        if (advanced.advanced) await reconcileTaskReminder(current, rule.taskId);
+        results.push(advanced);
       }
       return {
         advanced: results.filter((item) => item.advanced),
@@ -576,7 +595,8 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
     async (input) => mutationResult("update_task", input, async (current) => {
       const existing = await getRuntime().repository.getTask(current, input.taskId);
       const { taskId, ...patch } = input;
-      return { task: await getRuntime().repository.updateTask(current, taskId, { ...patch, version: input.version ?? existing.version }) };
+      const task = await getRuntime().repository.updateTask(current, taskId, { ...patch, version: input.version ?? existing.version });
+      return { task, reminder: await reconcileTaskReminder(current, taskId) };
     }));
 
   server.registerTool("move_task", { description: "Move an active or completed task to another Sticky list. The record version is optional.", inputSchema: z.object({ taskId: id, targetListId: id, version: version.optional() }) },
@@ -596,21 +616,33 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
     async (input) => mutationResult("reorder_tasks", input, async (current) => ({ tasks: await getRuntime().repository.reorderTasks(current, input.listId, input.taskIds) })));
 
   server.registerTool("duplicate_task", { description: "Duplicate a Sticky task into the same list. The copy keeps details, color, dates, times, and either its subtasks or its recurrence; copied subtasks are reset to active. A custom title is optional.", inputSchema: z.object({ taskId: id, title: z.string().trim().min(1).max(180).optional() }) },
-    async (input) => mutationResult("duplicate_task", input, async (current) => getRuntime().repository.duplicateTask(current, input.taskId, input.title)));
+    async (input) => mutationResult("duplicate_task", input, async (current) => {
+      const duplicated = await getRuntime().repository.duplicateTask(current, input.taskId, input.title);
+      return { ...duplicated, reminder: await reconcileTaskReminder(current, duplicated.task.id) };
+    }));
 
   server.registerTool("complete_task", { description: "Mark a Sticky task complete. If it repeats, Sticky atomically creates the next scheduled occurrence and moves the recurrence rule to it. The record version is optional; when omitted, Sticky safely uses the current version.", inputSchema: z.object({ taskId: id, version: version.optional() }) },
     async (input) => mutationResult("complete_task", input, async (current) => {
       const currentVersion = input.version ?? (await getRuntime().repository.getTask(current, input.taskId)).version;
-      return getRuntime().repository.completeTaskWithRecurrence(current, input.taskId, currentVersion);
+      const completed = await getRuntime().repository.completeTaskWithRecurrence(current, input.taskId, currentVersion);
+      const reminder = await reconcileTaskReminder(current, completed.task.id);
+      const nextReminder = completed.nextTask
+        ? await reconcileTaskReminder(current, completed.nextTask.id)
+        : null;
+      return { ...completed, reminder, nextReminder };
     }));
 
   server.registerTool("undo_recurring_completion", { description: "Undo the most recent recurring-task completion using the completed task id and the generated next-task id returned by complete_task. Sticky deletes only that generated occurrence, restores the completed occurrence, and moves the recurrence rule back.", inputSchema: z.object({ completedTaskId: id, generatedTaskId: id }) },
-    async (input) => mutationResult("undo_recurring_completion", input, async (current) => getRuntime().repository.undoRecurringCompletion(current, input.completedTaskId, input.generatedTaskId)));
+    async (input) => mutationResult("undo_recurring_completion", input, async (current) => {
+      const restored = await getRuntime().repository.undoRecurringCompletion(current, input.completedTaskId, input.generatedTaskId);
+      return { ...restored, reminder: await reconcileTaskReminder(current, input.completedTaskId) };
+    }));
 
   server.registerTool("restore_task", { description: "Restore a completed Sticky task. The record version is optional; when omitted, Sticky safely uses the current version.", inputSchema: z.object({ taskId: id, version: version.optional() }) },
     async (input) => mutationResult("restore_task", input, async (current) => {
       const currentVersion = input.version ?? (await getRuntime().repository.getTask(current, input.taskId)).version;
-      return { task: await getRuntime().repository.setTaskCompleted(current, input.taskId, false, currentVersion) };
+      const task = await getRuntime().repository.setTaskCompleted(current, input.taskId, false, currentVersion);
+      return { task, reminder: await reconcileTaskReminder(current, input.taskId) };
     }));
 
   server.registerTool("add_subtask", { description: "Create a real subtask under an existing non-recurring Sticky task. Use this whenever the user says add/create a subtask; never claim the integration cannot create subtasks and never redirect this request to Google Tasks. An undated subtask clears the parent due date. A dated subtask never invents a parent date; if the parent is already dated, Sticky extends it when needed.", inputSchema: z.object({ taskId: id, title: z.string().trim().min(1).max(160), dueDate: z.iso.date().nullable().default(null) }) },
@@ -650,19 +682,35 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
     subtasks: await getRuntime().repository.reorderSubtasks(current, input.taskId, input.subtaskIds),
   })));
 
-  server.registerTool("schedule_reminder", { description: "Schedule a web push, Poke, or combined reminder for a task.", inputSchema: z.object({ taskId: id, kind: z.enum(["absolute", "relative"]), remindAt: z.iso.datetime().optional(), relativeMinutes: z.int().positive().optional(), channels: z.array(z.enum(["push", "poke"])).min(1) }) },
-    async ({ taskId, ...input }) => mutationResult("schedule_reminder", { taskId, ...input }, async (current) => {
-      const task = await getRuntime().repository.getTask(current, taskId);
-      const remindAt = resolveReminderTime(input, task);
-      const reminder = await getRuntime().repository.createReminder(current, taskId, input, remindAt);
-      return { reminder, workflowRunId: await scheduleReminderWorkflow(reminder) };
-    }));
+  server.registerTool("schedule_reminder", {
+    description: "Replace the task's automatic 10-minute reminder with one explicit Poke reminder. Use relativeMinutes when the user says how long before the due time; use remindAt for an absolute instant. Do not create a second reminder.",
+    inputSchema: z.object({
+      taskId: id,
+      kind: z.enum(["absolute", "relative"]),
+      remindAt: z.iso.datetime().optional(),
+      relativeMinutes: z.int().positive().optional(),
+    }),
+  }, async ({ taskId, ...input }) => mutationResult("schedule_reminder", { taskId, ...input }, async (current) =>
+    replaceTaskReminder(current, taskId, { ...input, channels: ["poke"] })));
 
   server.registerTool("snooze_reminder", { description: "Move a reminder to a new absolute time.", inputSchema: z.object({ reminderId: id, version, remindAt: z.iso.datetime() }) },
     async (input) => mutationResult("snooze_reminder", input, async (current) => {
       const reminder = await getRuntime().repository.snoozeReminder(current, input.reminderId, input.version, input.remindAt);
       return { reminder, workflowRunId: await scheduleReminderWorkflow(reminder) };
     }));
+
+  server.registerTool("delete_reminder", { description: "Permanently delete one Sticky task reminder so it will not be delivered. Read list_reminders first and require the user's explicit deletion request.", inputSchema: z.object({ reminderId: id, confirmation: destructive }), annotations: { destructiveHint: true } },
+    async (input) => {
+      const current = actor();
+      requireDestructiveConfirmation(current, input.confirmation, ["delete", input.reminderId]);
+      return mutationResult("delete_reminder", input, async () => {
+        const reminder = (await getRuntime().repository.listReminders(current))
+          .find((item) => item.id === input.reminderId);
+        await getRuntime().repository.deleteReminder(current, input.reminderId);
+        const fallback = reminder ? await reconcileTaskReminder(current, reminder.taskId) : null;
+        return { deleted: true, reminderId: input.reminderId, fallback };
+      });
+    });
 
   server.registerTool("update_workspace_preferences", { description: "Change persisted Sticky workspace preferences: completed-pile state, density, light/dark theme, pad/wood board style, task filter, or custom/due-date sorting. This changes the app's saved workspace presentation, not task data.", inputSchema: updateWorkspacePreferencesSchema },
     async (input) => mutationResult("update_workspace_preferences", input, async (current) => ({ preferences: await getRuntime().repository.updateWorkspacePreferences(current, input) })));

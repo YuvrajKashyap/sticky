@@ -98,13 +98,14 @@ test("connected settings and task reminders stay integrated with the workspace",
   await expect(connections.getByRole("button", { name: "Create Littlebird connection" })).toBeVisible();
   await expect(connections.getByText("Google Workspace", { exact: true })).toBeVisible();
   await expect(connections.getByRole("button", { name: /Sync all Google/ })).toHaveCount(0);
-  await expect(connections.getByText("Web notifications")).toBeVisible();
+  await expect(connections.getByText("Web notifications")).toHaveCount(0);
   await connections.getByRole("button", { name: "Close connections" }).click();
 
   const firstTask = page.locator("[data-task-id]").first();
   await firstTask.click();
   await expect(page.getByRole("region", { name: "Task reminders" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Push" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByText(/automatically message you through Poke 10 minutes before/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Push" })).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
 });
 
@@ -363,6 +364,7 @@ test.describe("Sticky workspace", () => {
       await page.getByRole("button", { name: "Close list editor" }).click();
       await expect(page.getByRole("dialog", { name: "New list" })).toHaveCount(0);
 
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await page.getByRole("button", { name: "Rename current list reminders" }).click();
       await expect(page.getByRole("dialog", { name: "Rename list" })).toBeVisible();
       await expectDialogBackdropCoversViewport(page);
@@ -682,6 +684,8 @@ test.describe("Sticky workspace", () => {
       await expect(page.getByRole("heading", { name: "All tasks" })).toBeVisible();
       await expect(page.getByRole("button", { name: /Show all tasks/ })).toBeVisible();
       await expect(page.getByRole("button", { name: "Show starred tasks" })).toHaveCount(0);
+      await expect(page.locator(".list-tab.active")).toHaveCount(0);
+      await expect(page.locator(".board-column.active")).toHaveCount(0);
 
       await expect(page.locator(".board-column")).toHaveCount(6);
       await expect(page.locator('.board-column[data-list-slug="product"]')).toBeVisible();
@@ -873,6 +877,8 @@ test.describe("Sticky workspace", () => {
       await page.goto("/");
       await expect(page.getByRole("heading", { name: "All tasks" })).toBeVisible();
       await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
+      await expect(page.locator(".list-tab.active")).toHaveCount(0);
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await expect(
         page.getByRole("button", {
           name: "Open list reminders, 4 active tasks, 8 completed tasks, shown on All tasks, current list",
@@ -1292,6 +1298,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
       await expectMobileZoomAllowed(page);
       await expectSingleLine(page.locator(".workspace-title h2"));
@@ -1364,6 +1371,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
       const taskViews = page.locator(".task-filter-bar");
 
@@ -1380,6 +1388,8 @@ test.describe("Sticky workspace", () => {
       await expect(page.getByText(/Reordering is locked while filters or due-date sorting are active/)).toBeVisible();
 
       await page.reload();
+      await expect(page.getByRole("heading", { name: "All tasks", exact: true })).toBeVisible();
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
       await expect(taskViews.getByRole("button", { name: "Current task view: Today, 2 tasks" })).toHaveAttribute(
         "aria-pressed",
@@ -1398,6 +1408,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
 
       const completedToggle = page.locator('button[aria-controls="completed-stickies-list"]');
@@ -1411,6 +1422,8 @@ test.describe("Sticky workspace", () => {
       });
 
       await page.reload();
+      await expect(page.getByRole("heading", { name: "All tasks", exact: true })).toBeVisible();
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
       await expect(completedToggle).toHaveAttribute("aria-expanded", "true");
       await expect(page.locator("#completed-stickies-list")).toBeVisible();
@@ -1419,16 +1432,18 @@ test.describe("Sticky workspace", () => {
       await expect(completedToggle).toHaveAttribute("aria-expanded", "false");
       await page.waitForFunction(() => {
         const stored = window.localStorage.getItem("sticky.demo.workspace.v2");
-        return Boolean(stored && !JSON.parse(stored).preferences.completedOpenByList["demo-list-today"]);
+        return Boolean(stored && !JSON.parse(stored).preferences.completedOpenByList["demo-list-reminders"]);
       });
       await page.reload();
+      await expect(page.getByRole("heading", { name: "All tasks", exact: true })).toBeVisible();
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
       await expect(completedToggle).toHaveAttribute("aria-expanded", "false");
       await expect(page.locator("#completed-stickies-list")).toHaveCount(0);
     });
   });
 
-  test("selected list and search state survive reload", async ({ page }, testInfo) => {
+  test("search survives reload while list selection resets", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "user state persistence runs in the desktop project");
 
     await expectNoConsoleErrors(page, async () => {
@@ -1443,10 +1458,12 @@ test.describe("Sticky workspace", () => {
       await expect(activeRegion.getByText("Prepare the Vercel domain checklist")).toBeVisible();
 
       await page.reload();
-      await expect(page.getByRole("heading", { name: "Next 3", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "All tasks", exact: true })).toBeVisible();
+      await expect(page.locator(".list-tab.active")).toHaveCount(0);
+      await expect(page.locator(".board-column.active")).toHaveCount(0);
       await expect(searchInput).toHaveValue("domain");
       await expect(activeRegion.getByText("Prepare the Vercel domain checklist")).toBeVisible();
-      await expect(page.locator("button.list-tab", { hasText: "Next 3" })).toHaveAccessibleName(
+      await expect(page.locator("button.list-tab", { hasText: "Next 3" })).not.toHaveAccessibleName(
         /current list/,
       );
     });
@@ -1457,18 +1474,39 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
 
       const taskViews = page.locator(".task-filter-bar");
       const activeRegion = page.getByRole("region", { name: "Active tasks" });
       const overdueTitle = "Overdue filter proof";
       const overdueDate = localDateKey(-1);
+      const todayDate = localDateKey();
+
+      await activeRegion.getByText("Tighten the details panel").click();
+      const details = page.getByRole("complementary", { name: "Task details", exact: true });
+      await details.getByPlaceholder("Add subtask").fill("Undated sibling");
+      await details.getByRole("button", { name: "Add subtask" }).click();
+      await details.locator('input[aria-label="Due date for subtask: Check the mobile sheet"]').fill(todayDate);
+      await details.getByRole("button", { name: "Close details" }).click();
+
+      await taskViews.getByRole("button", { name: "Show task view: Today, 3 tasks" }).click();
+      await expect(taskViews.getByRole("button", { name: "Current task view: Today, 3 tasks" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      await expect(activeRegion.getByText("Tighten the details panel")).toBeVisible();
+      await activeRegion.getByText("Tighten the details panel").click();
+      await expect(details.getByRole("textbox", { name: "Subtask title: Check the mobile sheet" })).toBeVisible();
+      await expect(details.getByRole("textbox", { name: "Subtask title: Undated sibling" })).toHaveCount(0);
+      await expect(details.getByText("Showing active subtasks due today. Switch to All to add or reorder subtasks.")).toBeVisible();
+      await details.getByRole("button", { name: "Close details" }).click();
+      await runCommand(page, "show all tasks");
 
       await page.getByLabel("Quick add task").fill(overdueTitle);
       await quickAddButton(page, "reminders").click();
       await activeRegion.getByText(overdueTitle).click();
 
-      const details = page.getByRole("complementary", { name: "Task details", exact: true });
       await details.locator('input[aria-label="Due date"]').fill(overdueDate);
       await expect(activeRegion.locator(".task-card", { hasText: overdueTitle })).toContainText(
         shortDateLabel(overdueDate),
@@ -1563,6 +1601,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
       const nextFriday = nextWeekdayKey(5);
 
       await page.getByLabel("Quick add task").fill("Plan review Friday noon");
@@ -1594,6 +1633,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
       const activeRegion = page.getByRole("region", { name: "Active tasks" });
       const today = localDateKey();
       const nextWeek = localDateKey(7);
@@ -1648,6 +1688,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
       const tomorrow = localDateKey(1);
       await page.getByLabel("Quick add task").fill("Reusable setup tomorrow 9am");
       await quickAddButton(page, "reminders").click();
@@ -1690,6 +1731,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await page.getByLabel("Quick add task").fill("Weekly template");
       await quickAddButton(page, "reminders").click();
 
@@ -1729,6 +1771,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
 
       const details = page.getByRole("complementary", { name: "Task details", exact: true });
       const activeRegion = page.getByRole("region", { name: "Active tasks" });
@@ -1775,6 +1818,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
 
       const startDate = localDateKey(1);
       const secondDate = localDateKey(2);
@@ -1809,6 +1853,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await page.getByLabel("Quick add task").fill("Command action sticky");
       await quickAddButton(page, "reminders").click();
 
@@ -2037,18 +2082,18 @@ test.describe("Sticky workspace", () => {
       await expect(page.getByLabel("Quick add task")).toBeFocused();
 
       await page.goto("/?intent=search");
-      await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "All tasks", exact: true })).toBeVisible();
       await expect(page.getByLabel("Find in workspace")).toBeFocused();
 
       await page.goto("/?view=today");
-      await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "All tasks", exact: true })).toBeVisible();
       await expect(page.getByRole("button", { name: "Current task view: Today, 2 tasks" })).toHaveAttribute(
         "aria-pressed",
         "true",
       );
 
       await page.goto("/?view=scheduled");
-      await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "All tasks", exact: true })).toBeVisible();
       await expect(page.getByRole("button", { name: "Current task view: Scheduled, 2 tasks" })).toHaveAttribute(
         "aria-pressed",
         "true",
