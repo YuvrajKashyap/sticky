@@ -20,12 +20,15 @@
     "materials:premium": "python scripts/generate-premium-materials.py",
     "security:check": "node scripts/security-check.mjs",
     "schema:check": "node scripts/schema-check.mjs",
-    "audit:moderate": "npm audit --audit-level=moderate",
+    "audit:moderate": "node scripts/audit-check.mjs",
     "launch:check": "node scripts/launch-readiness.mjs",
     "verify": "npm run typecheck && npm run lint && npm run test:unit && npm run security:check && npm run schema:check && npm run build && npm run audit:moderate && npm run test:e2e"
   },
   "overrides": {
-    "postcss": "8.5.15"
+    "filelist": "2.0.2",
+    "gaxios": "7.3.0",
+    "postcss": "8.5.25",
+    "sharp": "0.35.3"
   },
   "dependencies": {
     "@dnd-kit/core": "6.3.1",
@@ -42,20 +45,20 @@
     "date-fns": "4.4.0",
     "framer-motion": "12.40.0",
     "lucide-react": "1.18.0",
-    "next": "16.2.9",
-    "react": "19.2.7",
-    "react-dom": "19.2.7",
+    "next": "16.2.12",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "zod": "4.4.3"
   },
   "devDependencies": {
     "@playwright/test": "1.60.0",
-    "@tailwindcss/postcss": "4.3.0",
+    "@tailwindcss/postcss": "4.3.3",
     "@types/node": "25.9.3",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
-    "eslint": "9.39.4",
-    "eslint-config-next": "16.2.9",
-    "tailwindcss": "4.3.0",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.2.12",
+    "tailwindcss": "4.3.3",
     "typescript": "6.0.3",
     "vitest": "4.1.10"
   }

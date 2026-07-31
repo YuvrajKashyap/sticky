@@ -23,6 +23,8 @@ async function expectNoConsoleErrors(page: Page, run: () => Promise<void>) {
 }
 
 async function dragBetween(page: Page, source: Locator, target: Locator) {
+  await source.scrollIntoViewIfNeeded();
+  await target.scrollIntoViewIfNeeded();
   const sourceBox = await source.boundingBox();
   const targetBox = await target.boundingBox();
   expect(sourceBox).not.toBeNull();
@@ -34,6 +36,7 @@ async function dragBetween(page: Page, source: Locator, target: Locator) {
 
   await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
   await page.mouse.down();
+  await page.waitForTimeout(80);
   await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, {
     steps: 14,
   });
@@ -1084,7 +1087,7 @@ test.describe("Sticky workspace", () => {
           name: /Move Verification sticky polished up/,
         }),
       ).toBeDisabled();
-      await expect(page.getByText(/Reordering is locked while filters or due-date sorting are active/)).toBeVisible();
+      await expect(page.getByText(/Reordering is locked while a task filter is active/)).toBeVisible();
       await runCommand(page, "show all tasks");
       await expect(taskViews.getByRole("button", { name: "Current task view: All, 3 tasks" })).toHaveAttribute(
         "aria-pressed",
@@ -1385,7 +1388,7 @@ test.describe("Sticky workspace", () => {
         "aria-pressed",
         "true",
       );
-      await expect(page.getByText(/Reordering is locked while filters or due-date sorting are active/)).toBeVisible();
+      await expect(page.getByText(/Reordering is locked while a task filter is active/)).toBeVisible();
 
       await page.reload();
       await expect(page.getByRole("heading", { name: "All tasks", exact: true })).toBeVisible();
@@ -1399,7 +1402,77 @@ test.describe("Sticky workspace", () => {
         "aria-pressed",
         "true",
       );
-      await expect(page.getByText(/Reordering is locked while filters or due-date sorting are active/)).toBeVisible();
+      await expect(page.getByText(/Reordering is locked while a task filter is active/)).toBeVisible();
+    });
+  });
+
+  test("due-date sorting keeps chronology fixed while exact schedule ties stay draggable", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "task ordering runs in the desktop project");
+    test.setTimeout(60_000);
+
+    await expectNoConsoleErrors(page, async () => {
+      await page.goto("/");
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
+      await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
+
+      const scheduleDate = localDateKey(30);
+      const laterDate = localDateKey(31);
+      const details = page.getByRole("complementary", { name: "Task details", exact: true });
+      const titles = {
+        timedFirst: "Due tie timed first",
+        timedSecond: "Due tie timed second",
+        undatedTimeFirst: "Due tie no-time first",
+        undatedTimeSecond: "Due tie no-time second",
+        later: "Due tie later date",
+      };
+
+      async function addScheduledTask(title: string, dueDate: string, dueTime?: string) {
+        await page.getByLabel("Quick add task").fill(title);
+        await quickAddButton(page, "reminders").click();
+        const card = page.locator(".task-card", { hasText: title });
+        await expect(card).toBeVisible();
+        await card.getByText(title, { exact: true }).click();
+        await details.locator('input[aria-label="Due date"]').fill(dueDate);
+        if (dueTime) {
+          await details.locator('input[aria-label="Due time"]').fill(dueTime);
+        }
+      }
+
+      await addScheduledTask(titles.timedFirst, scheduleDate, "09:00");
+      await addScheduledTask(titles.timedSecond, scheduleDate, "09:00");
+      await addScheduledTask(titles.undatedTimeFirst, scheduleDate);
+      await addScheduledTask(titles.undatedTimeSecond, scheduleDate);
+      await addScheduledTask(titles.later, laterDate);
+      await details.getByRole("button", { name: "Close details" }).click();
+
+      await runCommand(page, "sort by due date");
+      await expect(page.getByText(/Due dates stay chronological/)).toBeVisible();
+      await expectTextBefore(page, ".task-title", titles.timedFirst, titles.timedSecond);
+      await expectTextBefore(page, ".task-title", titles.timedSecond, titles.undatedTimeFirst);
+      await expectTextBefore(page, ".task-title", titles.undatedTimeFirst, titles.undatedTimeSecond);
+      await expectTextBefore(page, ".task-title", titles.undatedTimeSecond, titles.later);
+
+      const timedFirstCard = page.locator(".task-card", { hasText: titles.timedFirst });
+      const timedSecondCard = page.locator(".task-card", { hasText: titles.timedSecond });
+      await dragBetween(page, timedSecondCard.locator(".task-drag"), timedFirstCard.locator(".task-drag"));
+      await expectTextBefore(page, ".task-title", titles.timedSecond, titles.timedFirst);
+
+      const noTimeFirstCard = page.locator(".task-card", { hasText: titles.undatedTimeFirst });
+      const noTimeSecondCard = page.locator(".task-card", { hasText: titles.undatedTimeSecond });
+      await dragBetween(page, noTimeSecondCard.locator(".task-drag"), noTimeFirstCard.locator(".task-drag"));
+      await expectTextBefore(page, ".task-title", titles.undatedTimeSecond, titles.undatedTimeFirst);
+
+      await expectTextBefore(page, ".task-title", titles.undatedTimeFirst, titles.later);
+
+      await page.reload();
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
+      await expect(page.getByRole("button", { name: "Current task sort: Due date" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      await expectTextBefore(page, ".task-title", titles.timedSecond, titles.timedFirst);
+      await expectTextBefore(page, ".task-title", titles.undatedTimeSecond, titles.undatedTimeFirst);
+      await expectTextBefore(page, ".task-title", titles.undatedTimeFirst, titles.later);
     });
   });
 
@@ -1524,7 +1597,7 @@ test.describe("Sticky workspace", () => {
           name: /Move Overdue filter proof up/,
         }),
       ).toBeDisabled();
-      await expect(page.getByText(/Reordering is locked while filters or due-date sorting are active/)).toBeVisible();
+      await expect(page.getByText(/Reordering is locked while a task filter is active/)).toBeVisible();
 
       await runCommand(page, "show undated tasks");
       await expect(taskViews.getByRole("button", { name: "Current task view: Undated, 2 tasks" })).toHaveAttribute(
@@ -1559,7 +1632,7 @@ test.describe("Sticky workspace", () => {
         "aria-pressed",
         "true",
       );
-      await expect(page.getByText(/Reordering is locked while filters or due-date sorting are active/)).toHaveCount(0);
+      await expect(page.getByText(/Reordering is locked while a task filter is active/)).toHaveCount(0);
       await expectTextBefore(page, ".task-title", "Clear the capture tray", "Tighten the details panel");
       await expectTextBefore(page, ".task-title", "Daily planning pass", overdueTitle);
     });
@@ -1964,7 +2037,9 @@ test.describe("Sticky workspace", () => {
     });
   });
 
-  test("recurrence cron route is not publicly invokable", async ({ request }) => {
+  test("recurrence cron route is not publicly invokable", async ({ request }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "cron route boundary only needs one browser project");
+
     const response = await request.get("/api/recurrence/catch-up");
     expect([401, 503]).toContain(response.status());
   });

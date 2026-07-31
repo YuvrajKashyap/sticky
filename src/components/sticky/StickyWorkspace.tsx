@@ -10,6 +10,7 @@ import {
   closestCenter,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
 } from "@dnd-kit/core";
 import {
@@ -62,6 +63,12 @@ import { listToDb, recurrenceToDb, subtaskToDb, taskToDb } from "@/lib/sticky/ma
 import { mapList, mapSubtask, mapTask } from "@/lib/sticky/mappers";
 import type { DbList, DbSubtask, DbTask } from "@/types/sticky";
 import { userFacingStickySaveMessage } from "@/lib/sticky/messages";
+import {
+  compareTasksByDueSchedule,
+  reorderTasksWithinDueGroup,
+  taskDueGroupKey,
+  tasksShareDueGroup,
+} from "@/lib/sticky/task-order";
 import {
   nextOccurrenceCount,
   nextRecurrenceDate,
@@ -134,6 +141,33 @@ type SaveState = {
   pending: number;
   lastSavedAt: string | null;
   error: string | null;
+};
+
+const stickyCollisionDetection: CollisionDetection = (args) => {
+  const activeType = args.active.data.current?.type;
+  const activeListId = args.active.data.current?.listId;
+  const activeDueGroupKey = args.active.data.current?.dueGroupKey;
+
+  if (!activeType) {
+    return closestCenter(args);
+  }
+
+  const matchingContainers = args.droppableContainers.filter(
+    (container) =>
+      container.id !== args.active.id &&
+      container.data.current?.type === activeType &&
+      (!activeListId || container.data.current?.listId === activeListId) &&
+      (!activeDueGroupKey || container.data.current?.dueGroupKey === activeDueGroupKey),
+  );
+
+  if (!matchingContainers.length && activeType === "task") {
+    return [];
+  }
+
+  return closestCenter({
+    ...args,
+    droppableContainers: matchingContainers.length ? matchingContainers : args.droppableContainers,
+  });
 };
 
 function mergeById<T extends { id: string }>(items: T[], next: T): T[] {
@@ -1710,11 +1744,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     });
 
     if (taskSortMode === "due") {
-      return filteredTasks.slice().sort((a, b) => {
-        const aDue = `${a.dueDate ?? "9999-12-31"}T${a.dueTime ?? "23:59"}`;
-        const bDue = `${b.dueDate ?? "9999-12-31"}T${b.dueTime ?? "23:59"}`;
-        return aDue.localeCompare(bDue) || bySortOrder(a, b);
-      });
+      return filteredTasks.slice().sort(compareTasksByDueSchedule);
     }
 
     return filteredTasks;
@@ -1865,11 +1895,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       });
 
       if (taskSortMode === "due") {
-        return filteredTasks.slice().sort((a, b) => {
-          const aDue = `${a.dueDate ?? "9999-12-31"}T${a.dueTime ?? "23:59"}`;
-          const bDue = `${b.dueDate ?? "9999-12-31"}T${b.dueTime ?? "23:59"}`;
-          return aDue.localeCompare(bDue) || bySortOrder(a, b);
-        });
+        return filteredTasks.slice().sort(compareTasksByDueSchedule);
       }
 
       return filteredTasks;
@@ -1923,8 +1949,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     workspace.tasks,
   ]);
   const taskViewFiltered = taskViewFilter !== "all";
-  const taskSorted = taskSortMode !== "custom";
-  const reorderLocked = Boolean(taskViewFiltered || taskSorted);
+  const reorderLocked = taskViewFiltered;
 
   useEffect(() => {
     if (!selectedTaskId) {
@@ -3239,8 +3264,8 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   function moveTaskInOrder(taskId: string, direction: -1 | 1) {
     if (reorderLocked) {
       pushToast({
-        title: "Reorder paused during alternate views",
-        body: "Use All and Custom order before changing saved order.",
+        title: "Reorder paused while filtering",
+        body: "Switch to All tasks before changing the saved order.",
       });
       return;
     }
@@ -3250,10 +3275,29 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     const ordered = workspace.tasks
       .filter((item) => item.listId === listId && !item.isCompleted)
       .sort(bySortOrder);
-    const oldIndex = ordered.findIndex((item) => item.id === taskId);
+    if (!task) {
+      return;
+    }
+
+    const movableTasks = taskSortMode === "due"
+      ? ordered.filter((item) => tasksShareDueGroup(item, task))
+      : ordered;
+    const oldIndex = movableTasks.findIndex((item) => item.id === taskId);
     const newIndex = oldIndex + direction;
 
-    if (oldIndex < 0 || newIndex < 0 || newIndex >= ordered.length) {
+    if (oldIndex < 0 || newIndex < 0 || newIndex >= movableTasks.length) {
+      return;
+    }
+
+    if (taskSortMode === "due") {
+      const reordered = reorderTasksWithinDueGroup(
+        ordered,
+        taskId,
+        movableTasks[newIndex].id,
+      );
+      if (reordered) {
+        saveTaskOrder(reordered, workspace, listId);
+      }
       return;
     }
 
@@ -4096,11 +4140,21 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
-    if (!over || active.id === over.id) {
+    const type = active.data.current?.type as "list" | "board-list" | "task" | "subtask" | undefined;
+
+    if (!over) {
+      if (type === "task" && taskSortMode === "due" && Math.hypot(event.delta.x, event.delta.y) >= 8) {
+        pushToast({
+          title: "Due-date groups stay chronological",
+          body: "In Due date order, you can reorder tasks only when their due date and due time match.",
+        });
+      }
       return;
     }
 
-    const type = active.data.current?.type as "list" | "board-list" | "task" | "subtask" | undefined;
+    if (active.id === over.id) {
+      return;
+    }
 
     if (type === "list" || type === "board-list") {
       const activeListKey = String(active.id).replace(/^board:/, "");
@@ -4124,10 +4178,10 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
     if (type === "task") {
       if (reorderLocked) {
-          pushToast({
-            title: "Reorder paused during alternate views",
-            body: "Use All and Custom order before changing saved order.",
-          });
+        pushToast({
+          title: "Reorder paused while filtering",
+          body: "Switch to All tasks before changing the saved order.",
+        });
         return;
       }
 
@@ -4138,9 +4192,30 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
         return;
       }
 
+      if (taskSortMode === "due" && !tasksShareDueGroup(activeTask, overTask)) {
+        pushToast({
+          title: "Due-date groups stay chronological",
+          body: "In Due date order, you can reorder tasks only when their due date and due time match.",
+        });
+        return;
+      }
+
       const ordered = workspace.tasks
         .filter((task) => task.listId === activeTask.listId && !task.isCompleted)
         .sort(bySortOrder);
+
+      if (taskSortMode === "due") {
+        const reordered = reorderTasksWithinDueGroup(
+          ordered,
+          String(active.id),
+          String(over.id),
+        );
+        if (reordered) {
+          saveTaskOrder(reordered, workspace, activeTask.listId);
+        }
+        return;
+      }
+
       const oldIndex = ordered.findIndex((task) => task.id === active.id);
       const newIndex = ordered.findIndex((task) => task.id === over.id);
       if (oldIndex < 0 || newIndex < 0) {
@@ -4180,7 +4255,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       <DndContext
         id="sticky-workspace-dnd"
         sensors={sensors}
-        collisionDetection={closestCenter}
+        collisionDetection={stickyCollisionDetection}
         onDragEnd={handleDragEnd}
       >
         <aside className="list-rail" aria-label="Sticky lists">
@@ -4624,13 +4699,18 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                 {TASK_SORT_LABELS.due}
               </button>
             </div>
-            <span>{taskSortMode === "due" ? "Earliest scheduled tasks first" : "My order"}</span>
+            <span>{taskSortMode === "due" ? "Earliest first; drag matching times" : "Drag into any order"}</span>
           </div>
 
           {reorderLocked ? (
             <div className="filter-banner">
               <Search size={15} />
-              Reordering is locked while filters or due-date sorting are active, so custom order stays intact.
+              Reordering is locked while a task filter is active. Switch to All tasks to change saved order.
+            </div>
+          ) : taskSortMode === "due" ? (
+            <div className="filter-banner">
+              <CalendarDays size={15} />
+              Due dates stay chronological. Drag tasks with the same due date and time to order that group.
             </div>
           ) : null}
 
@@ -4699,6 +4779,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                     searchQuery={searchQuery}
                     taskViewFiltered={taskViewFiltered}
                     taskViewFilter={taskViewFilter}
+                    taskSortMode={taskSortMode}
                     reorderLocked={reorderLocked}
                     selectedTaskId={selectedTaskId}
                     subtasksByTask={subtasksByTask}
@@ -4884,6 +4965,7 @@ function StickyBoardColumn({
   searchQuery,
   taskViewFiltered,
   taskViewFilter,
+  taskSortMode,
   reorderLocked,
   selectedTaskId,
   subtasksByTask,
@@ -4917,6 +4999,7 @@ function StickyBoardColumn({
   searchQuery: string;
   taskViewFiltered: boolean;
   taskViewFilter: StickyTaskViewFilter;
+  taskSortMode: StickyTaskSortMode;
   reorderLocked: boolean;
   selectedTaskId: string | null;
   subtasksByTask: Map<string, StickySubtask[]>;
@@ -4943,6 +5026,17 @@ function StickyBoardColumn({
   const completedListId = active ? "completed-stickies-list" : `completed-tasks-${list.id}`;
   const plateGroups = list.name.toLowerCase() === "plate" ? getPlateTaskGroups(visibleTasks) : [];
   const shouldShowPlateGroups = plateGroups.length > 0 && !taskViewFiltered;
+  const sortableTaskGroups = taskSortMode === "due"
+    ? visibleTasks.reduce<StickyTask[][]>((groups, task) => {
+        const currentGroup = groups.at(-1);
+        if (currentGroup?.length && tasksShareDueGroup(currentGroup[0], task)) {
+          currentGroup.push(task);
+        } else {
+          groups.push([task]);
+        }
+        return groups;
+      }, [])
+    : [visibleTasks];
   const paperDepth = (columnIndex % 3) + 1;
   const emptyTitle = taskViewFiltered ? `No ${TASK_VIEW_LABELS[taskViewFilter].toLowerCase()} tasks` : "No tasks yet";
   const emptyBody = taskViewFiltered ? "Switch back to All to see this saved order." : "Add a task to start this list.";
@@ -5172,13 +5266,19 @@ function StickyBoardColumn({
               onCompleteTask={onCompleteTask}
           />
         ) : visibleTasks.length ? (
-          <SortableContext
-            items={visibleTasks.map((task) => task.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <AnimatePresence initial={false}>
-              {visibleTasks.map((task) => {
-                const orderIndex = activeTasks.findIndex((item) => item.id === task.id);
+          <>
+            {sortableTaskGroups.map((taskGroup) => (
+              <SortableContext
+                key={taskSortMode === "due" ? taskDueGroupKey(taskGroup[0]) : "custom-order"}
+                items={taskGroup.map((task) => task.id)}
+                strategy={verticalListSortingStrategy}
+              >
+              <AnimatePresence initial={false}>
+              {taskGroup.map((task) => {
+                const movableTasks = taskSortMode === "due"
+                  ? taskGroup
+                  : visibleTasks;
+                const orderIndex = movableTasks.findIndex((item) => item.id === task.id);
 
                 return (
                   <SortableTaskCard
@@ -5190,8 +5290,9 @@ function StickyBoardColumn({
                     dueLabel={humanDue(task)}
                     searchQuery={searchQuery}
                     reorderDisabled={reorderLocked}
+                    dueGrouping={taskSortMode === "due"}
                     canMoveUp={!reorderLocked && orderIndex > 0}
-                    canMoveDown={!reorderLocked && orderIndex >= 0 && orderIndex < activeTasks.length - 1}
+                    canMoveDown={!reorderLocked && orderIndex >= 0 && orderIndex < movableTasks.length - 1}
                     onOpen={() => onOpenTask(task)}
                     onComplete={() => onCompleteTask(task)}
                     onDelete={() => onDeleteTask(task)}
@@ -5200,8 +5301,10 @@ function StickyBoardColumn({
                   />
                 );
               })}
-            </AnimatePresence>
-          </SortableContext>
+              </AnimatePresence>
+              </SortableContext>
+            ))}
+          </>
         ) : active ? (
           <EmptyState title={emptyTitle} body={emptyBody} />
         ) : null}
@@ -5499,6 +5602,7 @@ function SortableTaskCard({
   dueLabel,
   searchQuery,
   reorderDisabled,
+  dueGrouping,
   canMoveUp,
   canMoveDown,
   onOpen,
@@ -5514,6 +5618,7 @@ function SortableTaskCard({
   dueLabel: string | null;
   searchQuery: string;
   reorderDisabled: boolean;
+  dueGrouping: boolean;
   canMoveUp: boolean;
   canMoveDown: boolean;
   onOpen: () => void;
@@ -5524,7 +5629,11 @@ function SortableTaskCard({
 }) {
   const sortable = useSortable({
     id: task.id,
-    data: { type: "task" },
+    data: {
+      type: "task",
+      listId: task.listId,
+      dueGroupKey: dueGrouping ? taskDueGroupKey(task) : undefined,
+    },
     disabled: reorderDisabled,
   });
   const reduceMotion = useReducedMotion();
@@ -5649,6 +5758,7 @@ function SortableTaskCard({
         <button
           className="task-drag"
           type="button"
+          disabled={reorderDisabled}
           {...sortable.attributes}
           {...sortable.listeners}
           aria-label={`Reorder ${task.title}`}
