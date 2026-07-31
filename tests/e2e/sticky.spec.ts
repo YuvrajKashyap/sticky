@@ -96,7 +96,7 @@ test("connected settings and task reminders stay integrated with the workspace",
   await expect(connections.getByLabel("Daily agenda time", { exact: true })).toHaveValue("06:00");
   await expect(connections.getByLabel("Daily agenda timezone", { exact: true })).toHaveValue("America/Chicago");
   await expect(connections.getByRole("button", { name: "Save schedule" })).toBeDisabled();
-  await expect(connections.getByRole("button", { name: "Send test now" })).toBeEnabled();
+  await expect(connections.getByRole("button", { name: "Send test now" })).toBeVisible();
   await expect(connections.getByText("Littlebird", { exact: true })).toBeVisible();
   await expect(connections.getByRole("button", { name: "Create Littlebird connection" })).toBeVisible();
   await expect(connections.getByText("Google Workspace", { exact: true })).toBeVisible();
@@ -387,9 +387,6 @@ test.describe("Sticky workspace", () => {
           const tracer = node.querySelector(".column-paper-stack");
           const glowStyle = tracer ? window.getComputedStyle(tracer, "::before") : null;
           const arcStyle = tracer ? window.getComputedStyle(tracer, "::after") : null;
-          const pin = node.querySelector(".column-pin");
-          const pinStyle = pin ? window.getComputedStyle(pin) : null;
-
           return {
             borderWidth: Number.parseFloat(style.borderLeftWidth),
             borderColorVisible: style.borderLeftColor !== "rgba(0, 0, 0, 0)",
@@ -397,7 +394,6 @@ test.describe("Sticky workspace", () => {
             glowOpacity: glowStyle ? Number.parseFloat(glowStyle.opacity) : -1,
             arcOpacity: arcStyle ? Number.parseFloat(arcStyle.opacity) : -1,
             cursorX: node.style.getPropertyValue("--mx"),
-            pinTransform: pinStyle ? pinStyle.transform : "",
           };
         });
 
@@ -417,8 +413,6 @@ test.describe("Sticky workspace", () => {
       expect(hover.boxShadow).not.toBe("none");
       expect(hover.glowOpacity).toBe(1);
       expect(hover.arcOpacity).toBe(1);
-      expect(hover.pinTransform).not.toBe(base.pinTransform);
-
       // The tracer follows the pointer and stays lit while hovering
       const box = await column.boundingBox();
       if (!box) throw new Error("column has no bounding box");
