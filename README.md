@@ -13,6 +13,13 @@ one installable web app.
 > The repository includes a sanitized local demo with no account or Supabase
 > setup required.
 
+## Product preview
+
+![Sticky workspace running with fictional sample tasks in the sanitized local demo](docs/assets/screenshots/workspace-overview.webp)
+
+The preview uses the repository's built-in fictional demo fixture. It contains
+no production account or private task data.
+
 ## What it does
 
 - **Capture and organize:** quick-add tasks, lists, subtasks, notes, colors,
