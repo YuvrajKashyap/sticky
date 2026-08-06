@@ -5,7 +5,12 @@ type OrderableTask = Pick<
   "id" | "dueDate" | "dueTime" | "sortOrder" | "createdAt"
 >;
 
-function normalizedDueTime(task: Pick<OrderableTask, "dueDate" | "dueTime">) {
+export type DueSchedule = {
+  dueDate: string | null;
+  dueTime?: string | null;
+};
+
+function normalizedDueTime(task: DueSchedule) {
   if (!task.dueDate || !task.dueTime) {
     return null;
   }
@@ -13,8 +18,12 @@ function normalizedDueTime(task: Pick<OrderableTask, "dueDate" | "dueTime">) {
   return task.dueTime.slice(0, 5);
 }
 
-export function taskDueGroupKey(task: Pick<OrderableTask, "dueDate" | "dueTime">) {
+export function dueScheduleGroupKey(task: DueSchedule) {
   return `${task.dueDate ?? "undated"}::${normalizedDueTime(task) ?? "no-time"}`;
+}
+
+export function taskDueGroupKey(task: Pick<OrderableTask, "dueDate" | "dueTime">) {
+  return dueScheduleGroupKey(task);
 }
 
 export function tasksShareDueGroup(
@@ -25,6 +34,14 @@ export function tasksShareDueGroup(
 }
 
 export function compareTasksByDueSchedule<T extends OrderableTask>(first: T, second: T) {
+  return (
+    compareDueSchedules(first, second) ||
+    first.sortOrder - second.sortOrder ||
+    first.createdAt.localeCompare(second.createdAt)
+  );
+}
+
+export function compareDueSchedules(first: DueSchedule, second: DueSchedule) {
   const firstDate = first.dueDate ?? "9999-12-31";
   const secondDate = second.dueDate ?? "9999-12-31";
   const dateDifference = firstDate.localeCompare(secondDate);
@@ -36,11 +53,53 @@ export function compareTasksByDueSchedule<T extends OrderableTask>(first: T, sec
   const firstTime = normalizedDueTime(first) ?? "23:59:59";
   const secondTime = normalizedDueTime(second) ?? "23:59:59";
 
-  return (
-    firstTime.localeCompare(secondTime) ||
-    first.sortOrder - second.sortOrder ||
-    first.createdAt.localeCompare(second.createdAt)
-  );
+  return firstTime.localeCompare(secondTime);
+}
+
+/**
+ * Moves two visible items relative to each other while leaving hidden items in
+ * their existing slots. The returned list is still complete, which keeps the
+ * transactional reorder RPC safe in filtered views.
+ */
+export function reorderItemsWithinVisibleSubset<T extends { id: string }>(
+  completeOrder: T[],
+  visibleItemIds: Iterable<string>,
+  itemId: string,
+  relativeToItemId: string,
+) {
+  const visibleIds = new Set(visibleItemIds);
+
+  if (!visibleIds.has(itemId) || !visibleIds.has(relativeToItemId)) {
+    return null;
+  }
+
+  const visibleIndexes: number[] = [];
+  const visibleItems: T[] = [];
+
+  completeOrder.forEach((item, index) => {
+    if (visibleIds.has(item.id)) {
+      visibleIndexes.push(index);
+      visibleItems.push(item);
+    }
+  });
+
+  const oldIndex = visibleItems.findIndex((item) => item.id === itemId);
+  const newIndex = visibleItems.findIndex((item) => item.id === relativeToItemId);
+
+  if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) {
+    return completeOrder;
+  }
+
+  const reorderedVisibleItems = visibleItems.slice();
+  const [movedItem] = reorderedVisibleItems.splice(oldIndex, 1);
+  reorderedVisibleItems.splice(newIndex, 0, movedItem);
+
+  const reorderedItems = completeOrder.slice();
+  visibleIndexes.forEach((itemIndex, visibleIndex) => {
+    reorderedItems[itemIndex] = reorderedVisibleItems[visibleIndex];
+  });
+
+  return reorderedItems;
 }
 
 /**
@@ -60,31 +119,10 @@ export function reorderTasksWithinDueGroup<T extends OrderableTask>(
     return null;
   }
 
-  const groupIndexes: number[] = [];
-  const groupTasks: T[] = [];
-
-  customOrderedTasks.forEach((item, index) => {
-    if (tasksShareDueGroup(item, task)) {
-      groupIndexes.push(index);
-      groupTasks.push(item);
-    }
-  });
-
-  const oldIndex = groupTasks.findIndex((item) => item.id === taskId);
-  const newIndex = groupTasks.findIndex((item) => item.id === relativeToTaskId);
-
-  if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) {
-    return customOrderedTasks;
-  }
-
-  const reorderedGroup = groupTasks.slice();
-  const [movedTask] = reorderedGroup.splice(oldIndex, 1);
-  reorderedGroup.splice(newIndex, 0, movedTask);
-
-  const reorderedTasks = customOrderedTasks.slice();
-  groupIndexes.forEach((taskIndex, groupIndex) => {
-    reorderedTasks[taskIndex] = reorderedGroup[groupIndex];
-  });
-
-  return reorderedTasks;
+  return reorderItemsWithinVisibleSubset(
+    customOrderedTasks,
+    customOrderedTasks.filter((item) => tasksShareDueGroup(item, task)).map((item) => item.id),
+    taskId,
+    relativeToTaskId,
+  );
 }

@@ -64,10 +64,10 @@ import { mapList, mapSubtask, mapTask } from "@/lib/sticky/mappers";
 import type { DbList, DbSubtask, DbTask } from "@/types/sticky";
 import { userFacingStickySaveMessage } from "@/lib/sticky/messages";
 import {
-  compareTasksByDueSchedule,
-  reorderTasksWithinDueGroup,
-  taskDueGroupKey,
-  tasksShareDueGroup,
+  compareDueSchedules,
+  dueScheduleGroupKey,
+  reorderItemsWithinVisibleSubset,
+  type DueSchedule,
 } from "@/lib/sticky/task-order";
 import {
   nextOccurrenceCount,
@@ -160,7 +160,7 @@ const stickyCollisionDetection: CollisionDetection = (args) => {
       (!activeDueGroupKey || container.data.current?.dueGroupKey === activeDueGroupKey),
   );
 
-  if (!matchingContainers.length && activeType === "task") {
+  if (!matchingContainers.length && (activeType === "task" || activeType === "subtask")) {
     return [];
   }
 
@@ -536,6 +536,97 @@ function taskOrActiveSubtaskIsDueOn(
   return (
     task.dueDate === dateKey ||
     subtasks.some((subtask) => !subtask.isCompleted && subtask.dueDate === dateKey)
+  );
+}
+
+function taskMatchesView(
+  task: StickyTask,
+  subtasks: StickySubtask[],
+  hasRecurrence: boolean,
+  filter: StickyTaskViewFilter,
+  todayKey: string,
+) {
+  if (filter === "due") return Boolean(task.dueDate);
+  if (filter === "today") return taskOrActiveSubtaskIsDueOn(task, subtasks, todayKey);
+  if (filter === "undated") return !task.dueDate;
+  if (filter === "overdue") return Boolean(task.dueDate && task.dueDate < todayKey);
+  if (filter === "recurring") return hasRecurrence;
+  if (filter === "subtasks") return subtasks.some((subtask) => !subtask.isCompleted);
+  return true;
+}
+
+function taskDueScheduleForView(
+  task: StickyTask,
+  subtasks: StickySubtask[],
+  filter: StickyTaskViewFilter,
+  todayKey: string,
+): DueSchedule {
+  if (filter !== "today") {
+    return task;
+  }
+
+  const candidates: DueSchedule[] = [];
+
+  if (task.dueDate === todayKey) {
+    candidates.push(task);
+  }
+
+  for (const subtask of subtasks) {
+    if (!subtask.isCompleted && subtask.dueDate === todayKey) {
+      candidates.push({ dueDate: subtask.dueDate, dueTime: null });
+    }
+  }
+
+  return candidates.sort(compareDueSchedules)[0] ?? task;
+}
+
+function taskDueGroupKeyForView(
+  task: StickyTask,
+  subtasks: StickySubtask[],
+  filter: StickyTaskViewFilter,
+  todayKey: string,
+) {
+  return dueScheduleGroupKey(taskDueScheduleForView(task, subtasks, filter, todayKey));
+}
+
+function tasksShareDueGroupForView(
+  first: StickyTask,
+  second: StickyTask,
+  subtasksByTask: Map<string, StickySubtask[]>,
+  filter: StickyTaskViewFilter,
+  todayKey: string,
+) {
+  return (
+    taskDueGroupKeyForView(first, subtasksByTask.get(first.id) ?? [], filter, todayKey) ===
+    taskDueGroupKeyForView(second, subtasksByTask.get(second.id) ?? [], filter, todayKey)
+  );
+}
+
+function compareTasksForView(
+  first: StickyTask,
+  second: StickyTask,
+  subtasksByTask: Map<string, StickySubtask[]>,
+  filter: StickyTaskViewFilter,
+  todayKey: string,
+) {
+  return (
+    compareDueSchedules(
+      taskDueScheduleForView(first, subtasksByTask.get(first.id) ?? [], filter, todayKey),
+      taskDueScheduleForView(second, subtasksByTask.get(second.id) ?? [], filter, todayKey),
+    ) || bySortOrder(first, second)
+  );
+}
+
+function subtaskDueGroupKey(subtask: StickySubtask) {
+  return dueScheduleGroupKey({ dueDate: subtask.dueDate, dueTime: null });
+}
+
+function compareSubtasksByDueSchedule(first: StickySubtask, second: StickySubtask) {
+  return (
+    compareDueSchedules(
+      { dueDate: first.dueDate, dueTime: null },
+      { dueDate: second.dueDate, dueTime: null },
+    ) || bySortOrder(first, second)
   );
 }
 
@@ -1711,40 +1802,22 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   const activeTasks = useMemo(() => {
     const todayKey = localDateKey();
 
-    const filteredTasks = activeListTasks.filter((task) => {
-      if (taskViewFilter === "due") {
-        return Boolean(task.dueDate);
-      }
-
-      if (taskViewFilter === "today") {
-        return taskOrActiveSubtaskIsDueOn(
-          task,
-          subtasksByTask.get(task.id) ?? [],
-          todayKey,
-        );
-      }
-
-      if (taskViewFilter === "undated") {
-        return !task.dueDate;
-      }
-
-      if (taskViewFilter === "overdue") {
-        return Boolean(task.dueDate && task.dueDate < todayKey);
-      }
-
-      if (taskViewFilter === "recurring") {
-        return recurrenceByTask.has(task.id);
-      }
-
-      if (taskViewFilter === "subtasks") {
-        return (subtasksByTask.get(task.id) ?? []).some((subtask) => !subtask.isCompleted);
-      }
-
-      return true;
-    });
+    const filteredTasks = activeListTasks.filter((task) =>
+      taskMatchesView(
+        task,
+        subtasksByTask.get(task.id) ?? [],
+        recurrenceByTask.has(task.id),
+        taskViewFilter,
+        todayKey,
+      ),
+    );
 
     if (taskSortMode === "due") {
-      return filteredTasks.slice().sort(compareTasksByDueSchedule);
+      return filteredTasks
+        .slice()
+        .sort((first, second) =>
+          compareTasksForView(first, second, subtasksByTask, taskViewFilter, todayKey),
+        );
     }
 
     return filteredTasks;
@@ -1862,40 +1935,22 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     const todayKey = localDateKey();
 
     function visibleTasksForList(tasks: StickyTask[]) {
-      const filteredTasks = tasks.filter((task) => {
-        if (taskViewFilter === "due") {
-          return Boolean(task.dueDate);
-        }
-
-        if (taskViewFilter === "today") {
-          return taskOrActiveSubtaskIsDueOn(
-            task,
-            subtasksByTask.get(task.id) ?? [],
-            todayKey,
-          );
-        }
-
-        if (taskViewFilter === "undated") {
-          return !task.dueDate;
-        }
-
-        if (taskViewFilter === "overdue") {
-          return Boolean(task.dueDate && task.dueDate < todayKey);
-        }
-
-        if (taskViewFilter === "recurring") {
-          return recurrenceByTask.has(task.id);
-        }
-
-        if (taskViewFilter === "subtasks") {
-          return (subtasksByTask.get(task.id) ?? []).some((subtask) => !subtask.isCompleted);
-        }
-
-        return true;
-      });
+      const filteredTasks = tasks.filter((task) =>
+        taskMatchesView(
+          task,
+          subtasksByTask.get(task.id) ?? [],
+          recurrenceByTask.has(task.id),
+          taskViewFilter,
+          todayKey,
+        ),
+      );
 
       if (taskSortMode === "due") {
-        return filteredTasks.slice().sort(compareTasksByDueSchedule);
+        return filteredTasks
+          .slice()
+          .sort((first, second) =>
+            compareTasksForView(first, second, subtasksByTask, taskViewFilter, todayKey),
+          );
       }
 
       return filteredTasks;
@@ -1949,7 +2004,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     workspace.tasks,
   ]);
   const taskViewFiltered = taskViewFilter !== "all";
-  const reorderLocked = taskViewFiltered;
+  const reorderLocked = Boolean(searchQuery);
 
   useEffect(() => {
     if (!selectedTaskId) {
@@ -3264,8 +3319,8 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   function moveTaskInOrder(taskId: string, direction: -1 | 1) {
     if (reorderLocked) {
       pushToast({
-        title: "Reorder paused while filtering",
-        body: "Switch to All tasks before changing the saved order.",
+        title: "Reorder paused while searching",
+        body: "Clear workspace search before changing the saved order.",
       });
       return;
     }
@@ -3279,9 +3334,33 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       return;
     }
 
+    const todayKey = localDateKey();
+    const visibleTasks = ordered
+      .filter((item) =>
+        taskMatchesView(
+          item,
+          subtasksByTask.get(item.id) ?? [],
+          recurrenceByTask.has(item.id),
+          taskViewFilter,
+          todayKey,
+        ),
+      )
+      .sort((first, second) =>
+        taskSortMode === "due"
+          ? compareTasksForView(first, second, subtasksByTask, taskViewFilter, todayKey)
+          : bySortOrder(first, second),
+      );
     const movableTasks = taskSortMode === "due"
-      ? ordered.filter((item) => tasksShareDueGroup(item, task))
-      : ordered;
+      ? visibleTasks.filter((item) =>
+          tasksShareDueGroupForView(
+            item,
+            task,
+            subtasksByTask,
+            taskViewFilter,
+            todayKey,
+          ),
+        )
+      : visibleTasks;
     const oldIndex = movableTasks.findIndex((item) => item.id === taskId);
     const newIndex = oldIndex + direction;
 
@@ -3289,19 +3368,15 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       return;
     }
 
-    if (taskSortMode === "due") {
-      const reordered = reorderTasksWithinDueGroup(
-        ordered,
-        taskId,
-        movableTasks[newIndex].id,
-      );
-      if (reordered) {
-        saveTaskOrder(reordered, workspace, listId);
-      }
-      return;
+    const reordered = reorderItemsWithinVisibleSubset(
+      ordered,
+      movableTasks.map((item) => item.id),
+      taskId,
+      movableTasks[newIndex].id,
+    );
+    if (reordered) {
+      saveTaskOrder(reordered, workspace, listId);
     }
-
-    saveTaskOrder(arrayMove(ordered, oldIndex, newIndex), workspace, listId);
   }
 
   function completeTask(task: StickyTask) {
@@ -3899,15 +3974,45 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   }
 
   function moveSubtaskInOrder(taskId: string, subtaskId: string, direction: -1 | 1) {
-    const ordered = (subtasksByTask.get(taskId) ?? []).slice().sort(bySortOrder);
-    const oldIndex = ordered.findIndex((subtask) => subtask.id === subtaskId);
-    const newIndex = oldIndex + direction;
-
-    if (oldIndex < 0 || newIndex < 0 || newIndex >= ordered.length) {
+    if (reorderLocked) {
       return;
     }
 
-    saveSubtaskOrder(taskId, arrayMove(ordered, oldIndex, newIndex), workspace);
+    const ordered = (subtasksByTask.get(taskId) ?? []).slice().sort(bySortOrder);
+    const movingSubtask = ordered.find((subtask) => subtask.id === subtaskId);
+
+    if (!movingSubtask) {
+      return;
+    }
+
+    const visibleSubtasks = (taskViewFilter === "today"
+      ? ordered.filter(
+          (subtask) => !subtask.isCompleted && subtask.dueDate === localDateKey(),
+        )
+      : ordered
+    ).sort(taskSortMode === "due" ? compareSubtasksByDueSchedule : bySortOrder);
+    const movableSubtasks = taskSortMode === "due"
+      ? visibleSubtasks.filter(
+          (subtask) => subtaskDueGroupKey(subtask) === subtaskDueGroupKey(movingSubtask),
+        )
+      : visibleSubtasks;
+    const oldIndex = movableSubtasks.findIndex((subtask) => subtask.id === subtaskId);
+    const newIndex = oldIndex + direction;
+
+    if (oldIndex < 0 || newIndex < 0 || newIndex >= movableSubtasks.length) {
+      return;
+    }
+
+    const reordered = reorderItemsWithinVisibleSubset(
+      ordered,
+      movableSubtasks.map((subtask) => subtask.id),
+      subtaskId,
+      movableSubtasks[newIndex].id,
+    );
+
+    if (reordered) {
+      saveSubtaskOrder(taskId, reordered, workspace);
+    }
   }
 
   function deleteSubtask(subtaskId: string) {
@@ -4143,10 +4248,14 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     const type = active.data.current?.type as "list" | "board-list" | "task" | "subtask" | undefined;
 
     if (!over) {
-      if (type === "task" && taskSortMode === "due" && Math.hypot(event.delta.x, event.delta.y) >= 8) {
+      if (
+        (type === "task" || type === "subtask") &&
+        taskSortMode === "due" &&
+        Math.hypot(event.delta.x, event.delta.y) >= 8
+      ) {
         pushToast({
           title: "Due-date groups stay chronological",
-          body: "In Due date order, you can reorder tasks only when their due date and due time match.",
+          body: "In Due date order, you can reorder items only when their due date and due time match.",
         });
       }
       return;
@@ -4179,8 +4288,8 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     if (type === "task") {
       if (reorderLocked) {
         pushToast({
-          title: "Reorder paused while filtering",
-          body: "Switch to All tasks before changing the saved order.",
+          title: "Reorder paused while searching",
+          body: "Clear workspace search before changing the saved order.",
         });
         return;
       }
@@ -4192,7 +4301,18 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
         return;
       }
 
-      if (taskSortMode === "due" && !tasksShareDueGroup(activeTask, overTask)) {
+      const todayKey = localDateKey();
+
+      if (
+        taskSortMode === "due" &&
+        !tasksShareDueGroupForView(
+          activeTask,
+          overTask,
+          subtasksByTask,
+          taskViewFilter,
+          todayKey,
+        )
+      ) {
         pushToast({
           title: "Due-date groups stay chronological",
           body: "In Due date order, you can reorder tasks only when their due date and due time match.",
@@ -4203,35 +4323,78 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       const ordered = workspace.tasks
         .filter((task) => task.listId === activeTask.listId && !task.isCompleted)
         .sort(bySortOrder);
-
-      if (taskSortMode === "due") {
-        const reordered = reorderTasksWithinDueGroup(
-          ordered,
-          String(active.id),
-          String(over.id),
+      const visibleTasks = ordered
+        .filter((task) =>
+          taskMatchesView(
+            task,
+            subtasksByTask.get(task.id) ?? [],
+            recurrenceByTask.has(task.id),
+            taskViewFilter,
+            todayKey,
+          ),
+        )
+        .filter((task) =>
+          taskSortMode === "due"
+            ? tasksShareDueGroupForView(
+                task,
+                activeTask,
+                subtasksByTask,
+                taskViewFilter,
+                todayKey,
+              )
+            : true,
         );
-        if (reordered) {
-          saveTaskOrder(reordered, workspace, activeTask.listId);
-        }
-        return;
+      const reordered = reorderItemsWithinVisibleSubset(
+        ordered,
+        visibleTasks.map((task) => task.id),
+        String(active.id),
+        String(over.id),
+      );
+      if (reordered) {
+        saveTaskOrder(reordered, workspace, activeTask.listId);
       }
-
-      const oldIndex = ordered.findIndex((task) => task.id === active.id);
-      const newIndex = ordered.findIndex((task) => task.id === over.id);
-      if (oldIndex < 0 || newIndex < 0) {
-        return;
-      }
-      saveTaskOrder(arrayMove(ordered, oldIndex, newIndex), workspace, activeTask.listId);
     }
 
     if (type === "subtask" && selectedTask) {
       const ordered = (subtasksByTask.get(selectedTask.id) ?? []).slice().sort(bySortOrder);
-      const oldIndex = ordered.findIndex((subtask) => subtask.id === active.id);
-      const newIndex = ordered.findIndex((subtask) => subtask.id === over.id);
-      if (oldIndex < 0 || newIndex < 0) {
+      const activeSubtask = ordered.find((subtask) => subtask.id === active.id);
+      const overSubtask = ordered.find((subtask) => subtask.id === over.id);
+
+      if (!activeSubtask || !overSubtask) {
         return;
       }
-      saveSubtaskOrder(selectedTask.id, arrayMove(ordered, oldIndex, newIndex), workspace);
+
+      if (
+        taskSortMode === "due" &&
+        subtaskDueGroupKey(activeSubtask) !== subtaskDueGroupKey(overSubtask)
+      ) {
+        pushToast({
+          title: "Due-date groups stay chronological",
+          body: "In Due date order, you can reorder subtasks only when their due dates match.",
+        });
+        return;
+      }
+
+      const visibleSubtasks = (taskViewFilter === "today"
+        ? ordered.filter(
+            (subtask) => !subtask.isCompleted && subtask.dueDate === localDateKey(),
+          )
+        : ordered
+      ).filter((subtask) =>
+        taskSortMode === "due"
+          ? subtaskDueGroupKey(subtask) === subtaskDueGroupKey(activeSubtask)
+          : true,
+      );
+      const reordered = reorderItemsWithinVisibleSubset(
+        ordered,
+        visibleSubtasks.map((subtask) => subtask.id),
+        String(active.id),
+        String(over.id),
+      );
+
+      if (reordered) {
+        saveSubtaskOrder(selectedTask.id, reordered, workspace);
+      }
     }
   }
 
@@ -4705,7 +4868,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           {reorderLocked ? (
             <div className="filter-banner">
               <Search size={15} />
-              Reordering is locked while a task filter is active. Switch to All tasks to change saved order.
+              Reordering is locked while searching. Clear search to change the saved order.
             </div>
           ) : taskSortMode === "due" ? (
             <div className="filter-banner">
@@ -4845,6 +5008,8 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           lists={unarchivedLists}
           subtasks={selectedTaskSubtasks}
           subtaskViewFilter={taskViewFilter === "today" ? "today" : "all"}
+          taskSortMode={taskSortMode}
+          reorderLocked={reorderLocked}
           recurrenceRule={selectedTaskRecurrence}
           catchUpTarget={selectedTaskCatchUp}
           pulse={workspacePulse}
@@ -5023,13 +5188,23 @@ function StickyBoardColumn({
   const [nearViewport, setNearViewport] = useState(renderImmediately);
   const { list, activeTasks, visibleTasks, completedTasks, completedOpen } = column;
   const contentReady = renderImmediately || nearViewport;
+  const todayKey = localDateKey();
   const completedListId = active ? "completed-stickies-list" : `completed-tasks-${list.id}`;
   const plateGroups = list.name.toLowerCase() === "plate" ? getPlateTaskGroups(visibleTasks) : [];
   const shouldShowPlateGroups = plateGroups.length > 0 && !taskViewFiltered;
   const sortableTaskGroups = taskSortMode === "due"
     ? visibleTasks.reduce<StickyTask[][]>((groups, task) => {
         const currentGroup = groups.at(-1);
-        if (currentGroup?.length && tasksShareDueGroup(currentGroup[0], task)) {
+        if (
+          currentGroup?.length &&
+          tasksShareDueGroupForView(
+            currentGroup[0],
+            task,
+            subtasksByTask,
+            taskViewFilter,
+            todayKey,
+          )
+        ) {
           currentGroup.push(task);
         } else {
           groups.push([task]);
@@ -5039,7 +5214,7 @@ function StickyBoardColumn({
     : [visibleTasks];
   const paperDepth = (columnIndex % 3) + 1;
   const emptyTitle = taskViewFiltered ? `No ${TASK_VIEW_LABELS[taskViewFilter].toLowerCase()} tasks` : "No tasks yet";
-  const emptyBody = taskViewFiltered ? "Switch back to All to see this saved order." : "Add a task to start this list.";
+  const emptyBody = taskViewFiltered ? "Switch views to see the rest of this list." : "Add a task to start this list.";
   const sortable = useSortable({ id: `board:${list.id}`, data: { type: "board-list" } });
 
   useEffect(() => {
@@ -5269,7 +5444,16 @@ function StickyBoardColumn({
           <>
             {sortableTaskGroups.map((taskGroup) => (
               <SortableContext
-                key={taskSortMode === "due" ? taskDueGroupKey(taskGroup[0]) : "custom-order"}
+                key={
+                  taskSortMode === "due"
+                    ? taskDueGroupKeyForView(
+                        taskGroup[0],
+                        subtasksByTask.get(taskGroup[0].id) ?? [],
+                        taskViewFilter,
+                        todayKey,
+                      )
+                    : "custom-order"
+                }
                 items={taskGroup.map((task) => task.id)}
                 strategy={verticalListSortingStrategy}
               >
@@ -5290,7 +5474,16 @@ function StickyBoardColumn({
                     dueLabel={humanDue(task)}
                     searchQuery={searchQuery}
                     reorderDisabled={reorderLocked}
-                    dueGrouping={taskSortMode === "due"}
+                    dueGroupKey={
+                      taskSortMode === "due"
+                        ? taskDueGroupKeyForView(
+                            task,
+                            subtasksByTask.get(task.id) ?? [],
+                            taskViewFilter,
+                            todayKey,
+                          )
+                        : undefined
+                    }
                     canMoveUp={!reorderLocked && orderIndex > 0}
                     canMoveDown={!reorderLocked && orderIndex >= 0 && orderIndex < movableTasks.length - 1}
                     onOpen={() => onOpenTask(task)}
@@ -5602,7 +5795,7 @@ function SortableTaskCard({
   dueLabel,
   searchQuery,
   reorderDisabled,
-  dueGrouping,
+  dueGroupKey,
   canMoveUp,
   canMoveDown,
   onOpen,
@@ -5618,7 +5811,7 @@ function SortableTaskCard({
   dueLabel: string | null;
   searchQuery: string;
   reorderDisabled: boolean;
-  dueGrouping: boolean;
+  dueGroupKey?: string;
   canMoveUp: boolean;
   canMoveDown: boolean;
   onOpen: () => void;
@@ -5632,7 +5825,7 @@ function SortableTaskCard({
     data: {
       type: "task",
       listId: task.listId,
-      dueGroupKey: dueGrouping ? taskDueGroupKey(task) : undefined,
+      dueGroupKey,
     },
     disabled: reorderDisabled,
   });
@@ -5916,6 +6109,8 @@ function TaskDetailsPanel({
   lists,
   subtasks,
   subtaskViewFilter,
+  taskSortMode,
+  reorderLocked,
   recurrenceRule,
   catchUpTarget,
   pulse,
@@ -5939,6 +6134,8 @@ function TaskDetailsPanel({
   lists: StickyList[];
   subtasks: StickySubtask[];
   subtaskViewFilter: "all" | "today";
+  taskSortMode: StickyTaskSortMode;
+  reorderLocked: boolean;
   recurrenceRule: StickyRecurrenceRule | null;
   catchUpTarget: ReturnType<typeof recurrenceCatchUpTarget>;
   pulse: WorkspacePulse;
@@ -5968,13 +6165,28 @@ function TaskDetailsPanel({
   const canRepeat = subtasks.length === 0;
   const recurrenceBlockedBySubtasks = !recurrenceRule && !canRepeat;
   const subtasksBlockedByRepeat = !canHaveSubtasks;
-  const visibleSubtasks =
+  const filteredSubtasks =
     subtaskViewFilter === "today"
       ? subtasks.filter(
           (subtask) => !subtask.isCompleted && subtask.dueDate === localDateKey(),
         )
       : subtasks;
-  const subtaskReorderLocked = subtaskViewFilter !== "all";
+  const visibleSubtasks = taskSortMode === "due"
+    ? filteredSubtasks.slice().sort(compareSubtasksByDueSchedule)
+    : filteredSubtasks;
+  const sortableSubtaskGroups = taskSortMode === "due"
+    ? visibleSubtasks.reduce<StickySubtask[][]>((groups, subtask) => {
+        const currentGroup = groups.at(-1);
+
+        if (currentGroup?.length && subtaskDueGroupKey(currentGroup[0]) === subtaskDueGroupKey(subtask)) {
+          currentGroup.push(subtask);
+        } else {
+          groups.push([subtask]);
+        }
+
+        return groups;
+      }, [])
+    : [visibleSubtasks];
 
   useEffect(() => {
     setNewSubtaskTitle("");
@@ -6491,7 +6703,7 @@ function TaskDetailsPanel({
             </form>
           ) : (
             <p className="helper-copy">
-              Showing active subtasks due today. Switch to All to add or reorder subtasks.
+              Showing active subtasks due today. Switch to All to add another subtask.
             </p>
           )}
 
@@ -6501,33 +6713,39 @@ function TaskDetailsPanel({
             </p>
           ) : null}
 
-          <SortableContext
-            items={visibleSubtasks.map((subtask) => subtask.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <div className="subtask-list">
-              <AnimatePresence initial={false}>
-                {visibleSubtasks.map((subtask, index) => (
-                  <SortableSubtaskRow
-                    key={subtask.id}
-                    subtask={subtask}
-                    reorderLocked={subtaskReorderLocked}
-                    canMoveUp={!subtaskReorderLocked && index > 0}
-                    canMoveDown={!subtaskReorderLocked && index < visibleSubtasks.length - 1}
-                    onUpdate={(patch) => onUpdateSubtask(subtask.id, patch)}
-                    onMoveUp={() => onMoveSubtask(subtask.id, -1)}
-                    onMoveDown={() => onMoveSubtask(subtask.id, 1)}
-                    onDelete={() => onDeleteSubtask(subtask.id)}
-                  />
-                ))}
-              </AnimatePresence>
-            </div>
-          </SortableContext>
+          <div className="subtask-list">
+            {sortableSubtaskGroups.map((subtaskGroup) => (
+              <SortableContext
+                key={taskSortMode === "due" ? subtaskDueGroupKey(subtaskGroup[0]) : "custom-order"}
+                items={subtaskGroup.map((subtask) => subtask.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <AnimatePresence initial={false}>
+                  {subtaskGroup.map((subtask, index) => (
+                    <SortableSubtaskRow
+                      key={subtask.id}
+                      subtask={subtask}
+                      reorderLocked={reorderLocked}
+                      dueGroupKey={taskSortMode === "due" ? subtaskDueGroupKey(subtask) : undefined}
+                      canMoveUp={!reorderLocked && index > 0}
+                      canMoveDown={!reorderLocked && index < subtaskGroup.length - 1}
+                      onUpdate={(patch) => onUpdateSubtask(subtask.id, patch)}
+                      onMoveUp={() => onMoveSubtask(subtask.id, -1)}
+                      onMoveDown={() => onMoveSubtask(subtask.id, 1)}
+                      onDelete={() => onDeleteSubtask(subtask.id)}
+                    />
+                  ))}
+                </AnimatePresence>
+              </SortableContext>
+            ))}
+          </div>
 
           {visibleSubtasks.length ? (
             <p className="helper-copy subtask-schedule-help">
               {subtaskViewFilter === "today"
-                ? "Only today's active subtasks are shown in this view."
+                ? taskSortMode === "due"
+                  ? "Only today's active subtasks are shown. Matching dates can be reordered."
+                  : "Only today's active subtasks are shown. Drag them into any order."
                 : "Give each step its own date - the task deadline stays on or after the latest step."}
             </p>
           ) : !subtasksBlockedByRepeat ? (
@@ -6591,6 +6809,7 @@ function TaskDetailsPanel({
 function SortableSubtaskRow({
   subtask,
   reorderLocked,
+  dueGroupKey,
   canMoveUp,
   canMoveDown,
   onUpdate,
@@ -6600,6 +6819,7 @@ function SortableSubtaskRow({
 }: {
   subtask: StickySubtask;
   reorderLocked: boolean;
+  dueGroupKey?: string;
   canMoveUp: boolean;
   canMoveDown: boolean;
   onUpdate: (patch: Partial<StickySubtask>) => void;
@@ -6610,7 +6830,7 @@ function SortableSubtaskRow({
   const [titleDraft, setTitleDraft] = useState(subtask.title);
   const sortable = useSortable({
     id: subtask.id,
-    data: { type: "subtask" },
+    data: { type: "subtask", listId: subtask.taskId, dueGroupKey },
     disabled: reorderLocked,
   });
   const style = {

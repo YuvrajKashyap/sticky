@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  compareDueSchedules,
+  dueScheduleGroupKey,
+  reorderItemsWithinVisibleSubset,
   compareTasksByDueSchedule,
   reorderTasksWithinDueGroup,
   tasksShareDueGroup,
@@ -61,5 +64,41 @@ describe("Sticky due-date task ordering", () => {
       reorderTasksWithinDueGroup(customOrder, "timed-b", "timed-a")?.map((item) => item.id),
     ).toEqual(["timed-b", "later", "timed-a", "undated"]);
     expect(reorderTasksWithinDueGroup(customOrder, "later", "timed-a")).toBeNull();
+  });
+
+  it("keeps hidden filtered items in place while reordering the visible subset", () => {
+    const completeOrder = [
+      task("visible-a", "2026-08-01", null, 1),
+      task("hidden-a", "2026-08-02", null, 2),
+      task("visible-b", "2026-08-01", null, 3),
+      task("hidden-b", null, null, 4),
+    ];
+
+    expect(
+      reorderItemsWithinVisibleSubset(
+        completeOrder,
+        ["visible-a", "visible-b"],
+        "visible-b",
+        "visible-a",
+      )?.map((item) => item.id),
+    ).toEqual(["visible-b", "hidden-a", "visible-a", "hidden-b"]);
+    expect(
+      reorderItemsWithinVisibleSubset(completeOrder, ["visible-a"], "hidden-a", "visible-a"),
+    ).toBeNull();
+  });
+
+  it("treats same-minute schedules and matching no-time dates as exact groups", () => {
+    expect(
+      dueScheduleGroupKey({ dueDate: "2026-08-06", dueTime: "09:00:45" }),
+    ).toBe(dueScheduleGroupKey({ dueDate: "2026-08-06", dueTime: "09:00" }));
+    expect(
+      dueScheduleGroupKey({ dueDate: "2026-08-06", dueTime: null }),
+    ).not.toBe(dueScheduleGroupKey({ dueDate: "2026-08-06", dueTime: "23:59" }));
+    expect(
+      compareDueSchedules(
+        { dueDate: "2026-08-06", dueTime: "09:00" },
+        { dueDate: "2026-08-06", dueTime: null },
+      ),
+    ).toBeLessThan(0);
   });
 });

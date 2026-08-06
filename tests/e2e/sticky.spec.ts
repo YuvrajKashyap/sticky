@@ -1081,7 +1081,7 @@ test.describe("Sticky workspace", () => {
           name: /Move Verification sticky polished up/,
         }),
       ).toBeDisabled();
-      await expect(page.getByText(/Reordering is locked while a task filter is active/)).toBeVisible();
+      await expect(page.getByText(/Reordering is locked while searching/)).toHaveCount(0);
       await runCommand(page, "show all tasks");
       await expect(taskViews.getByRole("button", { name: "Current task view: All, 3 tasks" })).toHaveAttribute(
         "aria-pressed",
@@ -1382,7 +1382,7 @@ test.describe("Sticky workspace", () => {
         "aria-pressed",
         "true",
       );
-      await expect(page.getByText(/Reordering is locked while a task filter is active/)).toBeVisible();
+      await expect(page.getByText(/Due dates stay chronological/)).toBeVisible();
 
       await page.reload();
       await expect(page.getByRole("heading", { name: "All tasks", exact: true })).toBeVisible();
@@ -1396,7 +1396,7 @@ test.describe("Sticky workspace", () => {
         "aria-pressed",
         "true",
       );
-      await expect(page.getByText(/Reordering is locked while a task filter is active/)).toBeVisible();
+      await expect(page.getByText(/Due dates stay chronological/)).toBeVisible();
     });
   });
 
@@ -1467,6 +1467,108 @@ test.describe("Sticky workspace", () => {
       await expectTextBefore(page, ".task-title", titles.timedSecond, titles.timedFirst);
       await expectTextBefore(page, ".task-title", titles.undatedTimeSecond, titles.undatedTimeFirst);
       await expectTextBefore(page, ".task-title", titles.undatedTimeFirst, titles.later);
+    });
+  });
+
+  test("Today keeps exact due groups draggable for tasks and visible subtasks", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "filtered task ordering runs in the desktop project");
+    test.setTimeout(90_000);
+
+    await expectNoConsoleErrors(page, async () => {
+      await page.goto("/");
+      await page.getByRole("button", { name: "New list" }).click();
+      await page.getByRole("textbox", { name: "Name" }).fill("Today reorder proof");
+      await page.getByText("Sky", { exact: true }).click();
+      await page.getByRole("button", { name: "Save list" }).click();
+      await page.locator("button.list-tab", { hasText: "Today reorder proof" }).click();
+      await expect(page.getByRole("heading", { name: "Today reorder proof", exact: true })).toBeVisible();
+
+      const today = localDateKey();
+      const tomorrow = localDateKey(1);
+      const details = page.getByRole("complementary", { name: "Task details", exact: true });
+      const activeRegion = page.getByRole("region", { name: "Active tasks" });
+      const titles = {
+        nineFirst: "Nine first proof",
+        nineSecond: "Nine second proof",
+        ten: "Ten oclock proof",
+        noTime: "No time proof",
+        parent: "Child-driven parent proof",
+      };
+
+      async function addTask(title: string, dueTime?: string) {
+        await page.getByLabel("Quick add task").fill(title);
+        await quickAddButton(page, "Today reorder proof").click();
+        const card = activeRegion.locator(".task-card", { hasText: title });
+        await card.getByText(title, { exact: true }).click();
+        await details.locator('input[aria-label="Due date"]').fill(today);
+        if (dueTime) {
+          await details.locator('input[aria-label="Due time"]').fill(dueTime);
+        }
+      }
+
+      await addTask(titles.nineFirst, "09:00");
+      await addTask(titles.nineSecond, "09:00");
+      await addTask(titles.ten, "10:00");
+      await addTask(titles.noTime);
+
+      await page.getByLabel("Quick add task").fill(titles.parent);
+      await quickAddButton(page, "Today reorder proof").click();
+      await activeRegion.getByText(titles.parent, { exact: true }).click();
+      await details.getByPlaceholder("Add subtask").fill("Today child first");
+      await details.getByRole("button", { name: "Add subtask" }).click();
+      await details.getByPlaceholder("Add subtask").fill("Today child second");
+      await details.getByRole("button", { name: "Add subtask" }).click();
+      await details.getByPlaceholder("Add subtask").fill("Tomorrow hidden child");
+      await details.getByRole("button", { name: "Add subtask" }).click();
+      await details.locator('input[aria-label="Due date for subtask: Today child first"]').fill(today);
+      await details.locator('input[aria-label="Due date for subtask: Today child second"]').fill(today);
+      await details.locator('input[aria-label="Due date for subtask: Tomorrow hidden child"]').fill(tomorrow);
+      await details.getByRole("button", { name: "Close details" }).click();
+
+      await runCommand(page, "show today tasks");
+      await runCommand(page, "sort by due date");
+      await expect(page.getByText(/Due dates stay chronological/)).toBeVisible();
+      await expectTextBefore(page, ".task-title", titles.nineFirst, titles.nineSecond);
+      await expectTextBefore(page, ".task-title", titles.nineSecond, titles.ten);
+      await expectTextBefore(page, ".task-title", titles.ten, titles.noTime);
+
+      const nineFirst = activeRegion.locator(".task-card", { hasText: titles.nineFirst });
+      const nineSecond = activeRegion.locator(".task-card", { hasText: titles.nineSecond });
+      await dragBetween(page, nineSecond.locator(".task-drag"), nineFirst.locator(".task-drag"));
+      await expectTextBefore(page, ".task-title", titles.nineSecond, titles.nineFirst);
+
+      const ten = activeRegion.locator(".task-card", { hasText: titles.ten });
+      await dragBetween(page, ten.locator(".task-drag"), nineSecond.locator(".task-drag"));
+      await expectTextBefore(page, ".task-title", titles.nineFirst, titles.ten);
+      await expect(page.getByText("Due-date groups stay chronological")).toBeVisible();
+
+      await activeRegion.getByText(titles.parent, { exact: true }).click();
+      await expect(details.getByRole("textbox", { name: "Subtask title: Tomorrow hidden child" })).toHaveCount(0);
+      await dragBetween(
+        page,
+        details.getByRole("button", { name: "Reorder subtask: Today child second" }),
+        details.getByRole("button", { name: "Reorder subtask: Today child first" }),
+      );
+      await expect(details.locator(".subtask-title").first()).toHaveValue("Today child second");
+      await details.getByRole("button", { name: "Close details" }).click();
+
+      await runCommand(page, "sort by custom order");
+      await dragBetween(page, ten.locator(".task-drag"), nineSecond.locator(".task-drag"));
+      await expectTextBefore(page, ".task-title", titles.ten, titles.nineSecond);
+
+      await page.reload();
+      await page.locator("button.list-tab", { hasText: "Today reorder proof" }).click();
+      await expect(page.getByRole("button", { name: "Current task view: Today, 5 tasks" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      await expect(page.getByRole("button", { name: "Current task sort: Custom" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      await expectTextBefore(page, ".task-title", titles.ten, titles.nineSecond);
+      await activeRegion.getByText(titles.parent, { exact: true }).click();
+      await expect(details.locator(".subtask-title").first()).toHaveValue("Today child second");
     });
   });
 
@@ -1566,7 +1668,7 @@ test.describe("Sticky workspace", () => {
       await activeRegion.getByText("Tighten the details panel").click();
       await expect(details.getByRole("textbox", { name: "Subtask title: Check the mobile sheet" })).toBeVisible();
       await expect(details.getByRole("textbox", { name: "Subtask title: Undated sibling" })).toHaveCount(0);
-      await expect(details.getByText("Showing active subtasks due today. Switch to All to add or reorder subtasks.")).toBeVisible();
+      await expect(details.getByText("Showing active subtasks due today. Switch to All to add another subtask.")).toBeVisible();
       await details.getByRole("button", { name: "Close details" }).click();
       await runCommand(page, "show all tasks");
 
@@ -1591,7 +1693,7 @@ test.describe("Sticky workspace", () => {
           name: /Move Overdue filter proof up/,
         }),
       ).toBeDisabled();
-      await expect(page.getByText(/Reordering is locked while a task filter is active/)).toBeVisible();
+      await expect(page.getByText(/Reordering is locked while searching/)).toHaveCount(0);
 
       await runCommand(page, "show undated tasks");
       await expect(taskViews.getByRole("button", { name: "Current task view: Undated, 2 tasks" })).toHaveAttribute(
@@ -1626,7 +1728,7 @@ test.describe("Sticky workspace", () => {
         "aria-pressed",
         "true",
       );
-      await expect(page.getByText(/Reordering is locked while a task filter is active/)).toHaveCount(0);
+      await expect(page.getByText(/Reordering is locked while searching/)).toHaveCount(0);
       await expectTextBefore(page, ".task-title", "Clear the capture tray", "Tighten the details panel");
       await expectTextBefore(page, ".task-title", "Daily planning pass", overdueTitle);
     });
