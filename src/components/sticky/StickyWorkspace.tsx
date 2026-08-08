@@ -667,6 +667,7 @@ function useBoardPan() {
     pan.startX = event.clientX;
     pan.startScrollLeft = event.currentTarget.scrollLeft;
     pan.moved = false;
+    event.currentTarget.classList.add("pan-armed");
     event.currentTarget.setPointerCapture(event.pointerId);
   }, []);
 
@@ -680,6 +681,8 @@ function useBoardPan() {
     if (Math.abs(delta) > 4) {
       pan.moved = true;
       event.currentTarget.classList.add("panning");
+      window.getSelection()?.removeAllRanges();
+      event.preventDefault();
     }
     event.currentTarget.scrollLeft = pan.startScrollLeft - delta;
   }, []);
@@ -691,7 +694,7 @@ function useBoardPan() {
     }
 
     pan.panning = false;
-    event.currentTarget.classList.remove("panning");
+    event.currentTarget.classList.remove("pan-armed", "panning");
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }

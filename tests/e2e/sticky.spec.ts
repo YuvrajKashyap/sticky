@@ -808,6 +808,46 @@ test.describe("Sticky workspace", () => {
     });
   });
 
+  test("grab panning never selects page text", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "grab panning is a desktop mouse gesture");
+
+    const board = page.locator(".board-scroll");
+    const columns = board.locator(".board-column");
+    await expect(columns).toHaveCount(6);
+    await expect(board).toBeVisible();
+    await expect(columns.nth(0)).toBeVisible();
+    await expect(columns.nth(1)).toBeVisible();
+
+    const firstBox = await columns.nth(0).boundingBox();
+    const secondBox = await columns.nth(1).boundingBox();
+    if (!firstBox || !secondBox) {
+      throw new Error("Expected visible board columns for the panning check.");
+    }
+
+    const startX = (firstBox.x + firstBox.width + secondBox.x) / 2;
+    const startY = firstBox.y + Math.min(180, firstBox.height / 2);
+    const initialScrollLeft = await board.evaluate((node) => node.scrollLeft);
+
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+
+    await expect(board).toHaveClass(/pan-armed/);
+    await expect
+      .poll(() => board.evaluate((node) => getComputedStyle(node).userSelect))
+      .toBe("none");
+
+    await page.mouse.move(startX - 3, startY, { steps: 3 });
+    expect(await page.evaluate(() => window.getSelection()?.toString() ?? "")).toBe("");
+
+    await page.mouse.move(startX - 180, startY, { steps: 12 });
+    await expect(board).toHaveClass(/panning/);
+    expect(await page.evaluate(() => window.getSelection()?.toString() ?? "")).toBe("");
+    await expect.poll(() => board.evaluate((node) => node.scrollLeft)).toBeGreaterThan(initialScrollLeft);
+
+    await page.mouse.up();
+    await expect(board).not.toHaveClass(/pan-armed|panning/);
+  });
+
   test("clicking any board column header selects that list", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "board header selection is a desktop interaction");
 

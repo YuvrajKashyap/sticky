@@ -2065,10 +2065,15 @@ mark.find-highlight {
   cursor: grab;
 }
 
+.board-scroll.pan-armed,
+.board-scroll.pan-armed * {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 .board-scroll.panning,
 .board-scroll.panning * {
   cursor: grabbing !important;
-  user-select: none;
 }
 
 /* Phone-only affordance: hidden until the ≤860px console takes over */
