@@ -63,6 +63,7 @@ import { listToDb, recurrenceToDb, subtaskToDb, taskToDb } from "@/lib/sticky/ma
 import { mapList, mapSubtask, mapTask } from "@/lib/sticky/mappers";
 import type { DbList, DbSubtask, DbTask } from "@/types/sticky";
 import { userFacingStickySaveMessage } from "@/lib/sticky/messages";
+import { reconcileWorkspaceTasks } from "@/lib/sticky/workspace-sync";
 import {
   compareDueSchedules,
   dueScheduleGroupKey,
@@ -1280,7 +1281,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
         setWorkspace((current) => ({
           ...current,
           lists: snapshot.lists,
-          tasks: snapshot.tasks,
+          tasks: reconcileWorkspaceTasks(current.tasks, snapshot.tasks),
         }));
       } catch (error) {
         console.warn("Sticky workspace reconciliation failed", error);
@@ -3403,6 +3404,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                 isCompleted: true,
                 completedAt,
                 completedSortOrder: nextCompletedSortOrder(completedInList),
+                version: (item.version ?? 1) + 1,
                 updatedAt: completedAt,
               }
             : item,
@@ -3507,6 +3509,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
               completedAt: null,
               completedSortOrder: null,
               sortOrder: nextSortOrder(activeInList),
+              version: (item.version ?? 1) + 1,
               updatedAt: nowIso(),
             }
           : item,
