@@ -1652,6 +1652,66 @@ test.describe("Sticky workspace", () => {
     });
   });
 
+  test("a long completed pile scrolls to its final task instead of being clipped", async ({ page }) => {
+    await expectNoConsoleErrors(page, async () => {
+      await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
+
+      await page.evaluate(() => {
+        const storageKey = "sticky.demo.workspace.v2";
+        const stored = window.localStorage.getItem(storageKey);
+        if (!stored) throw new Error("Demo workspace was not saved");
+
+        const workspace = JSON.parse(stored);
+        const template = workspace.tasks.find(
+          (task: { id: string }) => task.id === "demo-task-reminders-completed-1",
+        );
+        if (!template) throw new Error("Completed task fixture is missing");
+
+        const extraCompletedTasks = Array.from({ length: 24 }, (_, index) => ({
+          ...template,
+          id: `demo-task-completed-overflow-${index + 1}`,
+          title: `Completed overflow item ${String(index + 1).padStart(2, "0")}`,
+          completedSortOrder: 10_000 + index * 1_000,
+          sortOrder: 10_000 + index * 1_000,
+        }));
+
+        workspace.tasks.push(...extraCompletedTasks);
+        workspace.preferences.completedOpenByList["demo-list-reminders"] = false;
+        window.localStorage.setItem(storageKey, JSON.stringify(workspace));
+      });
+
+      await page.reload();
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
+      const completedToggle = page.locator('button[aria-controls="completed-stickies-list"]');
+      await completedToggle.click();
+
+      const completedList = page.locator("#completed-stickies-list");
+      await expect(completedList).toBeVisible();
+      await expect(completedList.getByText("Completed overflow item 24", { exact: true })).toBeAttached();
+
+      const geometry = await completedList.evaluate((node) => {
+        const rect = node.getBoundingClientRect();
+        return {
+          bottom: rect.bottom,
+          clientHeight: node.clientHeight,
+          overflowY: window.getComputedStyle(node).overflowY,
+          scrollHeight: node.scrollHeight,
+          viewportHeight: window.innerHeight,
+        };
+      });
+
+      expect(geometry.overflowY).toBe("auto");
+      expect(geometry.scrollHeight).toBeGreaterThan(geometry.clientHeight);
+      expect(geometry.bottom).toBeLessThanOrEqual(geometry.viewportHeight + 1);
+
+      await completedList.hover();
+      await page.mouse.wheel(0, 2_000);
+      await expect.poll(() => completedList.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+      await expect(completedList.getByText("Completed overflow item 24", { exact: true })).toBeInViewport();
+    });
+  });
+
   test("search survives reload while list selection resets", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "user state persistence runs in the desktop project");
 
