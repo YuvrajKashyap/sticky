@@ -1909,6 +1909,28 @@ test.describe("Sticky workspace", () => {
     });
   });
 
+  test("opening a task preserves the current task view filter", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "filtered task selection coverage runs in the desktop project");
+
+    await expectNoConsoleErrors(page, async () => {
+      await page.goto("/");
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
+
+      const taskViews = page.locator(".task-filter-bar");
+      const activeRegion = page.getByRole("region", { name: "Active tasks" });
+
+      await runCommand(page, "show repeating tasks");
+      const repeatingFilter = taskViews.getByRole("button", { name: /Current task view: Repeating/ });
+      await expect(repeatingFilter).toHaveAttribute("aria-pressed", "true");
+
+      await activeRegion.getByText("Daily planning pass", { exact: true }).click();
+
+      await expect(page.getByRole("complementary", { name: "Task details", exact: true })).toBeVisible();
+      await expect(repeatingFilter).toHaveAttribute("aria-pressed", "true");
+      await expect(taskViews.getByRole("button", { name: /Current task view: All/ })).toHaveCount(0);
+    });
+  });
+
   test("quick capture can route a sticky to a list token and reveal it", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "capture routing runs in the desktop project");
 

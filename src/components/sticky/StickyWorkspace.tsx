@@ -2803,10 +2803,6 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       updateUserState({ selectedListId: task.listId, searchQuery: "" });
     }
 
-    if (taskViewFilter !== "all" && taskViewFilter !== "today") {
-      setTaskViewFilter("all");
-    }
-
     setSelectedTaskId(task.id);
   }
 
