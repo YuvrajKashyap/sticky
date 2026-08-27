@@ -3075,8 +3075,8 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     saveListOrder(arrayMove(ordered, oldIndex, newIndex), workspace);
   }
 
-  function createTask(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function createTask(event?: React.FormEvent<HTMLFormElement>, selectCreatedTask = true) {
+    event?.preventDefault();
     const intent = parseQuickCaptureIntent(quickTitle, unarchivedLists);
     const title = intent.title.trim();
     const targetList = intent.listId
@@ -3151,7 +3151,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     setCaptureDraft({ details: "", dueDate: "", dueTime: "", repeat: null });
     setCaptureExpanded(false);
     setTaskViewFilter("all");
-    const shouldSelectCreatedTask = !quickCaptureClosedDetailsRef.current;
+    const shouldSelectCreatedTask = selectCreatedTask && !quickCaptureClosedDetailsRef.current;
     quickCaptureClosedDetailsRef.current = false;
     setWorkspace({
       ...workspace,
@@ -4969,6 +4969,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                     }}
                     onQuickTitleChange={setQuickTitle}
                     onSubmitQuickTask={createTask}
+                    onClickAwayQuickTask={() => createTask(undefined, false)}
                     onRenameList={() => openListEditor(column.list)}
                     onDeleteList={() => requestDeleteList(column.list)}
                     onOpenTask={(task) => openTaskInContext(task.id)}
@@ -5146,6 +5147,7 @@ function StickyBoardColumn({
   onPrepareQuickAdd,
   onQuickTitleChange,
   onSubmitQuickTask,
+  onClickAwayQuickTask,
   onRenameList,
   onDeleteList,
   onOpenTask,
@@ -5180,6 +5182,7 @@ function StickyBoardColumn({
   onPrepareQuickAdd: () => void;
   onQuickTitleChange: (title: string) => void;
   onSubmitQuickTask: (event: React.FormEvent<HTMLFormElement>) => void;
+  onClickAwayQuickTask: () => void;
   onRenameList: () => void;
   onDeleteList: () => void;
   onOpenTask: (task: StickyTask) => void;
@@ -5191,6 +5194,7 @@ function StickyBoardColumn({
   onClearCompleted: () => void;
 }) {
   const columnRef = useRef<HTMLElement | null>(null);
+  const captureFormRef = useRef<HTMLFormElement | null>(null);
   const [nearViewport, setNearViewport] = useState(renderImmediately);
   const { list, activeTasks, visibleTasks, completedTasks, completedOpen } = column;
   const contentReady = renderImmediately || nearViewport;
@@ -5222,6 +5226,22 @@ function StickyBoardColumn({
   const emptyTitle = taskViewFiltered ? `No ${TASK_VIEW_LABELS[taskViewFilter].toLowerCase()} tasks` : "No tasks yet";
   const emptyBody = taskViewFiltered ? "Switch views to see the rest of this list." : "Add a task to start this list.";
   const sortable = useSortable({ id: `board:${list.id}`, data: { type: "board-list" } });
+
+  useEffect(() => {
+    if (!active || !quickTitle.trim()) return;
+
+    function commitOnOutsidePointerDown(event: PointerEvent) {
+      const form = captureFormRef.current;
+      if (event.button !== 0 || !form || !(event.target instanceof Node) || form.contains(event.target)) {
+        return;
+      }
+
+      onClickAwayQuickTask();
+    }
+
+    document.addEventListener("pointerdown", commitOnOutsidePointerDown, true);
+    return () => document.removeEventListener("pointerdown", commitOnOutsidePointerDown, true);
+  }, [active, onClickAwayQuickTask, quickTitle]);
 
   useEffect(() => {
     if (renderImmediately) {
@@ -5333,6 +5353,7 @@ function StickyBoardColumn({
 
       {active ? (
         <form
+          ref={captureFormRef}
           className={`quick-capture board-quick-capture${captureExpanded ? " expanded" : ""}`}
           onSubmit={onSubmitQuickTask}
         >

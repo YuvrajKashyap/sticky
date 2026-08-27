@@ -1612,6 +1612,81 @@ test.describe("Sticky workspace", () => {
     });
   });
 
+  test("clicking outside quick capture submits a non-empty draft exactly once", async ({ page }) => {
+    await expectNoConsoleErrors(page, async () => {
+      await page.goto("/");
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
+
+      const quickAdd = page.getByLabel("Quick add task");
+      const activeTasks = page.getByRole("region", { name: "Active tasks" });
+      await quickAdd.fill("Click-away capture proof");
+      await page.getByLabel("New task details").fill("Saved from the expanded composer");
+      await expect(activeTasks.getByText("Click-away capture proof", { exact: true })).toHaveCount(0);
+      await page.getByRole("heading", { name: "All tasks", exact: true }).click();
+
+      await expect(activeTasks.getByText("Click-away capture proof", { exact: true })).toHaveCount(1);
+      await expect(
+        activeTasks
+          .locator(".task-card", { hasText: "Click-away capture proof" })
+          .getByText("Saved from the expanded composer", { exact: true }),
+      ).toBeVisible();
+      await expect(quickAdd).toHaveValue("");
+    });
+  });
+
+  test("clicking outside quick capture does not submit an empty draft", async ({ page }) => {
+    await expectNoConsoleErrors(page, async () => {
+      await page.goto("/");
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
+
+      const quickAdd = page.getByLabel("Quick add task");
+      const activeTasks = page.getByRole("region", { name: "Active tasks" });
+      const initialTaskCount = await activeTasks.locator("[data-task-id]").count();
+      await quickAdd.fill("   ");
+      await page.getByRole("heading", { name: "All tasks", exact: true }).click();
+
+      await expect(activeTasks.locator("[data-task-id]")).toHaveCount(initialTaskCount);
+    });
+  });
+
+  test("quick capture Enter and Add actions still submit exactly one task each", async ({ page }) => {
+    await expectNoConsoleErrors(page, async () => {
+      await page.goto("/");
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
+
+      const quickAdd = page.getByLabel("Quick add task");
+      const activeTasks = page.getByRole("region", { name: "Active tasks" });
+      const details = page.getByRole("complementary", { name: "Task details", exact: true });
+
+      await quickAdd.fill("Enter capture proof");
+      await quickAdd.press("Enter");
+      await expect(activeTasks.getByText("Enter capture proof", { exact: true })).toHaveCount(1);
+      await details.getByRole("button", { name: "Close details" }).click();
+
+      await quickAdd.fill("Add button capture proof");
+      await quickAddButton(page, "reminders").click();
+      await expect(activeTasks.getByText("Add button capture proof", { exact: true })).toHaveCount(1);
+    });
+  });
+
+  test("click-away capture preserves the outside action and saves to the original list", async ({ page }) => {
+    await expectNoConsoleErrors(page, async () => {
+      await page.goto("/");
+      const remindersTab = page.locator("button.list-tab", { hasText: "reminders" });
+      const nextTab = page.locator("button.list-tab", { hasText: "Next 3" });
+      await remindersTab.click();
+
+      await page.getByLabel("Quick add task").fill("Switch-away capture proof");
+      await nextTab.click();
+      await expect(nextTab).toHaveAccessibleName(/current list/);
+
+      await remindersTab.click();
+      await expect(
+        page.getByRole("region", { name: "Active tasks" }).getByText("Switch-away capture proof", { exact: true }),
+      ).toHaveCount(1);
+    });
+  });
+
   test("completed pile preference survives reload", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "completed pile persistence runs in the desktop project");
 
