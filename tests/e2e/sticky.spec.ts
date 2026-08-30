@@ -1821,7 +1821,7 @@ test.describe("Sticky workspace", () => {
     });
   });
 
-  test("task view filters cover undated, overdue, repeating, and subtasks without corrupting custom order", async ({ page }, testInfo) => {
+  test("task view filters cover daily, undated, overdue, repeating, and subtasks without corrupting custom order", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "view filter coverage runs in the desktop project");
 
     await expectNoConsoleErrors(page, async () => {
@@ -1837,12 +1837,23 @@ test.describe("Sticky workspace", () => {
 
       await expect(taskViews.getByRole("button", { name: "Show task view: Today, 1 task" })).toBeVisible();
       await expect(taskViews.getByRole("button", { name: "Show task view: All today, 2 tasks" })).toBeVisible();
+      await expect(taskViews.getByRole("button", { name: "Show task view: Daily, 1 task" })).toBeVisible();
+      await expect(taskViews.getByRole("button").nth(2)).toHaveAccessibleName("Show task view: All today, 2 tasks");
+      await expect(taskViews.getByRole("button").nth(3)).toHaveAccessibleName("Show task view: Daily, 1 task");
       await taskViews.getByRole("button", { name: "Show task view: Today, 1 task" }).click();
       await expect(activeRegion.getByText("Clear the capture tray")).toBeVisible();
       await expect(activeRegion.getByText("Daily planning pass")).toHaveCount(0);
       await taskViews.getByRole("button", { name: "Show task view: All today, 2 tasks" }).click();
       await expect(activeRegion.getByText("Clear the capture tray")).toBeVisible();
       await expect(activeRegion.getByText("Daily planning pass")).toBeVisible();
+      await taskViews.getByRole("button", { name: "Show task view: Daily, 1 task" }).click();
+      await expect(activeRegion.getByText("Clear the capture tray")).toHaveCount(0);
+      await expect(activeRegion.getByText("Daily planning pass")).toBeVisible();
+      await page.reload();
+      await expect(taskViews.getByRole("button", { name: "Current task view: Daily, 1 task" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
       await runCommand(page, "show all tasks");
 
       await activeRegion.getByText("Tighten the details panel").click();

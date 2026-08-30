@@ -276,6 +276,7 @@ const TASK_VIEW_LABELS: Record<StickyTaskViewFilter, string> = {
   all: "All",
   today: "Today",
   all_today: "All today",
+  daily: "Daily",
   due: "Scheduled",
   undated: "Undated",
   overdue: "Overdue",
@@ -286,6 +287,7 @@ const TASK_VIEW_ORDER: StickyTaskViewFilter[] = [
   "all",
   "today",
   "all_today",
+  "daily",
   "due",
   "undated",
   "overdue",
@@ -559,6 +561,7 @@ function taskMatchesView(
     return recurrenceFrequency !== "daily" && taskOrActiveSubtaskIsDueOn(task, subtasks, todayKey);
   }
   if (filter === "all_today") return taskOrActiveSubtaskIsDueOn(task, subtasks, todayKey);
+  if (filter === "daily") return recurrenceFrequency === "daily";
   if (filter === "undated") return !task.dueDate;
   if (filter === "overdue") return Boolean(task.dueDate && task.dueDate < todayKey);
   if (filter === "recurring") return recurrenceFrequency !== null;
@@ -1835,6 +1838,9 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       ).length,
       all_today: taskFilterScopeTasks.filter((task) =>
         taskOrActiveSubtaskIsDueOn(task, subtasksByTask.get(task.id) ?? [], todayKey),
+      ).length,
+      daily: taskFilterScopeTasks.filter(
+        (task) => recurrenceByTask.get(task.id)?.frequency === "daily",
       ).length,
       due: taskFilterScopeTasks.filter((task) => Boolean(task.dueDate)).length,
       undated: taskFilterScopeTasks.filter((task) => !task.dueDate).length,
@@ -4927,6 +4933,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                   {filter === "all" ? <Layers3 size={15} /> : null}
                   {filter === "today" ? <Sun size={15} /> : null}
                   {filter === "all_today" ? <CalendarDays size={15} /> : null}
+                  {filter === "daily" ? <Clock3 size={15} /> : null}
                   {filter === "due" ? <CalendarDays size={15} /> : null}
                   {filter === "undated" ? <CalendarOff size={15} /> : null}
                   {filter === "overdue" ? <TriangleAlert size={15} /> : null}

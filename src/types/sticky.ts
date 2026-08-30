@@ -22,6 +22,7 @@ export type StickyTaskViewFilter =
   | "all"
   | "today"
   | "all_today"
+  | "daily"
   | "due"
   | "undated"
   | "overdue"
