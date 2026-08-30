@@ -1938,6 +1938,32 @@ test.describe("Sticky workspace", () => {
     });
   });
 
+  test("Daily only shows incomplete daily occurrences due today", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "daily occurrence coverage runs in the desktop project");
+
+    await expectNoConsoleErrors(page, async () => {
+      await page.goto("/");
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
+
+      const futureDailyTitle = "Tomorrow daily proof";
+      await page.getByLabel("Quick add task").fill(futureDailyTitle);
+      await quickAddButton(page, "reminders").click();
+
+      const details = page.getByRole("complementary", { name: "Task details", exact: true });
+      await details.locator('input[aria-label="Due date"]').fill(localDateKey(1));
+      await details.getByLabel("Not repeating").check();
+      await details.getByLabel("Frequency").selectOption("daily");
+      await details.getByRole("button", { name: "Close details" }).click();
+
+      const taskViews = page.locator(".task-filter-bar");
+      const activeRegion = page.getByRole("region", { name: "Active tasks" });
+      await expect(taskViews.getByRole("button", { name: "Show task view: Daily, 1 task" })).toBeVisible();
+      await taskViews.getByRole("button", { name: "Show task view: Daily, 1 task" }).click();
+      await expect(activeRegion.getByText("Daily planning pass")).toBeVisible();
+      await expect(activeRegion.getByText(futureDailyTitle)).toHaveCount(0);
+    });
+  });
+
   test("opening a task preserves the current task view filter", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "filtered task selection coverage runs in the desktop project");
 

@@ -561,7 +561,9 @@ function taskMatchesView(
     return recurrenceFrequency !== "daily" && taskOrActiveSubtaskIsDueOn(task, subtasks, todayKey);
   }
   if (filter === "all_today") return taskOrActiveSubtaskIsDueOn(task, subtasks, todayKey);
-  if (filter === "daily") return recurrenceFrequency === "daily";
+  if (filter === "daily") {
+    return recurrenceFrequency === "daily" && taskOrActiveSubtaskIsDueOn(task, subtasks, todayKey);
+  }
   if (filter === "undated") return !task.dueDate;
   if (filter === "overdue") return Boolean(task.dueDate && task.dueDate < todayKey);
   if (filter === "recurring") return recurrenceFrequency !== null;
@@ -1840,7 +1842,9 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
         taskOrActiveSubtaskIsDueOn(task, subtasksByTask.get(task.id) ?? [], todayKey),
       ).length,
       daily: taskFilterScopeTasks.filter(
-        (task) => recurrenceByTask.get(task.id)?.frequency === "daily",
+        (task) =>
+          recurrenceByTask.get(task.id)?.frequency === "daily" &&
+          taskOrActiveSubtaskIsDueOn(task, subtasksByTask.get(task.id) ?? [], todayKey),
       ).length,
       due: taskFilterScopeTasks.filter((task) => Boolean(task.dueDate)).length,
       undated: taskFilterScopeTasks.filter((task) => !task.dueDate).length,
