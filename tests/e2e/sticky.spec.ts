@@ -1931,6 +1931,68 @@ test.describe("Sticky workspace", () => {
     });
   });
 
+  test("adding a nonmatching task preserves the filter and offers an explicit reveal", async ({ page }) => {
+    await expectNoConsoleErrors(page, async () => {
+      await page.goto("/");
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
+
+      const taskViews = page.locator(".task-filter-bar");
+      const activeRegion = page.getByRole("region", { name: "Active tasks" });
+      const title = "Hidden filter proof";
+
+      await runCommand(page, "show today tasks");
+      const todayFilter = taskViews.getByRole("button", { name: /Current task view: Today/ });
+      await expect(todayFilter).toHaveAttribute("aria-pressed", "true");
+
+      await page.getByLabel("Quick add task").fill(title);
+      await quickAddButton(page, "reminders").click();
+
+      await expect(todayFilter).toHaveAttribute("aria-pressed", "true");
+      await expect(activeRegion.getByText(title, { exact: true })).toHaveCount(0);
+      const details = page.getByRole("complementary", { name: "Task details", exact: true });
+      await expect(details.getByRole("textbox", { name: "Title", exact: true })).toHaveCount(0);
+
+      const toast = page.getByRole("group", {
+        name: /Task added: Saved to reminders\. Hidden by the Today filter\./,
+      });
+      await expect(toast).toBeVisible();
+      await toast.getByRole("button", { name: /Show task/ }).click();
+
+      await expect(taskViews.getByRole("button", { name: /Current task view: All/ })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      await expect(activeRegion.getByText(title, { exact: true })).toBeVisible();
+      await expect(details.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(title);
+    });
+  });
+
+  test("adding a matching task keeps it visible in the current filter", async ({ page }) => {
+    await expectNoConsoleErrors(page, async () => {
+      await page.goto("/");
+      await page.locator("button.list-tab", { hasText: "reminders" }).click();
+
+      const taskViews = page.locator(".task-filter-bar");
+      const activeRegion = page.getByRole("region", { name: "Active tasks" });
+      const title = "Visible undated proof";
+
+      await runCommand(page, "show undated tasks");
+      const undatedFilter = taskViews.getByRole("button", { name: /Current task view: Undated/ });
+      await expect(undatedFilter).toHaveAttribute("aria-pressed", "true");
+
+      await page.getByLabel("Quick add task").fill(title);
+      await quickAddButton(page, "reminders").click();
+
+      await expect(undatedFilter).toHaveAttribute("aria-pressed", "true");
+      await expect(activeRegion.getByText(title, { exact: true })).toBeVisible();
+      await expect(
+        page
+          .getByRole("complementary", { name: "Task details", exact: true })
+          .getByRole("textbox", { name: "Title", exact: true }),
+      ).toHaveValue(title);
+    });
+  });
+
   test("quick capture can route a sticky to a list token and reveal it", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "capture routing runs in the desktop project");
 

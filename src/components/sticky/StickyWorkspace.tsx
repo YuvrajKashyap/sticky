@@ -3071,6 +3071,50 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     saveListOrder(arrayMove(ordered, oldIndex, newIndex), workspace);
   }
 
+  function revealCreatedTask(taskId: string, listId: string) {
+    const before = workspaceRef.current;
+    const preferences = { ...before.preferences, taskViewFilter: "all" as const };
+    const userState = { ...before.userState, selectedListId: listId, searchQuery: "" };
+
+    setTaskViewFilterState("all");
+    setWorkspace((current) => ({
+      ...current,
+      preferences: { ...current.preferences, taskViewFilter: "all" },
+      userState: { ...current.userState, selectedListId: listId, searchQuery: "" },
+    }));
+    setSelectedTaskId(taskId);
+    void persist(
+      "Show task",
+      async () => {
+        const preferencesResult = await supabase!
+          .from("user_preferences")
+          .update({
+            completed_open_by_list: preferences.completedOpenByList,
+            density: preferences.density,
+            color_mode: preferences.colorMode,
+            board_style: preferences.boardStyle,
+            task_view_filter: preferences.taskViewFilter,
+            task_sort_mode: preferences.taskSortMode,
+          })
+          .eq("user_id", before.user.id);
+
+        if (preferencesResult.error) {
+          return preferencesResult;
+        }
+
+        return supabase!
+          .from("user_state")
+          .update({
+            selected_list_id: userState.selectedListId,
+            search_query: userState.searchQuery,
+            last_opened_at: nowIso(),
+          })
+          .eq("user_id", before.user.id);
+      },
+      before,
+    );
+  }
+
   function createTask(event?: React.FormEvent<HTMLFormElement>, selectCreatedTask = true) {
     event?.preventDefault();
     const intent = parseQuickCaptureIntent(quickTitle, unarchivedLists);
@@ -3090,10 +3134,6 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     const nextUserState = stateShouldReveal
       ? { ...workspace.userState, selectedListId: targetListId, searchQuery: "" }
       : workspace.userState;
-    const nextPreferences =
-      taskViewFilter === "all"
-        ? workspace.preferences
-        : { ...workspace.preferences, taskViewFilter: "all" as const };
     // Composer fields win over parsed ones; a bare time implies today.
     const draftDueTime = captureDraft.dueTime || intent.dueTime;
     const draftDueDate =
@@ -3142,12 +3182,19 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           createdAt: nowIso(),
           updatedAt: nowIso(),
         };
+    const matchesCurrentView = taskMatchesView(
+      task,
+      [],
+      Boolean(captureRule),
+      taskViewFilter,
+      localDateKey(),
+    );
 
     setQuickTitle("");
     setCaptureDraft({ details: "", dueDate: "", dueTime: "", repeat: null });
     setCaptureExpanded(false);
-    setTaskViewFilter("all");
-    const shouldSelectCreatedTask = selectCreatedTask && !quickCaptureClosedDetailsRef.current;
+    const shouldSelectCreatedTask =
+      selectCreatedTask && !quickCaptureClosedDetailsRef.current && matchesCurrentView;
     quickCaptureClosedDetailsRef.current = false;
     setWorkspace({
       ...workspace,
@@ -3155,10 +3202,17 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       recurrenceRules: captureRule
         ? [...workspace.recurrenceRules, captureRule]
         : workspace.recurrenceRules,
-      preferences: nextPreferences,
       userState: nextUserState,
     });
     setSelectedTaskId(shouldSelectCreatedTask ? task.id : null);
+    if (!matchesCurrentView) {
+      pushToast({
+        title: "Task added",
+        body: `Saved to ${targetList?.name ?? activeList?.name ?? "its list"}. Hidden by the ${TASK_VIEW_LABELS[taskViewFilter]} filter.`,
+        actionLabel: "Show task",
+        onAction: () => revealCreatedTask(task.id, task.listId),
+      });
+    }
     void persist(
       "Sticky",
       async () => {
