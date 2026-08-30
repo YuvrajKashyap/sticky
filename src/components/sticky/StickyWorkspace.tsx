@@ -275,6 +275,7 @@ const COLORS: StickyColor[] = [
 const TASK_VIEW_LABELS: Record<StickyTaskViewFilter, string> = {
   all: "All",
   today: "Today",
+  all_today: "All today",
   due: "Scheduled",
   undated: "Undated",
   overdue: "Overdue",
@@ -284,6 +285,7 @@ const TASK_VIEW_LABELS: Record<StickyTaskViewFilter, string> = {
 const TASK_VIEW_ORDER: StickyTaskViewFilter[] = [
   "all",
   "today",
+  "all_today",
   "due",
   "undated",
   "overdue",
@@ -432,7 +434,8 @@ function humanDue(task: StickyTask) {
   }
 
   const date = new Date(`${task.dueDate}T${task.dueTime ?? "00:00"}`);
-  return `${format(date, "MMM d")}${task.dueTime ? ` at ${task.dueTime}` : ""}`;
+  const dateLabel = task.dueDate === localDateKey() ? "Today" : format(date, "MMM d");
+  return `${dateLabel}${task.dueTime ? ` at ${captureTimeLabel(task.dueTime)}` : ""}`;
 }
 
 function getPlateTaskGroups(tasks: StickyTask[]): PlateTaskGroup[] {
@@ -540,18 +543,25 @@ function taskOrActiveSubtaskIsDueOn(
   );
 }
 
+function isTodayTaskView(filter: StickyTaskViewFilter) {
+  return filter === "today" || filter === "all_today";
+}
+
 function taskMatchesView(
   task: StickyTask,
   subtasks: StickySubtask[],
-  hasRecurrence: boolean,
+  recurrenceFrequency: RecurrenceFrequency | null,
   filter: StickyTaskViewFilter,
   todayKey: string,
 ) {
   if (filter === "due") return Boolean(task.dueDate);
-  if (filter === "today") return taskOrActiveSubtaskIsDueOn(task, subtasks, todayKey);
+  if (filter === "today") {
+    return recurrenceFrequency !== "daily" && taskOrActiveSubtaskIsDueOn(task, subtasks, todayKey);
+  }
+  if (filter === "all_today") return taskOrActiveSubtaskIsDueOn(task, subtasks, todayKey);
   if (filter === "undated") return !task.dueDate;
   if (filter === "overdue") return Boolean(task.dueDate && task.dueDate < todayKey);
-  if (filter === "recurring") return hasRecurrence;
+  if (filter === "recurring") return recurrenceFrequency !== null;
   if (filter === "subtasks") return subtasks.some((subtask) => !subtask.isCompleted);
   return true;
 }
@@ -562,7 +572,7 @@ function taskDueScheduleForView(
   filter: StickyTaskViewFilter,
   todayKey: string,
 ): DueSchedule {
-  if (filter !== "today") {
+  if (!isTodayTaskView(filter)) {
     return task;
   }
 
@@ -1818,7 +1828,12 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
     return {
       all: taskFilterScopeTasks.length,
-      today: taskFilterScopeTasks.filter((task) =>
+      today: taskFilterScopeTasks.filter(
+        (task) =>
+          recurrenceByTask.get(task.id)?.frequency !== "daily" &&
+          taskOrActiveSubtaskIsDueOn(task, subtasksByTask.get(task.id) ?? [], todayKey),
+      ).length,
+      all_today: taskFilterScopeTasks.filter((task) =>
         taskOrActiveSubtaskIsDueOn(task, subtasksByTask.get(task.id) ?? [], todayKey),
       ).length,
       due: taskFilterScopeTasks.filter((task) => Boolean(task.dueDate)).length,
@@ -1838,7 +1853,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       taskMatchesView(
         task,
         subtasksByTask.get(task.id) ?? [],
-        recurrenceByTask.has(task.id),
+        recurrenceByTask.get(task.id)?.frequency ?? null,
         taskViewFilter,
         todayKey,
       ),
@@ -1971,7 +1986,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
         taskMatchesView(
           task,
           subtasksByTask.get(task.id) ?? [],
-          recurrenceByTask.has(task.id),
+          recurrenceByTask.get(task.id)?.frequency ?? null,
           taskViewFilter,
           todayKey,
         ),
@@ -3213,7 +3228,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     const matchesCurrentView = taskMatchesView(
       task,
       [],
-      Boolean(captureRule),
+      captureRule?.frequency ?? null,
       taskViewFilter,
       localDateKey(),
     );
@@ -3422,7 +3437,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
         taskMatchesView(
           item,
           subtasksByTask.get(item.id) ?? [],
-          recurrenceByTask.has(item.id),
+          recurrenceByTask.get(item.id)?.frequency ?? null,
           taskViewFilter,
           todayKey,
         ),
@@ -4069,7 +4084,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       return;
     }
 
-    const visibleSubtasks = (taskViewFilter === "today"
+    const visibleSubtasks = (isTodayTaskView(taskViewFilter)
       ? ordered.filter(
           (subtask) => !subtask.isCompleted && subtask.dueDate === localDateKey(),
         )
@@ -4412,7 +4427,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           taskMatchesView(
             task,
             subtasksByTask.get(task.id) ?? [],
-            recurrenceByTask.has(task.id),
+            recurrenceByTask.get(task.id)?.frequency ?? null,
             taskViewFilter,
             todayKey,
           ),
@@ -4459,7 +4474,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
         return;
       }
 
-      const visibleSubtasks = (taskViewFilter === "today"
+      const visibleSubtasks = (isTodayTaskView(taskViewFilter)
         ? ordered.filter(
             (subtask) => !subtask.isCompleted && subtask.dueDate === localDateKey(),
           )
@@ -4911,6 +4926,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                   ) : null}
                   {filter === "all" ? <Layers3 size={15} /> : null}
                   {filter === "today" ? <Sun size={15} /> : null}
+                  {filter === "all_today" ? <CalendarDays size={15} /> : null}
                   {filter === "due" ? <CalendarDays size={15} /> : null}
                   {filter === "undated" ? <CalendarOff size={15} /> : null}
                   {filter === "overdue" ? <TriangleAlert size={15} /> : null}
@@ -5093,7 +5109,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           task={selectedTask}
           lists={unarchivedLists}
           subtasks={selectedTaskSubtasks}
-          subtaskViewFilter={taskViewFilter === "today" ? "today" : "all"}
+          subtaskViewFilter={isTodayTaskView(taskViewFilter) ? "today" : "all"}
           taskSortMode={taskSortMode}
           reorderLocked={reorderLocked}
           recurrenceRule={selectedTaskRecurrence}

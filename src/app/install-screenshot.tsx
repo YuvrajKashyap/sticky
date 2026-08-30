@@ -304,9 +304,9 @@ function WideScreenshot() {
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", marginTop: 20 }}>
-            <StickyCard selected color="#ffed9a" title="Clear the capture tray" meta="Today at 14:00 / 2 subtasks" />
+            <StickyCard selected color="#ffed9a" title="Clear the capture tray" meta="Today at 2:00 PM / 2 subtasks" />
             <div style={{ height: 14 }} />
-            <StickyCard color="#dff8ff" title="Prepare launch checklist" meta="Tomorrow at 09:00 / repeats weekly" />
+            <StickyCard color="#dff8ff" title="Prepare launch checklist" meta="Tomorrow at 9:00 AM / repeats weekly" />
             <div style={{ height: 14 }} />
             <StickyCard color="#dcfce7" title="Polish mobile install flow" meta="Scheduled / 1 subtask" />
           </div>
@@ -461,9 +461,9 @@ function NarrowScreenshot() {
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", marginTop: 16 }}>
-          <StickyCard selected color="#ffed9a" title="Clear the capture tray" meta="Today at 14:00" />
+          <StickyCard selected color="#ffed9a" title="Clear the capture tray" meta="Today at 2:00 PM" />
           <div style={{ height: 12 }} />
-          <StickyCard color="#dff8ff" title="Prepare launch checklist" meta="Tomorrow at 09:00" />
+          <StickyCard color="#dff8ff" title="Prepare launch checklist" meta="Tomorrow at 9:00 AM" />
           <div style={{ height: 12 }} />
           <StickyCard color="#dcfce7" title="Polish install flow" meta="Scheduled / 1 subtask" />
         </div>

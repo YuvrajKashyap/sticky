@@ -20,6 +20,7 @@ import type {
   StickyTask,
   StickyTaskViewFilter,
 } from "@/types/sticky";
+import { captureTimeLabel } from "./CaptureScheduler";
 import { AnimatedNumber, springs } from "./motion";
 
 type StickyOverviewProps = {
@@ -112,7 +113,7 @@ function buildReactorSegments(
 
 function dueLabelFor(task: StickyTask, todayKey: string): string | null {
   if (!task.dueDate) return null;
-  const timeSuffix = task.dueTime ? ` · ${task.dueTime}` : "";
+  const timeSuffix = task.dueTime ? ` at ${captureTimeLabel(task.dueTime)}` : "";
   if (task.dueDate === todayKey) return `Today${timeSuffix}`;
   const parsed = new Date(`${task.dueDate}T00:00:00`);
   return `${format(parsed, "EEE MMM d")}${timeSuffix}`;

@@ -719,7 +719,8 @@ test.describe("Sticky workspace", () => {
       await expect(page.locator(".list-tab.active")).toHaveCount(1);
       await expect(page.locator(".board-column.active")).toHaveCount(1);
       await expect(page.getByRole("button", { name: "Current task view: All, 4 tasks" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Show task view: Today, 2 tasks" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Show task view: Today, 1 task" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Show task view: All today, 2 tasks" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Show task view: Scheduled, 2 tasks" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Show task view: Undated, 2 tasks" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Show task view: Overdue, 0 tasks" })).toBeVisible();
@@ -806,7 +807,8 @@ test.describe("Sticky workspace", () => {
       await expect(page.locator(".list-tab.active")).toHaveCount(0);
       await expect(page.locator(".board-column.active")).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Current task view: All, 30 tasks" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Show task view: Today, 2 tasks" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Show task view: Today, 1 task" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Show task view: All today, 2 tasks" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Show task view: Scheduled, 2 tasks" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Show task view: Undated, 28 tasks" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Show task view: Overdue, 0 tasks" })).toBeVisible();
@@ -1073,7 +1075,7 @@ test.describe("Sticky workspace", () => {
       await quickAddButton(page, "Verification Prime").click();
       const smartCard = page.locator(".task-card", { hasText: "Smart parsed sticky" });
       await expect(smartCard).toBeVisible();
-      await expect(smartCard).toContainText(`${shortDateLabel(smartTomorrow)} at 14:00`);
+      await expect(smartCard).toContainText(`${shortDateLabel(smartTomorrow)} at 2:00 PM`);
       await expect(smartCard).not.toContainText("tomorrow 2pm");
 
       await page.getByText("Write the verification sticky").click();
@@ -1094,11 +1096,11 @@ test.describe("Sticky workspace", () => {
       // Due time via the time grid preset
       await details.getByRole("button", { name: "Set a due time" }).click();
       await details.getByRole("button", { name: "Afternoon", exact: true }).click();
-      await expect(polishedCard).toContainText(`${shortDateLabel(tomorrow)} at 14:00`);
+      await expect(polishedCard).toContainText(`${shortDateLabel(tomorrow)} at 2:00 PM`);
 
       // Clear both with the × chip and confirm the pickers reset
       await details.getByRole("button", { name: "Remove due date and time", exact: true }).click();
-      await expect(polishedCard).not.toContainText(`${shortDateLabel(tomorrow)} at 14:00`);
+      await expect(polishedCard).not.toContainText(`${shortDateLabel(tomorrow)} at 2:00 PM`);
       await expect(details.getByRole("button", { name: "Set a due date" })).toBeVisible();
 
       // Re-arm a concrete past-due schedule via exact entry so the Today filter
@@ -1106,7 +1108,7 @@ test.describe("Sticky workspace", () => {
       const overdue = localDateKey(-2);
       await details.locator('input[aria-label="Due date"]').fill(overdue);
       await details.locator('input[aria-label="Due time"]').fill("09:00");
-      await expect(polishedCard).toContainText(`${shortDateLabel(overdue)} at 09:00`);
+      await expect(polishedCard).toContainText(`${shortDateLabel(overdue)} at 9:00 AM`);
       const filteredActiveRegion = page.getByRole("region", { name: "Active tasks" });
       const taskViews = page.locator(".task-filter-bar");
       await runCommand(page, "show today tasks");
@@ -1232,7 +1234,6 @@ test.describe("Sticky workspace", () => {
       await expect(activeRegion.getByText("Verification sticky polished")).toBeVisible();
 
       const twoDaysAgo = localDateKey(-2);
-      const today = localDateKey();
       await page.getByLabel("Quick add task").fill("Overdue repeat catch-up");
       await quickAddButton(page, "Move Target").click();
       await activeRegion.getByText("Overdue repeat catch-up").click();
@@ -1244,7 +1245,7 @@ test.describe("Sticky workspace", () => {
       await details.getByRole("button", { name: "Advance repeat" }).click();
       await expect(page.getByText("Repeats caught up")).toBeVisible();
       await expect(page.locator(".task-card", { hasText: "Overdue repeat catch-up" })).toContainText(
-        `${shortDateLabel(today)} at 08:00`,
+        "Today at 8:00 AM",
       );
       await expect(page.getByText(/behind schedule/)).toHaveCount(0);
 
@@ -1368,7 +1369,7 @@ test.describe("Sticky workspace", () => {
       await page.getByLabel("Quick add task").fill("Mobile capture");
       await quickAddButton(page, "reminders").click();
       await expect(page.getByText("Mobile capture")).toBeVisible();
-      for (const label of ["Scheduled", "Undated", "Repeating", "Subtasks"]) {
+      for (const label of ["All today", "Scheduled", "Undated", "Repeating", "Subtasks"]) {
         await expectNoInlineClip(page.locator(".task-filter-bar button", { hasText: label }).locator("span"));
       }
       const mobileDetails = page.getByRole("complementary", { name: "Task details", exact: true });
@@ -1421,7 +1422,7 @@ test.describe("Sticky workspace", () => {
 
       await runCommand(page, "show today tasks");
       await runCommand(page, "sort by due date");
-      await expect(taskViews.getByRole("button", { name: "Current task view: Today, 2 tasks" })).toHaveAttribute(
+      await expect(taskViews.getByRole("button", { name: "Current task view: Today, 1 task" })).toHaveAttribute(
         "aria-pressed",
         "true",
       );
@@ -1435,7 +1436,7 @@ test.describe("Sticky workspace", () => {
       await expect(page.getByRole("heading", { name: "All tasks", exact: true })).toBeVisible();
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
-      await expect(taskViews.getByRole("button", { name: "Current task view: Today, 2 tasks" })).toHaveAttribute(
+      await expect(taskViews.getByRole("button", { name: "Current task view: Today, 1 task" })).toHaveAttribute(
         "aria-pressed",
         "true",
       );
@@ -1834,6 +1835,16 @@ test.describe("Sticky workspace", () => {
       const overdueDate = localDateKey(-1);
       const todayDate = localDateKey();
 
+      await expect(taskViews.getByRole("button", { name: "Show task view: Today, 1 task" })).toBeVisible();
+      await expect(taskViews.getByRole("button", { name: "Show task view: All today, 2 tasks" })).toBeVisible();
+      await taskViews.getByRole("button", { name: "Show task view: Today, 1 task" }).click();
+      await expect(activeRegion.getByText("Clear the capture tray")).toBeVisible();
+      await expect(activeRegion.getByText("Daily planning pass")).toHaveCount(0);
+      await taskViews.getByRole("button", { name: "Show task view: All today, 2 tasks" }).click();
+      await expect(activeRegion.getByText("Clear the capture tray")).toBeVisible();
+      await expect(activeRegion.getByText("Daily planning pass")).toBeVisible();
+      await runCommand(page, "show all tasks");
+
       await activeRegion.getByText("Tighten the details panel").click();
       const details = page.getByRole("complementary", { name: "Task details", exact: true });
       await details.getByPlaceholder("Add subtask").fill("Undated sibling");
@@ -1841,8 +1852,8 @@ test.describe("Sticky workspace", () => {
       await details.locator('input[aria-label="Due date for subtask: Check the mobile sheet"]').fill(todayDate);
       await details.getByRole("button", { name: "Close details" }).click();
 
-      await taskViews.getByRole("button", { name: "Show task view: Today, 3 tasks" }).click();
-      await expect(taskViews.getByRole("button", { name: "Current task view: Today, 3 tasks" })).toHaveAttribute(
+      await taskViews.getByRole("button", { name: "Show task view: Today, 2 tasks" }).click();
+      await expect(taskViews.getByRole("button", { name: "Current task view: Today, 2 tasks" })).toHaveAttribute(
         "aria-pressed",
         "true",
       );
@@ -2026,7 +2037,7 @@ test.describe("Sticky workspace", () => {
       const routedCard = page.locator(".task-card", { hasText: "Route me" });
       await expect(routedCard).toBeVisible();
       await expect(routedCard).not.toContainText("#capture-target");
-      await expect(routedCard).toContainText(`${shortDateLabel(localDateKey(1))} at 09:00`);
+      await expect(routedCard).toContainText(`${shortDateLabel(localDateKey(1))} at 9:00 AM`);
       await expect(page.getByRole("complementary", { name: "Task details", exact: true }).getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Route me");
     });
   });
@@ -2046,7 +2057,7 @@ test.describe("Sticky workspace", () => {
 
       const capturedCard = page.locator(".task-card", { hasText: "Plan review" });
       await expect(capturedCard).toBeVisible();
-      await expect(capturedCard).toContainText(`${shortDateLabel(nextFriday)} at 12:00`);
+      await expect(capturedCard).toContainText(`${shortDateLabel(nextFriday)} at 12:00 PM`);
       await expect(capturedCard).not.toContainText("Friday noon");
 
       const details = page.getByRole("complementary", { name: "Task details", exact: true });
@@ -2057,7 +2068,7 @@ test.describe("Sticky workspace", () => {
       await page.reload();
       const persistedCard = page.locator(".task-card", { hasText: "Plan review" });
       await expect(persistedCard).toBeVisible();
-      await expect(persistedCard).toContainText(`${shortDateLabel(nextFriday)} at 12:00`);
+      await expect(persistedCard).toContainText(`${shortDateLabel(nextFriday)} at 12:00 PM`);
       await persistedCard.click();
       await expect(details.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Plan review");
     });
@@ -2070,7 +2081,6 @@ test.describe("Sticky workspace", () => {
       await page.goto("/");
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
       const activeRegion = page.getByRole("region", { name: "Active tasks" });
-      const today = localDateKey();
       const nextWeek = localDateKey(7);
 
       await page.getByLabel("Quick add task").fill("Chip schedule proof");
@@ -2088,17 +2098,17 @@ test.describe("Sticky workspace", () => {
       // Morning preset from the time grid
       await details.getByRole("button", { name: "Set a due time" }).click();
       await details.getByRole("button", { name: "Morning", exact: true }).click();
-      await expect(card).toContainText(`${shortDateLabel(today)} at 09:00`);
+      await expect(card).toContainText("Today at 9:00 AM");
 
       // Roll the date a week forward
       await details.getByRole("button", { name: /^Due date:/ }).click();
       await details.getByRole("button", { name: "Next week", exact: true }).click();
-      await expect(card).toContainText(`${shortDateLabel(nextWeek)} at 09:00`);
+      await expect(card).toContainText(`${shortDateLabel(nextWeek)} at 9:00 AM`);
 
       // Evening preset
       await details.getByRole("button", { name: /^Due time:/ }).click();
       await details.getByRole("button", { name: "Evening", exact: true }).click();
-      await expect(card).toContainText(`${shortDateLabel(nextWeek)} at 17:00`);
+      await expect(card).toContainText(`${shortDateLabel(nextWeek)} at 5:00 PM`);
 
       // Clear just the time from the panel, then re-add it (panel stays open)
       await details.getByRole("button", { name: /^Due time:/ }).click();
@@ -2106,12 +2116,12 @@ test.describe("Sticky workspace", () => {
       await expect(card).toContainText(shortDateLabel(nextWeek));
       await expect(card).not.toContainText("17:00");
       await details.getByRole("button", { name: "Evening", exact: true }).click();
-      await expect(card).toContainText(`${shortDateLabel(nextWeek)} at 17:00`);
+      await expect(card).toContainText(`${shortDateLabel(nextWeek)} at 5:00 PM`);
 
       await page.reload();
       const persistedCard = activeRegion.locator(".task-card", { hasText: "Chip schedule proof" });
       await expect(persistedCard).toBeVisible();
-      await expect(persistedCard).toContainText(`${shortDateLabel(nextWeek)} at 17:00`);
+      await expect(persistedCard).toContainText(`${shortDateLabel(nextWeek)} at 5:00 PM`);
       await persistedCard.click();
       await expect(details.getByRole("button", { name: /^Due date:/ })).toBeVisible();
       await expect(details.getByRole("button", { name: /^Due time:/ })).toBeVisible();
@@ -2153,7 +2163,7 @@ test.describe("Sticky workspace", () => {
       await page.reload();
       const copiedCard = page.locator(".task-card", { hasText: "Reusable setup copy" });
       await expect(copiedCard).toBeVisible();
-      await expect(copiedCard).not.toContainText(`${shortDateLabel(tomorrow)} at 09:00`);
+      await expect(copiedCard).not.toContainText(`${shortDateLabel(tomorrow)} at 9:00 AM`);
 
       await copiedCard.click();
       await details.getByRole("button", { name: "Duplicate Reusable setup copy" }).click();
@@ -2524,7 +2534,7 @@ test.describe("Sticky workspace", () => {
 
       await page.goto("/?view=today");
       await expect(page.getByRole("heading", { name: "All tasks", exact: true })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Current task view: Today, 2 tasks" })).toHaveAttribute(
+      await expect(page.getByRole("button", { name: "Current task view: Today, 1 task" })).toHaveAttribute(
         "aria-pressed",
         "true",
       );
