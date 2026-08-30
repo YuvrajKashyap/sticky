@@ -7304,12 +7304,99 @@ mark.find-highlight {
   --deck-tilt-y: 0deg;
 }
 
+/* Ambient field: aurora blobs + two drifting star layers behind the panels. */
+.deck-ambient {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.deck-topbar,
+.deck-grid,
+.deck-horizon {
+  position: relative;
+  z-index: 1;
+}
+
+.deck-aurora {
+  position: absolute;
+  width: 55vw;
+  height: 55vw;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.55;
+  will-change: transform;
+}
+
+.deck-aurora-a {
+  top: -20vw;
+  left: -12vw;
+  background: radial-gradient(circle, rgba(var(--accent-rgb), 0.17), transparent 65%);
+  animation: deck-aurora-a 46s ease-in-out infinite alternate;
+}
+
+.deck-aurora-b {
+  bottom: -24vw;
+  right: -14vw;
+  background: radial-gradient(circle, rgba(106, 92, 255, 0.19), transparent 65%);
+  animation: deck-aurora-b 58s ease-in-out infinite alternate;
+}
+
+@keyframes deck-aurora-a {
+  to { transform: translate(9vw, 6vh) scale(1.15); }
+}
+
+@keyframes deck-aurora-b {
+  to { transform: translate(-8vw, -7vh) scale(1.12); }
+}
+
+.deck-stars {
+  position: absolute;
+  inset: -340px -340px 0 0;
+  background-repeat: repeat;
+}
+
+.deck-stars-far {
+  background-image:
+    radial-gradient(1px 1px at 22px 34px, rgba(190, 214, 255, 0.5), transparent 55%),
+    radial-gradient(1px 1px at 120px 92px, rgba(190, 214, 255, 0.32), transparent 55%),
+    radial-gradient(1px 1px at 204px 166px, rgba(190, 214, 255, 0.42), transparent 55%);
+  background-size: 260px 220px;
+  opacity: 0.7;
+  animation: deck-stars-far-drift 170s linear infinite;
+}
+
+.deck-stars-near {
+  background-image:
+    radial-gradient(1.5px 1.5px at 64px 22px, rgba(var(--accent-rgb), 0.5), transparent 60%),
+    radial-gradient(1.5px 1.5px at 182px 142px, rgba(224, 234, 255, 0.45), transparent 60%),
+    radial-gradient(1px 1px at 302px 74px, rgba(224, 234, 255, 0.38), transparent 60%);
+  background-size: 340px 280px;
+  animation: deck-stars-near-drift 115s linear infinite, deck-stars-twinkle 7s ease-in-out infinite alternate;
+}
+
+@keyframes deck-stars-far-drift {
+  to { transform: translate3d(-260px, -110px, 0); }
+}
+
+@keyframes deck-stars-near-drift {
+  to { transform: translate3d(-340px, -140px, 0); }
+}
+
+@keyframes deck-stars-twinkle {
+  from { opacity: 0.4; }
+  to { opacity: 0.85; }
+}
+
 .deck-scanline {
   position: fixed;
   left: 0;
   right: 0;
   top: -4px;
   height: 3px;
+  z-index: 2;
   pointer-events: none;
   background: linear-gradient(90deg, transparent, rgba(var(--accent-rgb), 0.85), transparent);
   box-shadow: 0 0 24px 4px rgba(var(--accent-rgb), 0.45);
@@ -7381,6 +7468,17 @@ mark.find-highlight {
   text-transform: uppercase;
   color: var(--ink);
   text-shadow: 0 0 18px rgba(var(--accent-rgb), 0.45);
+  animation: deck-title-ignite 0.9s steps(1, end) 0.2s 1 both;
+}
+
+/* Power-on flicker: the title strikes twice before holding, like a tube warming up. */
+@keyframes deck-title-ignite {
+  0% { opacity: 0; }
+  8% { opacity: 1; }
+  14% { opacity: 0.25; }
+  24% { opacity: 1; }
+  32% { opacity: 0.5; }
+  42%, 100% { opacity: 1; }
 }
 
 .deck-status {
@@ -7487,6 +7585,10 @@ mark.find-highlight {
   outline: none;
 }
 
+.deck-close:active {
+  transform: scale(0.96);
+}
+
 /* Main grid ------------------------------------------------------------- */
 
 .deck-grid {
@@ -7494,7 +7596,9 @@ mark.find-highlight {
   grid-template-columns: minmax(240px, 300px) minmax(0, 1fr) minmax(280px, 350px);
   gap: 14px;
   flex: 1;
-  min-height: 0;
+  /* Keep content height on short viewports so the overlay scrolls instead of
+     panels bleeding behind the horizon. */
+  min-height: max-content;
   transform: rotateX(var(--deck-tilt-x)) rotateY(var(--deck-tilt-y));
   transform-style: preserve-3d;
   transition: transform 320ms var(--ease-out);
@@ -7561,6 +7665,55 @@ mark.find-highlight {
   outline: none;
 }
 
+.deck-signal:active {
+  transform: translateX(4px) scale(0.98);
+}
+
+/* Persistent cursor spotlight: a radial glow tracks the pointer (via --mx/--my)
+   for as long as the control is hovered — never a one-shot sweep. */
+.deck-signal,
+.deck-close,
+.deck-horizon-link {
+  position: relative;
+}
+
+.deck-signal::after,
+.deck-queue-task::after,
+.deck-close::after,
+.deck-horizon-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(
+    160px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(var(--accent-rgb), 0.16),
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity 260ms var(--ease-out);
+}
+
+.deck-signal:hover::after,
+.deck-signal:focus-visible::after,
+.deck-queue-task:hover::after,
+.deck-queue-task:focus-visible::after,
+.deck-close:hover::after,
+.deck-close:focus-visible::after,
+.deck-horizon-link:hover::after,
+.deck-horizon-link:focus-visible::after {
+  opacity: 1;
+}
+
+.deck-signal.alert::after {
+  background: radial-gradient(
+    160px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 93, 122, 0.16),
+    transparent 70%
+  );
+}
+
 .deck-signal-icon {
   display: grid;
   place-items: center;
@@ -7603,6 +7756,22 @@ mark.find-highlight {
   border-radius: 2px;
   background: linear-gradient(90deg, var(--accent-deep), var(--accent));
   box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.7);
+  overflow: hidden;
+}
+
+/* Slow sheen looping down each filled meter — the readouts feel powered. */
+.deck-signal-meter i::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  transform: translateX(-100%);
+  animation: deck-meter-sheen 3.4s var(--ease-out) 2.2s infinite;
+}
+
+@keyframes deck-meter-sheen {
+  0% { transform: translateX(-100%); }
+  45%, 100% { transform: translateX(100%); }
 }
 
 .deck-signal-value {
@@ -7667,12 +7836,51 @@ mark.find-highlight {
     rgba(var(--accent-rgb), 0.4) 359deg,
     transparent 360deg
   );
-  animation: deck-sweep-spin 7s linear infinite;
+  animation: deck-sweep-spin 7s linear infinite, deck-fade-in 0.9s var(--ease-out) 1.2s both;
   mix-blend-mode: screen;
 }
 
 @keyframes deck-sweep-spin {
   to { transform: rotate(360deg); }
+}
+
+@keyframes deck-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Ambient core glow: breathes once boot settles, leans toward the cursor. */
+.deck-reactor::before {
+  content: "";
+  position: absolute;
+  inset: 14%;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(var(--accent-rgb), 0.14), transparent 62%);
+  transform: translate(var(--deck-glow-x, 0px), var(--deck-glow-y, 0px));
+  animation: deck-core-breathe 4.6s ease-in-out 1.8s infinite;
+}
+
+@keyframes deck-core-breathe {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+/* One-shot ignition ring fired as the boot sequence completes. */
+.deck-boot-flare {
+  position: absolute;
+  inset: 30%;
+  border-radius: 50%;
+  pointer-events: none;
+  border: 1.5px solid rgba(var(--accent-rgb), 0.8);
+  box-shadow: 0 0 30px rgba(var(--accent-rgb), 0.5), inset 0 0 22px rgba(var(--accent-rgb), 0.35);
+  opacity: 0;
+  animation: deck-boot-flare 1s cubic-bezier(0.16, 1, 0.3, 1) 1.15s 1 both;
+}
+
+@keyframes deck-boot-flare {
+  0% { opacity: 0.9; transform: scale(0.35); }
+  100% { opacity: 0; transform: scale(1.5); }
 }
 
 .deck-rotor {
@@ -7794,6 +8002,85 @@ mark.find-highlight {
 .deck-core-list.color-azure .deck-core-list-name { color: var(--azure-ink); text-shadow: 0 0 16px var(--azure-edge); }
 .deck-core-list.color-magenta .deck-core-list-name { color: var(--magenta-ink); text-shadow: 0 0 16px var(--magenta-edge); }
 
+/* Core hover zone: a circle inside the completion ring that summons the orb. */
+.deck-core-hit {
+  position: absolute;
+  inset: 24%;
+  border-radius: 50%;
+}
+
+/* The orb: layered plasma sphere that breathes, spins a sheen, and leans
+   toward the cursor (via --orb-x/--orb-y written from pointer position). */
+.deck-core-orb {
+  display: grid;
+  place-items: center;
+}
+
+.deck-orb-drift {
+  position: relative;
+  display: block;
+  width: 138px;
+  height: 138px;
+  transform: translate(var(--orb-x, 0px), var(--orb-y, 0px));
+  transition: transform 200ms var(--ease-out);
+}
+
+.deck-orb-drift i {
+  position: absolute;
+  border-radius: 50%;
+}
+
+.deck-orb-halo {
+  inset: -22%;
+  background: radial-gradient(circle, rgba(var(--accent-rgb), 0.35), rgba(106, 92, 255, 0.14) 55%, transparent 72%);
+  mix-blend-mode: screen;
+  animation: deck-orb-halo-breathe 3.2s ease-in-out infinite;
+}
+
+.deck-orb-body {
+  inset: 16%;
+  background: radial-gradient(
+    circle at 36% 30%,
+    rgba(255, 255, 255, 0.95),
+    rgba(var(--accent-rgb), 0.9) 30%,
+    rgba(106, 92, 255, 0.75) 64%,
+    rgba(8, 12, 28, 0.95) 100%
+  );
+  box-shadow:
+    0 0 42px rgba(var(--accent-rgb), 0.65),
+    0 0 96px rgba(106, 92, 255, 0.4),
+    inset 0 0 26px rgba(255, 255, 255, 0.35),
+    inset -8px -10px 30px rgba(8, 12, 28, 0.7);
+  animation: deck-orb-breathe 3.2s ease-in-out infinite;
+}
+
+.deck-orb-sheen {
+  inset: 16%;
+  background: conic-gradient(from 0deg, transparent 0 68%, rgba(255, 255, 255, 0.35) 82%, transparent 100%);
+  mix-blend-mode: screen;
+  animation: deck-orb-spin 5.5s linear infinite;
+}
+
+.deck-orb-ring {
+  inset: 2%;
+  border: 1px dashed rgba(var(--accent-rgb), 0.45);
+  animation: deck-orb-spin 16s linear infinite reverse;
+}
+
+@keyframes deck-orb-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+@keyframes deck-orb-halo-breathe {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+
+@keyframes deck-orb-spin {
+  to { transform: rotate(360deg); }
+}
+
 .deck-core-hint {
   font-family: var(--font-mono);
   font-size: 0.62rem;
@@ -7857,6 +8144,13 @@ mark.find-highlight {
   width: 3px;
   background: var(--accent);
   box-shadow: 0 0 10px var(--accent);
+  transition: width var(--speed-fast) var(--ease-out), filter var(--speed-fast) var(--ease-out);
+}
+
+.deck-queue-task:hover::before,
+.deck-queue-task:focus-visible::before {
+  width: 5px;
+  filter: brightness(1.3);
 }
 
 .deck-queue-task.color-sun::before { background: var(--sun-edge); box-shadow: 0 0 10px var(--sun-edge); }
@@ -7880,11 +8174,22 @@ mark.find-highlight {
   outline: none;
 }
 
+.deck-queue-task:active {
+  transform: translateX(-4px) scale(0.98);
+}
+
+.deck-queue-task:hover .deck-queue-index,
+.deck-queue-task:focus-visible .deck-queue-index {
+  color: var(--accent-ink);
+  text-shadow: 0 0 10px rgba(var(--accent-rgb), 0.5);
+}
+
 .deck-queue-index {
   font-family: var(--font-mono);
   font-size: 0.82rem;
   color: var(--ink-faint);
   flex-shrink: 0;
+  transition: color var(--speed-fast) var(--ease-out), text-shadow var(--speed-fast) var(--ease-out);
 }
 
 .deck-queue-body {
@@ -7983,6 +8288,14 @@ mark.find-highlight {
   outline: none;
 }
 
+.deck-horizon-link:active {
+  transform: scale(0.96);
+}
+
+.deck-horizon-day:active .deck-horizon-track i {
+  filter: brightness(1.5);
+}
+
 .deck-horizon-bars {
   display: grid;
   grid-template-columns: repeat(14, 1fr);
@@ -8014,8 +8327,8 @@ mark.find-highlight {
   font-size: 0.7rem;
   color: var(--accent-ink);
   min-height: 1em;
-  opacity: 0;
-  transition: opacity var(--speed-fast) var(--ease-out);
+  opacity: var(--prox, 0);
+  transition: opacity 140ms var(--ease-out);
 }
 
 .deck-horizon-day:hover .deck-horizon-count,
@@ -8038,6 +8351,23 @@ mark.find-highlight {
   border-radius: 4px;
   background: linear-gradient(180deg, var(--accent) 0%, var(--accent-deep) 130%);
   box-shadow: 0 0 12px rgba(var(--accent-rgb), 0.5);
+}
+
+/* Proximity flashlight: bars near the cursor glow with distance falloff
+   (--prox is written per-bar from the pointer position). */
+.deck-horizon-track::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.4), rgba(var(--accent-rgb), 0.06));
+  mix-blend-mode: screen;
+  opacity: var(--prox, 0);
+}
+
+.deck-horizon-label {
+  transform: translateY(calc(var(--prox, 0) * -3px));
 }
 
 .deck-horizon-day.empty .deck-horizon-track i {
@@ -8124,10 +8454,25 @@ mark.find-highlight {
   .deck-rotor-reverse,
   .deck-clock-colon,
   .deck-status-alert i,
-  .deck-ident-mark svg {
+  .deck-ident-mark svg,
+  .deck-aurora,
+  .deck-stars,
+  .deck-title,
+  .deck-reactor::before,
+  .deck-signal-meter i::after,
+  .deck-orb-halo,
+  .deck-orb-body,
+  .deck-orb-sheen,
+  .deck-orb-ring,
+  .deck-boot-flare {
     animation: none;
   }
 
-  .deck-scanline { display: none; }
+  .deck-orb-drift { transition: none; }
+
+  .deck-scanline,
+  .deck-boot-flare { display: none; }
+  .deck-sweep { opacity: 1; }
   .deck-grid { transform: none; transition: none; }
+  .deck-horizon-label { transform: none; }
 }

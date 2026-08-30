@@ -46,6 +46,7 @@ type ReactorSegment = {
 
 type QueueTask = {
   id: string;
+  listId: string;
   title: string;
   listName: string;
   color: StickyColor;
@@ -69,6 +70,11 @@ const REACTOR_CENTER = REACTOR_SIZE / 2;
 const SEGMENT_RADIUS = 186;
 const COMPLETION_RADIUS = 142;
 const HORIZON_DAYS = 14;
+
+/** House entrance ease — slow launch, long luxurious settle. */
+const DECK_EASE = [0.16, 1, 0.3, 1] as const;
+/** How far (px) the horizon proximity flashlight reaches from the cursor. */
+const HORIZON_GLOW_REACH = 150;
 
 function polarPoint(radius: number, angleDegrees: number): [number, number] {
   const radians = ((angleDegrees - 90) * Math.PI) / 180;
@@ -119,6 +125,19 @@ function dueLabelFor(task: StickyTask, todayKey: string): string | null {
   return `${format(parsed, "EEE MMM d")}${timeSuffix}`;
 }
 
+/**
+ * Persistent cursor spotlight: writes the pointer position into CSS vars so a
+ * radial glow tracks the cursor across the control for as long as it hovers.
+ */
+function trackPointerGlow(event: React.PointerEvent<HTMLElement>) {
+  if (event.pointerType !== "mouse") return;
+  const bounds = event.currentTarget.getBoundingClientRect();
+  const x = ((event.clientX - bounds.left) / bounds.width) * 100;
+  const y = ((event.clientY - bounds.top) / bounds.height) * 100;
+  event.currentTarget.style.setProperty("--mx", `${x.toFixed(1)}%`);
+  event.currentTarget.style.setProperty("--my", `${y.toFixed(1)}%`);
+}
+
 /** Live wall clock for the deck header — hours, minutes, pulsing seconds. */
 function DeckClock() {
   const [now, setNow] = useState(() => new Date());
@@ -155,8 +174,12 @@ export function StickyOverview({
 }: StickyOverviewProps) {
   const reduceMotion = useReducedMotion();
   const overlayRef = useRef<HTMLDivElement | null>(null);
+  const reactorRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const horizonBarRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const horizonFrame = useRef<number | null>(null);
   const [hoveredListId, setHoveredListId] = useState<string | null>(null);
+  const [coreHovered, setCoreHovered] = useState(false);
 
   useEffect(() => {
     closeButtonRef.current?.focus();
@@ -169,6 +192,12 @@ export function StickyOverview({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
+
+  useEffect(() => {
+    return () => {
+      if (horizonFrame.current != null) cancelAnimationFrame(horizonFrame.current);
+    };
+  }, []);
 
   const deck = useMemo(() => {
     const todayKey = format(new Date(), "yyyy-MM-dd");
@@ -210,6 +239,7 @@ export function StickyOverview({
       .slice(0, 6)
       .map((task) => ({
         id: task.id,
+        listId: task.listId,
         title: task.title,
         listName: listById.get(task.listId)?.name ?? "No list",
         color: task.color,
@@ -295,13 +325,74 @@ export function StickyOverview({
     const y = (event.clientY - bounds.top) / bounds.height - 0.5;
     node.style.setProperty("--deck-tilt-x", `${(y * -2.2).toFixed(2)}deg`);
     node.style.setProperty("--deck-tilt-y", `${(x * 2.2).toFixed(2)}deg`);
+    // The reactor's ambient glow leans toward the cursor with the tilt.
+    node.style.setProperty("--deck-glow-x", `${(x * 30).toFixed(1)}px`);
+    node.style.setProperty("--deck-glow-y", `${(y * 24).toFixed(1)}px`);
   }
 
-  const panelEntrance = (order: number) => ({
-    initial: { opacity: 0, y: 22, scale: 0.985 },
-    animate: { opacity: 1, y: 0, scale: 1 },
+  /**
+   * Proximity flashlight over the horizon: bars near the cursor glow and their
+   * counts surface, falling off with distance — persistent while the pointer
+   * roams, cleared on leave.
+   */
+  function handleHorizonGlow(event: React.PointerEvent<HTMLDivElement>) {
+    if (reduceMotion || event.pointerType !== "mouse") return;
+    const clientX = event.clientX;
+    if (horizonFrame.current != null) return;
+    horizonFrame.current = requestAnimationFrame(() => {
+      horizonFrame.current = null;
+      horizonBarRefs.current.forEach((node) => {
+        if (!node) return;
+        const rect = node.getBoundingClientRect();
+        const distance = Math.abs(clientX - (rect.left + rect.width / 2));
+        const proximity = Math.max(0, 1 - distance / HORIZON_GLOW_REACH);
+        node.style.setProperty("--prox", (proximity * proximity).toFixed(3));
+      });
+    });
+  }
+
+  function clearHorizonGlow() {
+    if (horizonFrame.current != null) {
+      cancelAnimationFrame(horizonFrame.current);
+      horizonFrame.current = null;
+    }
+    horizonBarRefs.current.forEach((node) => node?.style.setProperty("--prox", "0"));
+  }
+
+  /** The core orb leans toward the cursor while the pointer roams the center. */
+  function handleOrbLean(event: React.PointerEvent<HTMLDivElement>) {
+    if (reduceMotion || event.pointerType !== "mouse") return;
+    const node = reactorRef.current;
+    if (!node) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const dx = event.clientX - (bounds.left + bounds.width / 2);
+    const dy = event.clientY - (bounds.top + bounds.height / 2);
+    const lean = (value: number) => Math.max(-16, Math.min(16, value * 0.16));
+    node.style.setProperty("--orb-x", `${lean(dx).toFixed(1)}px`);
+    node.style.setProperty("--orb-y", `${lean(dy).toFixed(1)}px`);
+  }
+
+  /** Queue rows point back at the reactor: hovering one lights its list's arc. */
+  function linkListHover(listId: string) {
+    return {
+      onPointerEnter: () => setHoveredListId(listId),
+      onPointerLeave: () =>
+        setHoveredListId((current) => (current === listId ? null : current)),
+      onFocus: () => setHoveredListId(listId),
+      onBlur: () =>
+        setHoveredListId((current) => (current === listId ? null : current)),
+    };
+  }
+
+  // Boot choreography clock: segments draw on around the dial, then the
+  // completion arc charges, then the core ignites and ambient loops begin.
+  const bootDelayFor = (startAngle: number) => 0.25 + (startAngle / 360) * 0.55;
+
+  const shellEntrance = (from: { x?: number; y?: number }, delay: number) => ({
+    initial: reduceMotion ? false : { opacity: 0, scale: 0.985, ...from },
+    animate: { opacity: 1, x: 0, y: 0, scale: 1 },
     exit: { opacity: 0, y: 14, scale: 0.99 },
-    transition: { ...springs.drawer, delay: reduceMotion ? 0 : 0.08 + order * 0.07 },
+    transition: reduceMotion ? { duration: 0 } : { ...springs.drawer, delay },
   });
 
   return (
@@ -317,9 +408,25 @@ export function StickyOverview({
       transition={{ duration: 0.24 }}
       onPointerMove={handleParallax}
     >
+      <div className="deck-ambient" aria-hidden="true">
+        <i className="deck-aurora deck-aurora-a" />
+        <i className="deck-aurora deck-aurora-b" />
+        <i className="deck-stars deck-stars-far" />
+        <i className="deck-stars deck-stars-near" />
+      </div>
       <div className="deck-scanline" aria-hidden="true" />
 
-      <motion.header className="deck-topbar" {...panelEntrance(0)}>
+      <motion.header
+        className="deck-topbar"
+        initial={
+          reduceMotion
+            ? false
+            : { clipPath: "inset(0 100% 0 0 round 18px)", x: -14, opacity: 0.4 }
+        }
+        animate={{ clipPath: "inset(0 0% 0 0 round 18px)", x: 0, opacity: 1 }}
+        exit={{ opacity: 0, y: -10 }}
+        transition={reduceMotion ? { duration: 0 } : { duration: 0.9, ease: DECK_EASE }}
+      >
         <div className="deck-ident">
           <span className="deck-ident-mark" aria-hidden="true">
             <Radar size={18} />
@@ -342,6 +449,7 @@ export function StickyOverview({
             className="deck-close"
             type="button"
             onClick={onClose}
+            onPointerMove={trackPointerGlow}
             aria-label="Close command deck"
           >
             <X size={18} />
@@ -351,15 +459,25 @@ export function StickyOverview({
       </motion.header>
 
       <div className="deck-grid">
-        <motion.section className="deck-panel deck-signals" aria-label="Workspace signals" {...panelEntrance(1)}>
+        <motion.section
+          className="deck-panel deck-signals"
+          aria-label="Workspace signals"
+          {...shellEntrance({ x: -26 }, 0.12)}
+        >
           <p className="deck-panel-label">Signals</p>
-          {signals.map((signal) => (
-            <button
+          {signals.map((signal, index) => (
+            <motion.button
               key={signal.id}
               type="button"
               className={`deck-signal${signal.alert ? " alert" : ""}`}
               onClick={() => onShowFilter(signal.id)}
+              onPointerMove={trackPointerGlow}
               aria-label={`${signal.label}: ${signal.value}. Show on board.`}
+              initial={reduceMotion ? false : { opacity: 0, x: -24 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={
+                reduceMotion ? { duration: 0 } : { ...springs.paper, delay: 0.24 + index * 0.09 }
+              }
             >
               <span className="deck-signal-icon">{signal.icon}</span>
               <span className="deck-signal-text">
@@ -370,12 +488,16 @@ export function StickyOverview({
                     animate={{
                       scaleX: deck.activeCount ? Math.min(signal.value / deck.activeCount, 1) : 0,
                     }}
-                    transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 90, damping: 22 }}
+                    transition={
+                      reduceMotion
+                        ? { duration: 0 }
+                        : { type: "spring", stiffness: 90, damping: 22, delay: 0.4 + index * 0.09 }
+                    }
                   />
                 </span>
               </span>
               <AnimatedNumber value={signal.value} className="deck-signal-value" />
-            </button>
+            </motion.button>
           ))}
           <div className="deck-signal-footer">
             <span>
@@ -387,16 +509,24 @@ export function StickyOverview({
           </div>
         </motion.section>
 
-        <motion.section className="deck-core" aria-label="List reactor" {...panelEntrance(2)}>
-          <div className="deck-reactor">
+        <motion.section
+          className="deck-core"
+          aria-label="List reactor"
+          initial={reduceMotion ? false : { opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.98 }}
+          transition={reduceMotion ? { duration: 0 } : { duration: 0.7, ease: DECK_EASE }}
+        >
+          <div className="deck-reactor" ref={reactorRef}>
             <div className="deck-sweep" aria-hidden="true" />
+            <div className="deck-boot-flare" aria-hidden="true" />
             <svg
               viewBox={`0 0 ${REACTOR_SIZE} ${REACTOR_SIZE}`}
               className="deck-reactor-svg"
               aria-hidden="true"
             >
               <g className="deck-rotor deck-rotor-slow">
-                <circle
+                <motion.circle
                   className="deck-tick-ring"
                   cx={REACTOR_CENTER}
                   cy={REACTOR_CENTER}
@@ -404,10 +534,13 @@ export function StickyOverview({
                   fill="none"
                   strokeWidth={2.5}
                   strokeDasharray="1.5 7"
+                  initial={reduceMotion ? false : { opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={reduceMotion ? { duration: 0 } : { duration: 0.8, delay: 0.1 }}
                 />
               </g>
               <g className="deck-rotor deck-rotor-reverse">
-                <circle
+                <motion.circle
                   className="deck-tick-ring faint"
                   cx={REACTOR_CENTER}
                   cy={REACTOR_CENTER}
@@ -415,6 +548,9 @@ export function StickyOverview({
                   fill="none"
                   strokeWidth={1.5}
                   strokeDasharray="10 6"
+                  initial={reduceMotion ? false : { opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={reduceMotion ? { duration: 0 } : { duration: 0.8, delay: 0.25 }}
                 />
               </g>
 
@@ -427,10 +563,23 @@ export function StickyOverview({
                       className={`deck-segment color-${segment.color}${dimmed ? " dimmed" : ""}`}
                       d={arcPath(SEGMENT_RADIUS, segment.startAngle, segment.endAngle)}
                       fill="none"
+                      strokeWidth={10}
                       strokeLinecap="round"
-                      initial={false}
-                      animate={{ strokeWidth: hovered ? 16 : 10 }}
-                      transition={reduceMotion ? { duration: 0 } : springs.snappy}
+                      initial={reduceMotion ? false : { pathLength: 0, opacity: 0, strokeWidth: 10 }}
+                      animate={{ pathLength: 1, opacity: 1, strokeWidth: hovered ? 16 : 10 }}
+                      transition={
+                        reduceMotion
+                          ? { duration: 0 }
+                          : {
+                              pathLength: {
+                                duration: 0.8,
+                                ease: DECK_EASE,
+                                delay: bootDelayFor(segment.startAngle),
+                              },
+                              opacity: { duration: 0.3, delay: bootDelayFor(segment.startAngle) },
+                              strokeWidth: springs.snappy,
+                            }
+                      }
                     />
                     <path
                       className="deck-segment-hit"
@@ -485,12 +634,29 @@ export function StickyOverview({
                 transition={
                   reduceMotion
                     ? { duration: 0 }
-                    : { type: "spring", stiffness: 46, damping: 17, delay: 0.35 }
+                    : { type: "spring", stiffness: 46, damping: 17, delay: 0.95 }
                 }
               />
             </svg>
 
-            <div className="deck-reactor-core">
+            <div
+              className="deck-core-hit"
+              aria-hidden="true"
+              onPointerEnter={(event) => {
+                if (event.pointerType === "mouse") setCoreHovered(true);
+              }}
+              onPointerLeave={() => setCoreHovered(false)}
+              onPointerMove={handleOrbLean}
+            />
+
+            <motion.div
+              className="deck-reactor-core"
+              initial={reduceMotion ? false : { opacity: 0, scale: 0.86 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={
+                reduceMotion ? { duration: 0 } : { ...springs.paper, delay: 0.85 }
+              }
+            >
               <AnimatePresence mode="wait" initial={false}>
                 {hoveredSegment ? (
                   <motion.div
@@ -506,6 +672,22 @@ export function StickyOverview({
                       {hoveredSegment.activeCount} active
                     </span>
                     <span className="deck-core-hint">Click to open</span>
+                  </motion.div>
+                ) : coreHovered ? (
+                  <motion.div
+                    key="orb"
+                    className="deck-core-orb"
+                    initial={{ opacity: 0, scale: 0.5 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.7 }}
+                    transition={reduceMotion ? { duration: 0 } : springs.bouncy}
+                  >
+                    <span className="deck-orb-drift">
+                      <i className="deck-orb-halo" />
+                      <i className="deck-orb-body" />
+                      <i className="deck-orb-sheen" />
+                      <i className="deck-orb-ring" />
+                    </span>
                   </motion.div>
                 ) : (
                   <motion.div
@@ -526,29 +708,40 @@ export function StickyOverview({
                   </motion.div>
                 )}
               </AnimatePresence>
-            </div>
+            </motion.div>
           </div>
           <p className="deck-core-footnote">Each arc is a list — sweep scales with active load</p>
         </motion.section>
 
-        <motion.section className="deck-panel deck-queue" aria-label="Priority queue" {...panelEntrance(3)}>
+        <motion.section
+          className="deck-panel deck-queue"
+          aria-label="Priority queue"
+          {...shellEntrance({ x: 26 }, 0.18)}
+        >
           <p className="deck-panel-label">Priority queue</p>
           {deck.queue.length ? (
             <ol className="deck-queue-list">
               {deck.queue.map((item, index) => (
                 <motion.li
                   key={item.id}
-                  initial={{ opacity: 0, x: 18 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{
-                    ...springs.paper,
-                    delay: reduceMotion ? 0 : 0.32 + index * 0.06,
-                  }}
+                  initial={
+                    reduceMotion
+                      ? false
+                      : { opacity: 0, x: 12, clipPath: "inset(0 100% 0 0 round 12px)" }
+                  }
+                  animate={{ opacity: 1, x: 0, clipPath: "inset(0 0% 0 0 round 12px)" }}
+                  transition={
+                    reduceMotion
+                      ? { duration: 0 }
+                      : { duration: 0.7, ease: DECK_EASE, delay: 0.3 + index * 0.07 }
+                  }
                 >
                   <button
                     type="button"
                     className={`deck-queue-task color-${item.color}`}
                     onClick={() => onOpenTask(item.id)}
+                    onPointerMove={trackPointerGlow}
+                    {...linkListHover(item.listId)}
                   >
                     <span className="deck-queue-index">{String(index + 1).padStart(2, "0")}</span>
                     <span className="deck-queue-body">
@@ -575,18 +768,34 @@ export function StickyOverview({
         </motion.section>
       </div>
 
-      <motion.section className="deck-panel deck-horizon" aria-label="Fourteen day horizon" {...panelEntrance(4)}>
+      <motion.section
+        className="deck-panel deck-horizon"
+        aria-label="Fourteen day horizon"
+        {...shellEntrance({ y: 26 }, 0.26)}
+      >
         <div className="deck-horizon-head">
           <p className="deck-panel-label">Horizon · next 14 days</p>
-          <button type="button" className="deck-horizon-link" onClick={onOpenCalendar}>
+          <button
+            type="button"
+            className="deck-horizon-link"
+            onClick={onOpenCalendar}
+            onPointerMove={trackPointerGlow}
+          >
             <CalendarDays size={15} />
             Open calendar
           </button>
         </div>
-        <div className="deck-horizon-bars">
+        <div
+          className="deck-horizon-bars"
+          onPointerMove={handleHorizonGlow}
+          onPointerLeave={clearHorizonGlow}
+        >
           {deck.horizon.map((day, index) => (
             <button
               key={day.key}
+              ref={(node) => {
+                horizonBarRefs.current[index] = node;
+              }}
               type="button"
               className={`deck-horizon-day${day.isToday ? " today" : ""}${day.count ? "" : " empty"}`}
               onClick={onOpenCalendar}
