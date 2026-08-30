@@ -1179,6 +1179,17 @@ function createNextRecurringOccurrence(
   return { task: nextTask, rule: nextRule };
 }
 
+function recurrenceFamilyKey(task: StickyTask) {
+  return JSON.stringify([
+    task.listId,
+    task.title,
+    task.details,
+    task.color,
+    task.dueTime,
+    task.timezone,
+  ]);
+}
+
 function saveStatus(saveState: SaveState, mode: AppMode, demoReady: boolean) {
   if (mode === "demo") {
     return {
@@ -1723,6 +1734,23 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   const recurrenceByTask = useMemo(() => {
     return new Map(workspace.recurrenceRules.map((rule) => [rule.taskId, rule]));
   }, [workspace.recurrenceRules]);
+  const recurringTaskIds = useMemo(() => {
+    const currentRecurringFamilies = new Set(
+      workspace.tasks
+        .filter((task) => recurrenceByTask.has(task.id))
+        .map(recurrenceFamilyKey),
+    );
+
+    return new Set(
+      workspace.tasks
+        .filter(
+          (task) =>
+            recurrenceByTask.has(task.id) ||
+            (task.isCompleted && currentRecurringFamilies.has(recurrenceFamilyKey(task))),
+        )
+        .map((task) => task.id),
+    );
+  }, [recurrenceByTask, workspace.tasks]);
 
   const listStats = useMemo(() => {
     const stats = new Map<string, { active: number; completed: number }>();
@@ -4954,6 +4982,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
               mode={mode}
               tasks={calendarTasks}
               lists={unarchivedLists}
+              recurringTaskIds={recurringTaskIds}
               onTaskSelect={(taskId) => {
                 setSelectedTaskId(taskId);
               }}

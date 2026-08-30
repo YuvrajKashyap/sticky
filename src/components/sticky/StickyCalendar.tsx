@@ -22,6 +22,7 @@ import styles from "./StickyCalendar.module.css";
 type StickyCalendarProps = {
   tasks: StickyTask[];
   lists: StickyList[];
+  recurringTaskIds: ReadonlySet<string>;
   onTaskSelect: (taskId: string) => void;
   mode: AppMode;
 };
@@ -91,6 +92,11 @@ function bySchedule(a: StickyTask, b: StickyTask) {
   return (a.dueTime ?? "23:59").localeCompare(b.dueTime ?? "23:59") || a.title.localeCompare(b.title);
 }
 
+function byCalendarPriority(recurringTaskIds: ReadonlySet<string>, a: StickyTask, b: StickyTask) {
+  const recurrencePriority = Number(recurringTaskIds.has(a.id)) - Number(recurringTaskIds.has(b.id));
+  return recurrencePriority || bySchedule(a, b);
+}
+
 function weekTitle(start: Date, end: Date) {
   if (isSameMonth(start, end)) {
     return `${format(start, "MMM d")} - ${format(end, "d, yyyy")}`;
@@ -117,7 +123,7 @@ function eventTime(event: StickyCalendarEvent) {
   return event.allDay || !event.startAt ? "All day" : format(new Date(event.startAt), "h:mm a");
 }
 
-export function StickyCalendar({ tasks, lists, onTaskSelect, mode }: StickyCalendarProps) {
+export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, mode }: StickyCalendarProps) {
   const today = useMemo(() => new Date(), []);
   const todayKey = format(today, "yyyy-MM-dd");
   const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
@@ -198,9 +204,11 @@ export function StickyCalendar({ tasks, lists, onTaskSelect, mode }: StickyCalen
       grouped.set(dateKey, dateTasks);
     }
 
-    grouped.forEach((dateTasks) => dateTasks.sort(bySchedule));
+    grouped.forEach((dateTasks) =>
+      dateTasks.sort((a, b) => byCalendarPriority(recurringTaskIds, a, b)),
+    );
     return grouped;
-  }, [tasks]);
+  }, [recurringTaskIds, tasks]);
 
   const eventsByDate = useMemo(() => {
     const grouped = new Map<string, StickyCalendarEvent[]>();

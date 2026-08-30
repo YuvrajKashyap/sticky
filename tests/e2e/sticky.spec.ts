@@ -549,6 +549,8 @@ test.describe("Sticky workspace", () => {
 
   test("calendar provides a complete month view and opens scheduled tasks", async ({ page }, testInfo) => {
     await expectNoConsoleErrors(page, async () => {
+      await page.getByRole("button", { name: "Complete Daily planning pass" }).click();
+      await expect(page.locator(".toast", { hasText: "Task completed" })).toBeVisible();
       await page.getByRole("button", { name: "Show calendar view" }).click();
 
       const calendar = page.getByRole("region", { name: "Workspace calendar" });
@@ -559,6 +561,11 @@ test.describe("Sticky workspace", () => {
       await expect(
         calendar.locator(".calendar-agenda").getByText("Daily planning pass", { exact: true }),
       ).toBeVisible();
+
+      const todayTasks = calendar.locator(".calendar-cell.today .calendar-task");
+      await expect(todayTasks).toHaveCount(2);
+      await expect(todayTasks.nth(0)).toContainText("Clear the capture tray");
+      await expect(todayTasks.nth(1)).toContainText("Daily planning pass");
 
       if (testInfo.project.name === "mobile") {
         await expect
