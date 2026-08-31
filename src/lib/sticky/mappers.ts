@@ -104,6 +104,9 @@ export function mapPreferences(row: DbUserPreferences | null): StickyPreferences
     boardStyle: row?.board_style ?? "pad",
     taskViewFilter: row?.task_view_filter ?? "all",
     taskSortMode: row?.task_sort_mode ?? "custom",
+    interfaceSizeMode: row?.interface_size_mode ?? "auto",
+    interfaceScale: row?.interface_scale ?? 100,
+    interfaceAutoBias: row?.interface_auto_bias ?? 0,
   };
 }
 

@@ -82,7 +82,7 @@ function requireCron(c: Context) {
 
 const webCommandColumns: Record<string, ReadonlySet<string>> = {
   user_state: new Set(["selected_list_id", "search_query", "last_opened_at"]),
-  user_preferences: new Set(["completed_open_by_list", "density", "color_mode", "board_style", "task_view_filter", "task_sort_mode"]),
+  user_preferences: new Set(["completed_open_by_list", "density", "color_mode", "board_style", "task_view_filter", "task_sort_mode", "interface_size_mode", "interface_scale", "interface_auto_bias"]),
   lists: new Set(["id", "user_id", "name", "color", "sort_order", "is_visible_on_board", "archived_at"]),
   tasks: new Set(["id", "user_id", "list_id", "title", "details", "color", "due_date", "due_time", "timezone", "is_completed", "completed_at", "sort_order", "completed_sort_order"]),
   subtasks: new Set(["id", "user_id", "task_id", "title", "due_date", "is_completed", "completed_at", "sort_order"]),

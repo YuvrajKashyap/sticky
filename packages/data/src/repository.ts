@@ -62,6 +62,9 @@ function mapWorkspacePreferencesRow(row: DataRow): WorkspacePreferencesDto {
     boardStyle: row.board_style as WorkspacePreferencesDto["boardStyle"],
     taskViewFilter: row.task_view_filter as WorkspacePreferencesDto["taskViewFilter"],
     taskSortMode: row.task_sort_mode as WorkspacePreferencesDto["taskSortMode"],
+    interfaceSizeMode: (row.interface_size_mode ?? "auto") as WorkspacePreferencesDto["interfaceSizeMode"],
+    interfaceScale: Number(row.interface_scale ?? 100),
+    interfaceAutoBias: Number(row.interface_auto_bias ?? 0),
   };
 }
 
@@ -780,7 +783,7 @@ export class StickyRepository {
 
   async getWorkspacePreferences(actor: ActorContext): Promise<WorkspacePreferencesDto> {
     const { data, error } = await this.db.from("user_preferences")
-      .select("completed_open_by_list,density,color_mode,board_style,task_view_filter,task_sort_mode")
+      .select("completed_open_by_list,density,color_mode,board_style,task_view_filter,task_sort_mode,interface_size_mode,interface_scale,interface_auto_bias")
       .eq("user_id", actor.userId)
       .maybeSingle();
     throwQuery(error);
@@ -799,9 +802,12 @@ export class StickyRepository {
     if (input.boardStyle !== undefined) values.board_style = input.boardStyle;
     if (input.taskViewFilter !== undefined) values.task_view_filter = input.taskViewFilter;
     if (input.taskSortMode !== undefined) values.task_sort_mode = input.taskSortMode;
+    if (input.interfaceSizeMode !== undefined) values.interface_size_mode = input.interfaceSizeMode;
+    if (input.interfaceScale !== undefined) values.interface_scale = input.interfaceScale;
+    if (input.interfaceAutoBias !== undefined) values.interface_auto_bias = input.interfaceAutoBias;
     const { data, error } = await this.db.from("user_preferences").update(values)
       .eq("user_id", actor.userId)
-      .select("completed_open_by_list,density,color_mode,board_style,task_view_filter,task_sort_mode")
+      .select("completed_open_by_list,density,color_mode,board_style,task_view_filter,task_sort_mode,interface_size_mode,interface_scale,interface_auto_bias")
       .maybeSingle();
     throwQuery(error, "Sticky could not save those workspace preferences.");
     if (!data) throw new StickyDomainError("not_found", "Sticky could not find your workspace preferences.", 404);

@@ -55,7 +55,7 @@ import {
   Undo2,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import { format } from "date-fns";
 import { parentDueDateIssue, reconcileParentDueDate } from "@sticky/domain";
 import { createStickyPlatformClient } from "@/lib/sticky/api-client";
@@ -64,6 +64,7 @@ import { mapList, mapSubtask, mapTask } from "@/lib/sticky/mappers";
 import type { DbList, DbSubtask, DbTask } from "@/types/sticky";
 import { userFacingStickySaveMessage } from "@/lib/sticky/messages";
 import { reconcileWorkspaceTasks } from "@/lib/sticky/workspace-sync";
+import { resolveWorkspaceScale } from "@/lib/sticky/workspace-scale";
 import {
   compareDueSchedules,
   dueScheduleGroupKey,
@@ -324,6 +325,9 @@ function normalizeWorkspacePreferences(data: StickyWorkspaceData): StickyWorkspa
       ...data.preferences,
       colorMode: data.preferences.colorMode === "dark" ? "dark" : "light",
       boardStyle: data.preferences.boardStyle ?? "pad",
+      interfaceSizeMode: data.preferences.interfaceSizeMode ?? "auto",
+      interfaceScale: data.preferences.interfaceScale ?? 100,
+      interfaceAutoBias: data.preferences.interfaceAutoBias ?? 0,
     },
   };
 }
@@ -1258,6 +1262,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   const [overviewOpen, setOverviewOpen] = useState(false);
   const [accentHue, setAccentHue] = useState(DEFAULT_ACCENT_HUE);
   const [captureExpanded, setCaptureExpanded] = useState(false);
+  const [viewport, setViewport] = useState({ width: 1920, height: 1080 });
   const [captureDraft, setCaptureDraft] = useState<QuickCaptureDraft>({
     details: "",
     dueDate: "",
@@ -1290,6 +1295,38 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     () => (mode === "supabase" ? createStickyPlatformClient() : null),
     [mode],
   );
+  const resolvedInterfaceScale = useMemo(
+    () => resolveWorkspaceScale({
+      mode: workspace.preferences.interfaceSizeMode,
+      manualPercent: workspace.preferences.interfaceScale,
+      autoBias: workspace.preferences.interfaceAutoBias,
+      width: viewport.width,
+      height: viewport.height,
+    }),
+    [viewport, workspace.preferences.interfaceAutoBias, workspace.preferences.interfaceScale, workspace.preferences.interfaceSizeMode],
+  );
+
+  useEffect(() => {
+    let frame = 0;
+    const measure = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        const visual = window.visualViewport;
+        setViewport({
+          width: Math.round(visual?.width ?? window.innerWidth),
+          height: Math.round(visual?.height ?? window.innerHeight),
+        });
+      });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    window.visualViewport?.addEventListener("resize", measure);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("resize", measure);
+    };
+  }, []);
 
   useEffect(() => {
     if (mode !== "supabase" || !supabase) return;
@@ -2523,6 +2560,9 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
             board_style: preferences.boardStyle,
             task_view_filter: preferences.taskViewFilter,
             task_sort_mode: preferences.taskSortMode,
+            interface_size_mode: preferences.interfaceSizeMode,
+            interface_scale: preferences.interfaceScale,
+            interface_auto_bias: preferences.interfaceAutoBias,
           })
           .eq("user_id", workspace.user.id),
       before,
@@ -3148,6 +3188,9 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
             board_style: preferences.boardStyle,
             task_view_filter: preferences.taskViewFilter,
             task_sort_mode: preferences.taskSortMode,
+            interface_size_mode: preferences.interfaceSizeMode,
+            interface_scale: preferences.interfaceScale,
+            interface_auto_bias: preferences.interfaceAutoBias,
           })
           .eq("user_id", before.user.id);
 
@@ -4523,6 +4566,9 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       className={`sticky-app${
         selectedTask || pulseOpen ? " details-open" : ""
       }${railCollapsed ? " rail-collapsed" : ""}`}
+      data-interface-size-mode={workspace.preferences.interfaceSizeMode}
+      data-interface-scale={resolvedInterfaceScale}
+      style={{ "--workspace-scale": resolvedInterfaceScale / 100 } as CSSProperties}
     >
       <DndContext
         id="sticky-workspace-dnd"
@@ -4891,6 +4937,74 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                       <span>{workspace.user.email}</span>
                       <small>Operator online</small>
                     </div>
+                  </div>
+                  <div className="appearance-group">
+                    <span className="appearance-group-label">Interface size</span>
+                    <div className="segmented-control interface-size-mode" aria-label="Interface sizing mode">
+                      <button
+                        type="button"
+                        className={workspace.preferences.interfaceSizeMode === "auto" ? "active" : ""}
+                        aria-pressed={workspace.preferences.interfaceSizeMode === "auto"}
+                        onClick={() => updatePreferences({ interfaceSizeMode: "auto" })}
+                      >
+                        Auto
+                      </button>
+                      <button
+                        type="button"
+                        className={workspace.preferences.interfaceSizeMode === "manual" ? "active" : ""}
+                        aria-pressed={workspace.preferences.interfaceSizeMode === "manual"}
+                        onClick={() => updatePreferences({ interfaceSizeMode: "manual" })}
+                      >
+                        Manual
+                      </button>
+                    </div>
+                    {workspace.preferences.interfaceSizeMode === "auto" ? (
+                      <div className="interface-scale-control">
+                        <div className="interface-scale-summary">
+                          <span>Auto adjustment</span>
+                          <strong>{resolvedInterfaceScale}%</strong>
+                        </div>
+                        <input
+                          type="range"
+                          min="-10"
+                          max="10"
+                          step="5"
+                          value={workspace.preferences.interfaceAutoBias}
+                          aria-label="Automatic interface size adjustment"
+                          onChange={(event) => updatePreferences({ interfaceAutoBias: Number(event.target.value) })}
+                        />
+                        <div className="interface-scale-ends" aria-hidden="true"><span>Smaller</span><span>Larger</span></div>
+                      </div>
+                    ) : (
+                      <div className="interface-scale-control">
+                        <div className="interface-size-presets" aria-label="Interface size presets">
+                          {[{ label: "Small", value: 85 }, { label: "Standard", value: 100 }, { label: "Large", value: 115 }].map((option) => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              className={workspace.preferences.interfaceScale === option.value ? "active" : ""}
+                              aria-pressed={workspace.preferences.interfaceScale === option.value}
+                              onClick={() => updatePreferences({ interfaceScale: option.value })}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="interface-scale-summary">
+                          <span>Fine tune</span>
+                          <strong>{workspace.preferences.interfaceScale}%</strong>
+                        </div>
+                        <input
+                          type="range"
+                          min="80"
+                          max="125"
+                          step="5"
+                          value={workspace.preferences.interfaceScale}
+                          aria-label="Manual interface size"
+                          onChange={(event) => updatePreferences({ interfaceScale: Number(event.target.value) })}
+                        />
+                      </div>
+                    )}
                   </div>
                   <div className="appearance-group">
                     <span className="appearance-group-label">Accent</span>

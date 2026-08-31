@@ -357,9 +357,15 @@ mark.find-highlight {
    ---------------------------------------------------------------------- */
 
 .sticky-app {
+  --workspace-scale: 1;
+  --workspace-rail-width: calc(264px * var(--workspace-scale));
+  --workspace-rail-collapsed-width: calc(68px * var(--workspace-scale));
+  --workspace-details-width: calc(356px * var(--workspace-scale));
+  --workspace-column-width: calc(316px * var(--workspace-scale));
   color: var(--ink);
+  font-size: calc(16px * var(--workspace-scale));
   display: grid;
-  grid-template-columns: 264px minmax(0, 1fr) 0;
+  grid-template-columns: var(--workspace-rail-width) minmax(0, 1fr) 0;
   height: 100dvh;
   overflow: hidden;
   background: var(--canvas);
@@ -372,17 +378,17 @@ mark.find-highlight {
    while something is open, and the rail can collapse to a slim dot strip. */
 @media (min-width: 1281px) {
   .sticky-app.details-open {
-    grid-template-columns: 264px minmax(0, 1fr) 356px;
+    grid-template-columns: var(--workspace-rail-width) minmax(0, 1fr) var(--workspace-details-width);
   }
 
   .sticky-app.rail-collapsed.details-open {
-    grid-template-columns: 68px minmax(0, 1fr) 356px;
+    grid-template-columns: var(--workspace-rail-collapsed-width) minmax(0, 1fr) var(--workspace-details-width);
   }
 }
 
 @media (min-width: 861px) {
   .sticky-app.rail-collapsed {
-    grid-template-columns: 68px minmax(0, 1fr) 0;
+    grid-template-columns: var(--workspace-rail-collapsed-width) minmax(0, 1fr) 0;
   }
 
   .rail-collapsed .list-rail {
@@ -1626,6 +1632,8 @@ mark.find-highlight {
   flex-direction: column;
   gap: 16px;
   width: 324px;
+  max-height: min(760px, calc(100dvh - 84px));
+  overflow-y: auto;
   padding: 16px;
   border-radius: var(--radius-l);
   background: rgba(15, 22, 45, 0.95);
@@ -1650,6 +1658,67 @@ mark.find-highlight {
   display: flex;
   flex-direction: column;
   gap: 7px;
+}
+
+.interface-size-mode button {
+  min-height: 34px;
+}
+
+.interface-scale-control {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--surface-sunken);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.interface-scale-summary,
+.interface-scale-ends {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.interface-scale-summary span,
+.interface-scale-ends {
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.interface-scale-summary strong {
+  color: var(--accent-ink);
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+}
+
+.interface-scale-control input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.interface-size-presets {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+}
+
+.interface-size-presets button {
+  padding: 7px 5px;
+  border-radius: 8px;
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  font-weight: 800;
+  background: var(--surface-raised);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.interface-size-presets button.active {
+  color: var(--accent-ink);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
 }
 
 /* ---- Accent wheel: drag the ring, the whole console re-lights ---- */
@@ -2056,9 +2125,9 @@ mark.find-highlight {
   flex: 1;
   display: flex;
   align-items: flex-start;
-  gap: 18px;
+  gap: calc(18px * var(--workspace-scale));
   min-height: 0;
-  padding: 16px 18px 22px;
+  padding: calc(16px * var(--workspace-scale)) calc(18px * var(--workspace-scale)) calc(22px * var(--workspace-scale));
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
@@ -2110,7 +2179,7 @@ mark.find-highlight {
   display: flex;
   flex-direction: column;
   flex: none;
-  width: 316px;
+  width: var(--workspace-column-width);
   max-height: 100%;
   border-radius: var(--radius-l);
   background: var(--surface);
@@ -3617,7 +3686,7 @@ mark.find-highlight {
   }
 
   .details-panel .details-scroll {
-    width: 356px;
+    width: var(--workspace-details-width);
     flex: none;
     height: 100%;
   }
@@ -3822,10 +3891,15 @@ mark.find-highlight {
 
 .due-chip-row button.active,
 .repeat-days button.active,
+.reminder-presets button.active,
 .reminder-channel-picker button.active {
   background: var(--accent);
   color: var(--on-accent);
   box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.reminder-presets button.active:disabled {
+  opacity: 1;
 }
 
 .due-controls {
@@ -6024,6 +6098,49 @@ mark.find-highlight {
   gap: 6px;
 }
 
+.reminder-offset {
+  display: grid;
+  grid-template-columns: auto minmax(54px, 72px) auto auto;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink-muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.reminder-offset input {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--ink);
+  background: var(--surface-sunken);
+  font: inherit;
+  outline: none;
+}
+
+.reminder-offset input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
+}
+
+.reminder-offset button {
+  padding: 7px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  color: var(--accent-ink);
+  background: var(--surface-raised);
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.reminder-offset button:disabled,
+.reminder-offset input:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 /* Reminder custom time — same glass calendar/time grid as the due picker */
 .reminder-scheduler {
   flex: none;
@@ -6453,7 +6570,7 @@ mark.find-highlight {
 }
 
 .density-compact .board-column {
-  width: 292px;
+  width: calc(292px * var(--workspace-scale));
 }
 
 .density-compact .column-header {
@@ -6471,7 +6588,7 @@ mark.find-highlight {
 
 @media (max-width: 1280px) {
   .sticky-app {
-    grid-template-columns: 240px minmax(0, 1fr);
+    grid-template-columns: calc(240px * var(--workspace-scale)) minmax(0, 1fr);
   }
 
   .details-panel {
@@ -6480,7 +6597,7 @@ mark.find-highlight {
     right: 0;
     bottom: 0;
     z-index: 55;
-    width: min(400px, 92vw);
+    width: min(calc(400px * var(--workspace-scale)), 92vw);
     box-shadow: var(--shadow-float);
     transform: translateX(calc(100% + 30px));
     transition: transform 0.34s var(--ease-out);

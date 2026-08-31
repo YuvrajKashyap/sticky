@@ -254,7 +254,7 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
   server.registerTool("list_reminders", { description: "List Sticky task reminders, optionally for one task. Recurrence and reminders are separate features.", inputSchema: z.object({ taskId: id.optional() }), annotations: { readOnlyHint: true } },
     async ({ taskId }) => { const current = actor(); requireScope(current, "tasks:read"); return result({ reminders: await getRuntime().repository.listReminders(current, taskId) }); });
 
-  server.registerTool("get_workspace_preferences", { description: "Read the user's persisted Sticky workspace preferences, including completed-pile state, density, theme, board style, task filter, and task sorting.", inputSchema: z.object({}), annotations: { readOnlyHint: true } },
+  server.registerTool("get_workspace_preferences", { description: "Read the user's persisted Sticky workspace preferences, including completed-pile state, density, theme, board style, interface sizing, task filter, and task sorting.", inputSchema: z.object({}), annotations: { readOnlyHint: true } },
     async () => { const current = actor(); requireScope(current, "tasks:read"); return result({ preferences: await getRuntime().repository.getWorkspacePreferences(current) }); });
 
   server.registerTool("get_daily_agenda_settings", { description: "Read whether Sticky's daily Poke agenda is enabled, its delivery time and timezone, delivery readiness, and last send state.", inputSchema: z.object({}), annotations: { readOnlyHint: true } },
@@ -683,12 +683,12 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
   })));
 
   server.registerTool("schedule_reminder", {
-    description: "Replace the task's automatic 10-minute reminder with one explicit Poke reminder. Use relativeMinutes when the user says how long before the due time; use remindAt for an absolute instant. Do not create a second reminder.",
+    description: "Opt one task into a single Poke reminder. Use relativeMinutes=0 for the due time itself, a positive number for that many minutes before, or remindAt for an absolute instant. Replaces the task's prior reminder; reminders are never automatic.",
     inputSchema: z.object({
       taskId: id,
       kind: z.enum(["absolute", "relative"]),
       remindAt: z.iso.datetime().optional(),
-      relativeMinutes: z.int().positive().optional(),
+      relativeMinutes: z.int().min(0).optional(),
     }),
   }, async ({ taskId, ...input }) => mutationResult("schedule_reminder", { taskId, ...input }, async (current) =>
     replaceTaskReminder(current, taskId, { ...input, channels: ["poke"] })));
@@ -712,7 +712,7 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
       });
     });
 
-  server.registerTool("update_workspace_preferences", { description: "Change persisted Sticky workspace preferences: completed-pile state, density, light/dark theme, pad/wood board style, task filter, or custom/due-date sorting. This changes the app's saved workspace presentation, not task data.", inputSchema: updateWorkspacePreferencesSchema },
+  server.registerTool("update_workspace_preferences", { description: "Change persisted Sticky workspace preferences: completed-pile state, density, light/dark theme, pad/wood board style, automatic or manual interface sizing, task filter, or custom/due-date sorting. This changes the app's saved workspace presentation, not task data.", inputSchema: updateWorkspacePreferencesSchema },
     async (input) => mutationResult("update_workspace_preferences", input, async (current) => ({ preferences: await getRuntime().repository.updateWorkspacePreferences(current, input) })));
 
   server.registerTool("update_daily_agenda_settings", { description: "Save the recurring daily Sticky agenda schedule. Always use this once when the user tells Poke what time the three-bucket daily or morning brief should arrive. Pass enabled=true, the requested 24-hour local time, and the IANA timezone. Sticky then sends it automatically every day; do not create a separate reminder or try to invoke this settings tool each day.", inputSchema: dailyAgendaSettingsSchema },

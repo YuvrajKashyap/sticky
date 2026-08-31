@@ -107,7 +107,13 @@ test("connected settings and task reminders stay integrated with the workspace",
   const firstTask = page.locator("[data-task-id]").first();
   await firstTask.click();
   await expect(page.getByRole("region", { name: "Task reminders" })).toBeVisible();
-  await expect(page.getByText(/automatically message you through Poke 10 minutes before/)).toBeVisible();
+  await expect(page.getByText(/Poke stays off until you choose a reminder/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Off" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "At time" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "10 min" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "30 min" })).toBeVisible();
+  await expect(page.getByLabel("Minutes before due")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Set custom reminder" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Push" })).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
 });
@@ -815,6 +821,30 @@ test.describe("Sticky workspace", () => {
       await expect(page.getByRole("button", { name: "Show task view: Repeating, 1 task" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Show task view: Subtasks, 2 tasks" })).toBeVisible();
     });
+  });
+
+  test("interface sizing supports responsive Auto and a persisted manual size", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "desktop viewport drives workspace sizing");
+
+    const app = page.locator(".sticky-app");
+    await expect(app).toHaveAttribute("data-interface-size-mode", "auto");
+    await expect(app).toHaveAttribute("data-interface-scale", "90");
+
+    await page.setViewportSize({ width: 2560, height: 1440 });
+    await expect(app).toHaveAttribute("data-interface-scale", "110");
+
+    await page.getByLabel("Open appearance settings").click();
+    const settings = page.getByLabel("Workspace appearance");
+    await expect(settings.getByRole("button", { name: "Auto" })).toHaveAttribute("aria-pressed", "true");
+    await settings.getByRole("button", { name: "Manual" }).click();
+    await settings.getByRole("button", { name: "Large" }).click();
+    await expect(app).toHaveAttribute("data-interface-size-mode", "manual");
+    await expect(app).toHaveAttribute("data-interface-scale", "115");
+
+    await page.reload();
+    await expect(page.locator(".sticky-app")).toHaveAttribute("data-interface-size-mode", "manual");
+    await expect(page.locator(".sticky-app")).toHaveAttribute("data-interface-scale", "115");
+    await expectNoHorizontalOverflow(page);
   });
 
   test("grab panning never selects page text", async ({ page }, testInfo) => {

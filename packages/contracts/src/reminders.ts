@@ -19,13 +19,13 @@ export const reminderDtoSchema = z.object({
 export const createReminderSchema = z.object({
   kind: reminderKindSchema,
   remindAt: z.iso.datetime().optional(),
-  relativeMinutes: z.number().int().positive().max(525_600).optional(),
+  relativeMinutes: z.number().int().min(0).max(525_600).optional(),
   channels: z.array(reminderChannelSchema).length(1).default(["poke"]),
 }).superRefine((value, ctx) => {
   if (value.kind === "absolute" && !value.remindAt) {
     ctx.addIssue({ code: "custom", path: ["remindAt"], message: "Absolute reminders need a date and time." });
   }
-  if (value.kind === "relative" && !value.relativeMinutes) {
+  if (value.kind === "relative" && value.relativeMinutes === undefined) {
     ctx.addIssue({ code: "custom", path: ["relativeMinutes"], message: "Relative reminders need an offset." });
   }
 });

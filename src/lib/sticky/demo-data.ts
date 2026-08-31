@@ -268,6 +268,9 @@ export function createDemoWorkspaceData(): StickyWorkspaceData {
       boardStyle: "pad",
       taskViewFilter: "all",
       taskSortMode: "custom",
+      interfaceSizeMode: "auto",
+      interfaceScale: 100,
+      interfaceAutoBias: 0,
     },
     userState: { selectedListId: remindersId, searchQuery: "" },
   };

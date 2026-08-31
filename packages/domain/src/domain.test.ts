@@ -10,7 +10,6 @@ import {
   recurrenceCatchUpTarget,
   resolveFieldConflict,
   resolveReminderTime,
-  taskUsesAutomaticReminder,
   toGoogleTask,
 } from "./index";
 
@@ -60,30 +59,9 @@ describe("reminder scheduling", () => {
     expect(result.toISOString()).toBe("2026-11-01T14:00:00.000Z");
   });
 
-  it("treats 11:59 PM as end of day and excludes it from automatic reminders", () => {
+  it("recognizes the end-of-day sentinel used by task scheduling", () => {
     expect(isEndOfDayDueTime("23:59")).toBe(true);
     expect(isEndOfDayDueTime("23:59:00")).toBe(true);
-    expect(taskUsesAutomaticReminder({
-      dueDate: "2026-07-30",
-      dueTime: "23:59",
-      timezone: "America/Chicago",
-      isCompleted: false,
-    })).toBe(false);
-  });
-
-  it("automatically reminds active tasks with a real due time", () => {
-    expect(taskUsesAutomaticReminder({
-      dueDate: "2026-07-30",
-      dueTime: "16:30",
-      timezone: "America/Chicago",
-      isCompleted: false,
-    })).toBe(true);
-    expect(taskUsesAutomaticReminder({
-      dueDate: "2026-07-30",
-      dueTime: "16:30",
-      timezone: "America/Chicago",
-      isCompleted: true,
-    })).toBe(false);
   });
 });
 

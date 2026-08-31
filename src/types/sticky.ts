@@ -115,6 +115,9 @@ export type StickyPreferences = {
   boardStyle: StickyBoardStyle;
   taskViewFilter: StickyTaskViewFilter;
   taskSortMode: StickyTaskSortMode;
+  interfaceSizeMode: "auto" | "manual";
+  interfaceScale: number;
+  interfaceAutoBias: number;
 };
 
 export type StickyUserState = {
@@ -215,4 +218,7 @@ export type DbUserPreferences = {
   board_style: StickyBoardStyle | null;
   task_view_filter: StickyTaskViewFilter | null;
   task_sort_mode: StickyTaskSortMode | null;
+  interface_size_mode: "auto" | "manual" | null;
+  interface_scale: number | null;
+  interface_auto_bias: number | null;
 };

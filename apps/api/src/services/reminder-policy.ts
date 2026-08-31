@@ -1,19 +1,10 @@
 import type { ActorContext, CreateReminderInput, ReminderDto, TaskDto } from "@sticky/contracts";
 import {
-  DEFAULT_AGENT_REMINDER_MINUTES,
-  localDateTimeToUtc,
   resolveReminderTime,
-  taskUsesAutomaticReminder,
 } from "@sticky/domain";
 import { start } from "workflow/api";
 import { getRuntime } from "../runtime";
 import { reminderWorkflow } from "../workflows/reminder";
-
-const DEFAULT_REMINDER_INPUT: CreateReminderInput = {
-  kind: "relative",
-  relativeMinutes: DEFAULT_AGENT_REMINDER_MINUTES,
-  channels: ["poke"],
-};
 
 function sameInstant(left: string, right: Date) {
   return new Date(left).getTime() === right.getTime();
@@ -99,30 +90,8 @@ export async function reconcileTaskReminder(actor: ActorContext, taskId: string)
     return { action: "unchanged" as const, reminder: explicit, workflowRunId: null };
   }
 
-  const dueAt = task.dueDate && task.dueTime
-    ? localDateTimeToUtc(task.dueDate, task.dueTime, task.timezone)
-    : null;
-  if (!taskUsesAutomaticReminder(task) || !dueAt || dueAt <= new Date()) {
-    const cancelledReminderIds = await repository.cancelScheduledReminders(actor, taskId, { onlyDefault: true });
-    return { action: "ineligible" as const, cancelledReminderIds };
-  }
-
-  const remindAt = resolveReminderTime(DEFAULT_REMINDER_INPUT, task);
-  const automatic = scheduled.find((reminder) => reminder.isDefault);
-  if (automatic) return rescheduleRelativeReminder(actor, task, automatic);
-
-  const reminder = await repository.createReminder(
-    actor,
-    task.id,
-    DEFAULT_REMINDER_INPUT,
-    remindAt,
-    { isDefault: true },
-  );
-  return {
-    action: "created" as const,
-    reminder,
-    workflowRunId: await scheduleReminderWorkflow(reminder),
-  };
+  const cancelledReminderIds = await repository.cancelScheduledReminders(actor, taskId, { onlyDefault: true });
+  return { action: "disabled" as const, cancelledReminderIds };
 }
 
 export async function replaceTaskReminder(

@@ -98,31 +98,15 @@ beforeEach(() => {
   delete process.env.WORKFLOW_ENABLED;
 });
 
-describe("automatic agent reminder policy", () => {
-  it("creates one Poke reminder ten minutes before a timed task", async () => {
+describe("opt-in agent reminder policy", () => {
+  it("leaves a timed task reminder-free until the user explicitly enables one", async () => {
     const { repository } = runtime();
 
     const result = await reconcileTaskReminder(actor, task.id);
 
-    expect(repository.createReminder).toHaveBeenCalledWith(
-      actor,
-      task.id,
-      { kind: "relative", relativeMinutes: 10, channels: ["poke"] },
-      new Date("2099-07-30T16:50:00.000Z"),
-      { isDefault: true },
-    );
-    expect(start).toHaveBeenCalledOnce();
-    expect(result).toMatchObject({ action: "created", workflowRunId: "wrun_default" });
-  });
-
-  it("does not create an automatic reminder for an end-of-day task", async () => {
-    const { repository } = runtime({ task: { ...task, dueTime: "23:59" } });
-
-    const result = await reconcileTaskReminder(actor, task.id);
-
     expect(repository.createReminder).not.toHaveBeenCalled();
-    expect(repository.cancelScheduledReminders).toHaveBeenCalledWith(actor, task.id, { onlyDefault: true });
-    expect(result.action).toBe("ineligible");
+    expect(start).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ action: "disabled" });
   });
 
   it("keeps an explicit relative offset and rebases it when the task time changes", async () => {
@@ -164,6 +148,23 @@ describe("automatic agent reminder policy", () => {
       task.id,
       { kind: "relative", relativeMinutes: 30, channels: ["poke"] },
       new Date("2099-07-30T16:30:00.000Z"),
+    );
+  });
+
+  it("supports an explicit Poke reminder at the task due time", async () => {
+    const { repository } = runtime();
+
+    await replaceTaskReminder(actor, task.id, {
+      kind: "relative",
+      relativeMinutes: 0,
+      channels: ["poke"],
+    });
+
+    expect(repository.createReminder).toHaveBeenCalledWith(
+      actor,
+      task.id,
+      { kind: "relative", relativeMinutes: 0, channels: ["poke"] },
+      new Date("2099-07-30T17:00:00.000Z"),
     );
   });
 });
