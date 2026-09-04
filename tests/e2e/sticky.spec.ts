@@ -1868,7 +1868,8 @@ test.describe("Sticky workspace", () => {
       await expect(taskViews.getByRole("button", { name: "Show task view: Today, 1 task" })).toBeVisible();
       await expect(taskViews.getByRole("button", { name: "Show task view: All today, 2 tasks" })).toBeVisible();
       await expect(taskViews.getByRole("button", { name: "Show task view: Daily, 1 task" })).toBeVisible();
-      await expect(taskViews.getByRole("button").nth(2)).toHaveAccessibleName("Show task view: All today, 2 tasks");
+      await expect(taskViews.getByRole("button").nth(1)).toHaveAccessibleName("Show task view: All today, 2 tasks");
+      await expect(taskViews.getByRole("button").nth(2)).toHaveAccessibleName("Show task view: Today, 1 task");
       await expect(taskViews.getByRole("button").nth(3)).toHaveAccessibleName("Show task view: Daily, 1 task");
       await taskViews.getByRole("button", { name: "Show task view: Today, 1 task" }).click();
       await expect(activeRegion.getByText("Clear the capture tray")).toBeVisible();

@@ -286,8 +286,8 @@ const TASK_VIEW_LABELS: Record<StickyTaskViewFilter, string> = {
 };
 const TASK_VIEW_ORDER: StickyTaskViewFilter[] = [
   "all",
-  "today",
   "all_today",
+  "today",
   "daily",
   "due",
   "undated",
