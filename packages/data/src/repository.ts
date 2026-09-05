@@ -26,6 +26,8 @@ import { assertVersion, conflict, nextOccurrenceCount, nextRecurrenceDate, paren
 import type { StickySupabaseClient } from "./client";
 import { mapCalendarEventRow, mapCalendarRow, mapListRow, mapRecurrenceRuleRow, mapReminderRow, mapSubtaskRow, mapTaskRow, type DataRow } from "./mappers";
 
+import { readAllPages } from "./pagination";
+
 type QueryError = { code?: string; message: string; details?: string | null };
 
 function throwQuery(error: QueryError | null, fallback = "Sticky could not save that change."): void {
@@ -74,7 +76,8 @@ export class StickyRepository {
   async listLists(actor: ActorContext, includeArchived = false): Promise<ListDto[]> {
     let query = this.db.from("lists").select("*").eq("user_id", actor.userId).order("sort_order");
     if (!includeArchived) query = query.is("archived_at", null);
-    const { data, error } = await query;
+    query = query.order("id");
+    const { data, error } = await readAllPages<DataRow>((from, to) => query.range(from, to));
     throwQuery(error);
     return ((data ?? []) as DataRow[]).map(mapListRow);
   }
@@ -152,7 +155,8 @@ export class StickyRepository {
     if (options.listId) query = query.eq("list_id", options.listId);
     if (!options.includeCompleted) query = query.eq("is_completed", false);
     if (options.query) query = query.or(`title.ilike.%${options.query.replace(/[,%()]/g, "")}%,details.ilike.%${options.query.replace(/[,%()]/g, "")}%`);
-    const { data, error } = await query;
+    query = query.order("id");
+    const { data, error } = await readAllPages<DataRow>((from, to) => query.range(from, to));
     throwQuery(error);
     return ((data ?? []) as DataRow[]).map(mapTaskRow);
   }
@@ -590,7 +594,8 @@ export class StickyRepository {
       .order("sort_order").order("created_at");
     if (taskId) query = query.eq("task_id", taskId);
     if (!includeCompleted) query = query.eq("is_completed", false);
-    const { data, error } = await query;
+    query = query.order("id");
+    const { data, error } = await readAllPages<DataRow>((from, to) => query.range(from, to));
     throwQuery(error);
     return ((data ?? []) as DataRow[]).map(mapSubtaskRow);
   }
@@ -702,7 +707,8 @@ export class StickyRepository {
   async listReminders(actor: ActorContext, taskId?: string): Promise<ReminderDto[]> {
     let query = this.db.from("task_reminders").select("*").eq("user_id", actor.userId).order("remind_at");
     if (taskId) query = query.eq("task_id", taskId);
-    const { data, error } = await query;
+    query = query.order("id");
+    const { data, error } = await readAllPages<DataRow>((from, to) => query.range(from, to));
     throwQuery(error);
     return ((data ?? []) as DataRow[]).map(mapReminderRow);
   }

@@ -13,6 +13,9 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit && npm run typecheck --workspaces --if-present",
     "test:unit": "vitest run",
+    "database:start": "supabase start -x studio,postgres-meta,storage-api,imgproxy,mailpit,edge-runtime,logflare,vector,supavisor",
+    "test:database": "node scripts/test-database.mjs",
+    "test:database-browser": "node scripts/test-database.mjs --browser",
     "test:api": "vitest run packages/domain apps/api",
     "test:e2e": "playwright test",
     "test:production-smoke": "node scripts/production-smoke.mjs",
@@ -62,6 +65,7 @@
     "@types/react-dom": "19.2.3",
     "eslint": "9.39.5",
     "eslint-config-next": "16.2.12",
+    "supabase": "2.116.0",
     "tailwindcss": "4.3.3",
     "typescript": "6.0.3",
     "vitest": "4.1.10"

@@ -113,6 +113,10 @@ until its server-side configuration is present.
 
 ## Verification
 
+The additional [authenticated database gate](docs/database-verification.md)
+uses a disposable local Supabase stack and verifies real persistence and owner
+isolation in CI, including desktop/mobile workspace checks.
+
 ```powershell
 npm run verify
 ```

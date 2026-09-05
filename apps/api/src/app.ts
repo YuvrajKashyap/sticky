@@ -1,3 +1,4 @@
+import { readWorkspaceRecords } from "@sticky/data";
 import type { ActorContext, ApiSuccess } from "@sticky/contracts";
 import {
   apiCredentialCreateSchema,
@@ -216,6 +217,14 @@ const app = new Hono<Env>();
       getRuntime().repository.listReminders(actor),
     ]);
     return success(c, { lists, tasks, subtasks, reminders });
+  });
+
+  app.get("/api/v1/workspace/board", async (c) => {
+    const actor = c.get("actor");
+    requireScope(actor, "tasks:read");
+    const requested = c.req.query("completedListIds")?.split(",").filter(Boolean) ?? [];
+    const ids = z.array(z.string().uuid()).max(500).parse(requested);
+    return success(c, await readWorkspaceRecords(getRuntime().db, actor.userId, ids));
   });
 
   const webCommandSchema = z.discriminatedUnion("kind", [

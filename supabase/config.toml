@@ -1,0 +1,44 @@
+# Disposable local verification stack. This is not the hosted project configuration.
+project_id = "sticky-verification"
+
+[api]
+enabled = true
+port = 55321
+schemas = ["public", "graphql_public", "sticky"]
+extra_search_path = ["public", "extensions"]
+# Deliberately small to exercise pagination.
+max_rows = 100
+
+[db]
+port = 55322
+shadow_port = 55320
+major_version = 17
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed-verification.sql"]
+
+[studio]
+enabled = false
+
+[local_smtp]
+enabled = false
+
+[storage]
+enabled = false
+
+[analytics]
+enabled = false
+
+[edge_runtime]
+enabled = false
+
+[auth]
+enabled = true
+site_url = "http://localhost:3198"
+additional_redirect_urls = ["http://localhost:3198/auth/callback"]
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false

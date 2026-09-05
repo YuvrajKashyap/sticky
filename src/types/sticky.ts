@@ -133,6 +133,11 @@ export type StickyWorkspaceData = {
   recurrenceRules: StickyRecurrenceRule[];
   preferences: StickyPreferences;
   userState: StickyUserState;
+  history?: {
+    completedCounts: Record<string, number>;
+    loadedCounts: Record<string, number>;
+    loadedListIds: string[];
+  };
 };
 
 export type DbList = {

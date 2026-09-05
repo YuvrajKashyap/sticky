@@ -1,3 +1,4 @@
+import type { WorkspaceRecords } from "@sticky/data";
 import type {
   DbList,
   DbRecurrenceRule,
@@ -13,7 +14,20 @@ import type {
   StickyTask,
   StickyUser,
   StickyUserState,
+  StickyWorkspaceData,
 } from "@/types/sticky";
+
+export function mapWorkspaceRecords(records: WorkspaceRecords): Omit<StickyWorkspaceData, "user"> {
+  return {
+    lists: records.lists.map((row) => mapList(row as DbList)),
+    tasks: records.tasks.map((row) => mapTask(row as DbTask)),
+    subtasks: records.subtasks.map((row) => mapSubtask(row as DbSubtask)),
+    recurrenceRules: records.recurrenceRules.map((row) => mapRecurrenceRule(row as DbRecurrenceRule)),
+    preferences: mapPreferences(records.preferences as DbUserPreferences | null),
+    userState: mapUserState(records.userState as DbUserState | null),
+    history: records.history,
+  };
+}
 
 export function mapUser(row: DbUser): StickyUser {
   return {

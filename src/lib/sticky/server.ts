@@ -4,46 +4,17 @@ import {
   GENERIC_STICKY_ACCESS_MESSAGE,
   userFacingStickyMessage,
 } from "@/lib/sticky/messages";
-import {
-  mapList,
-  mapPreferences,
-  mapRecurrenceRule,
-  mapSubtask,
-  mapTask,
-  mapUser,
-  mapUserState,
-} from "@/lib/sticky/mappers";
+import { mapUser, mapWorkspaceRecords } from "@/lib/sticky/mappers";
+import { readWorkspaceRecords } from "@sticky/data";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isDemoModeEnabled } from "@/lib/supabase/env";
-import type {
-  DbList,
-  DbRecurrenceRule,
-  DbSubtask,
-  DbTask,
-  DbUser,
-  DbUserPreferences,
-  DbUserState,
-  StickyWorkspaceData,
-} from "@/types/sticky";
+import type { DbUser, StickyWorkspaceData } from "@/types/sticky";
 
 export type WorkspaceLoadResult =
-  | {
-      status: "demo";
-      data: StickyWorkspaceData;
-      reason: string;
-    }
-  | {
-      status: "signed_out";
-      configurationMissing: boolean;
-    }
-  | {
-      status: "access_denied";
-      message: string;
-    }
-  | {
-      status: "ready";
-      data: StickyWorkspaceData;
-    };
+  | { status: "demo"; data: StickyWorkspaceData; reason: string }
+  | { status: "signed_out"; configurationMissing: boolean }
+  | { status: "access_denied"; message: string }
+  | { status: "ready"; data: StickyWorkspaceData };
 
 type ClaimsData = {
   claims?: {
@@ -119,57 +90,11 @@ export async function loadWorkspace(): Promise<WorkspaceLoadResult> {
     };
   }
 
-  const [listsResult, tasksResult, subtasksResult, recurrenceResult, stateResult, prefsResult] =
-    await Promise.all([
-      supabase.from("lists").select("*").order("sort_order", { ascending: true }),
-      supabase
-        .from("tasks")
-        .select("*")
-        .order("is_completed", { ascending: true })
-        .order("sort_order", { ascending: true })
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("subtasks")
-        .select("*")
-        .order("sort_order", { ascending: true })
-        .order("created_at", { ascending: true }),
-      supabase.from("task_recurrence_rules").select("*"),
-      supabase.from("user_state").select("selected_list_id, search_query").maybeSingle<DbUserState>(),
-      supabase
-        .from("user_preferences")
-        .select("completed_open_by_list, density, color_mode, board_style, task_view_filter, task_sort_mode, interface_size_mode, interface_scale, interface_auto_bias")
-        .maybeSingle<DbUserPreferences>(),
-    ]);
-
-  const firstError =
-    listsResult.error ??
-    tasksResult.error ??
-    subtasksResult.error ??
-    recurrenceResult.error ??
-    stateResult.error ??
-    prefsResult.error;
-
-  if (firstError) {
-    console.error("Sticky workspace load failed", {
-      code: firstError.code,
-      message: firstError.message,
-    });
-
-    return {
-      status: "access_denied",
-      message: GENERIC_STICKY_ACCESS_MESSAGE,
-    };
+  try {
+    const records = await readWorkspaceRecords(supabase, userRow.id);
+    return { status: "ready", data: { user: mapUser(userRow), ...mapWorkspaceRecords(records) } };
+  } catch (error) {
+    console.error("Sticky workspace load failed", error);
+    return { status: "access_denied", message: GENERIC_STICKY_ACCESS_MESSAGE };
   }
-
-  const workspace: StickyWorkspaceData = {
-    user: mapUser(userRow),
-    lists: ((listsResult.data ?? []) as DbList[]).map(mapList),
-    tasks: ((tasksResult.data ?? []) as DbTask[]).map(mapTask),
-    subtasks: ((subtasksResult.data ?? []) as DbSubtask[]).map(mapSubtask),
-    recurrenceRules: ((recurrenceResult.data ?? []) as DbRecurrenceRule[]).map(mapRecurrenceRule),
-    preferences: mapPreferences(prefsResult.data as DbUserPreferences | null),
-    userState: mapUserState(stateResult.data as DbUserState | null),
-  };
-
-  return { status: "ready", data: workspace };
 }

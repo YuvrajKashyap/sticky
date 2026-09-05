@@ -60,10 +60,10 @@ import { format } from "date-fns";
 import { parentDueDateIssue, reconcileParentDueDate } from "@sticky/domain";
 import { createStickyPlatformClient } from "@/lib/sticky/api-client";
 import { listToDb, recurrenceToDb, subtaskToDb, taskToDb } from "@/lib/sticky/mappers";
-import { mapList, mapSubtask, mapTask } from "@/lib/sticky/mappers";
-import type { DbList, DbSubtask, DbTask } from "@/types/sticky";
+import { mapWorkspaceRecords } from "@/lib/sticky/mappers";
+import type { WorkspaceRecords } from "@sticky/data";
 import { userFacingStickySaveMessage } from "@/lib/sticky/messages";
-import { reconcileWorkspaceTasks } from "@/lib/sticky/workspace-sync";
+import { WorkspacePersistence, settleWorkspaceOperations } from "@/lib/sticky/workspace-persistence";
 import { resolveWorkspaceScale } from "@/lib/sticky/workspace-scale";
 import {
   compareDueSchedules,
@@ -110,11 +110,6 @@ type StickyWorkspaceProps = {
   mode: AppMode;
   systemMessage?: string;
   initialLaunchIntent?: StickyLaunchIntent;
-};
-
-type WorkspaceSyncSnapshot = {
-  lists: StickyList[];
-  tasks: StickyTask[];
 };
 
 type Toast = {
@@ -172,14 +167,6 @@ const stickyCollisionDetection: CollisionDetection = (args) => {
   });
 };
 
-function mergeById<T extends { id: string }>(items: T[], next: T): T[] {
-  const index = items.findIndex((item) => item.id === next.id);
-  if (index < 0) return [...items, next];
-  const copy = items.slice();
-  copy[index] = next;
-  return copy;
-}
-
 type WorkspacePulseTask = {
   id: string;
   title: string;
@@ -232,6 +219,7 @@ type BoardColumn = {
   activeTasks: StickyTask[];
   visibleTasks: StickyTask[];
   completedTasks: StickyTask[];
+  completedCount: number;
   completedOpen: boolean;
 };
 
@@ -1238,7 +1226,7 @@ function saveStatus(saveState: SaveState, mode: AppMode, demoReady: boolean) {
 }
 
 export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunchIntent }: StickyWorkspaceProps) {
-  const [workspace, setWorkspace] = useState(() =>
+  const [workspace, setWorkspaceState] = useState(() =>
     normalizeWorkspaceForInitialLoad(initialData, initialLaunchIntent),
   );
   const [demoReady, setDemoReady] = useState(mode !== "demo");
@@ -1279,7 +1267,16 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     error: null,
   });
   const workspaceRef = useRef(workspace);
-  const latestSaveAttemptRef = useRef(0);
+  const setWorkspace = useCallback((update: StickyWorkspaceData | ((current: StickyWorkspaceData) => StickyWorkspaceData)) => {
+    const next = typeof update === "function" ? update(workspaceRef.current) : update;
+    workspaceRef.current = next;
+    setWorkspaceState(next);
+  }, []);
+  const [persistence] = useState(() => new WorkspacePersistence(() => workspaceRef.current, setWorkspace));
+  const requestedHistoryRef = useRef(new Set(initialData.history?.loadedListIds ?? []));
+  const reconcileRef = useRef<() => Promise<boolean>>(async () => false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const launchIntentAppliedRef = useRef(false);
   const dialogReturnFocusRef = useRef<HTMLElement | null>(null);
   const commandFocusTargetRef = useRef<CommandFocusTarget | null>(null);
@@ -1332,90 +1329,85 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     if (mode !== "supabase" || !supabase) return;
     const platform = supabase;
     let disposed = false;
-    let reconciliationInFlight = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     let channel: ReturnType<typeof platform.realtime.channel> | null = null;
+    persistence.setActive(true);
 
     async function reconcileWorkspace() {
-      if (disposed || reconciliationInFlight) return;
-      reconciliationInFlight = true;
+      if (disposed || persistence.busy) return false;
       try {
-        const snapshot = await platform.request<WorkspaceSyncSnapshot>("/api/v1/workspace");
-        if (disposed) return;
-        setWorkspace((current) => ({
-          ...current,
-          lists: snapshot.lists,
-          tasks: reconcileWorkspaceTasks(current.tasks, snapshot.tasks),
-        }));
+        const applied = await persistence.refresh(async () => {
+          const ids = [...requestedHistoryRef.current];
+          const query = new URLSearchParams({ completedListIds: ids.join(",") });
+          const records = await platform.request<WorkspaceRecords>(`/api/v1/workspace/board?${query}`);
+          const snapshot = mapWorkspaceRecords(records);
+          return {
+            user: initialData.user,
+            ...snapshot,
+            // List selection is navigation local to this tab. Normal launches
+            // must keep opening All tasks, even if another tab selected a list.
+            userState: { ...snapshot.userState, selectedListId: workspaceRef.current.userState.selectedListId },
+          };
+        });
+        if (applied && !disposed) setHistoryError(null);
+        return applied;
       } catch (error) {
+        if (!disposed) setHistoryError("Could not refresh tasks. Retry when your connection is back.");
         console.warn("Sticky workspace reconciliation failed", error);
-      } finally {
-        reconciliationInFlight = false;
+        return false;
       }
     }
-
-    function applyBroadcast(payload: unknown) {
-      const change = payload as { operation?: string; table?: string; record?: unknown; old_record?: { id?: string } };
-      const operation = change.operation?.toUpperCase();
-      const recordId = (change.record as { id?: string } | undefined)?.id ?? change.old_record?.id;
-      if (!recordId || !change.table) return;
-      setWorkspace((current) => {
-        if (change.table === "lists") {
-          const lists = operation === "DELETE"
-            ? current.lists.filter((item) => item.id !== recordId)
-            : mergeById(current.lists, mapList(change.record as DbList));
-          return { ...current, lists };
-        }
-        if (change.table === "tasks") {
-          const tasks = operation === "DELETE"
-            ? current.tasks.filter((item) => item.id !== recordId)
-            : mergeById(current.tasks, mapTask(change.record as DbTask));
-          return { ...current, tasks };
-        }
-        if (change.table === "subtasks") {
-          const subtasks = operation === "DELETE"
-            ? current.subtasks.filter((item) => item.id !== recordId)
-            : mergeById(current.subtasks, mapSubtask(change.record as DbSubtask));
-          return { ...current, subtasks };
-        }
-        return current;
-      });
+    reconcileRef.current = reconcileWorkspace;
+    function requestReconciliation() {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { void reconcileWorkspace(); }, 150);
     }
-
     async function connectRealtime() {
       try {
         await platform.authenticateRealtime();
         if (disposed) return;
         channel = platform.realtime
           .channel(`sticky:${initialData.user.id}`, { config: { private: true } })
-          .on("broadcast", { event: "*" }, ({ payload }) => applyBroadcast(payload))
+          .on("broadcast", { event: "*" }, requestReconciliation)
           .subscribe((status) => {
-            if (status === "SUBSCRIBED") {
-              void reconcileWorkspace();
-            }
+            if (status === "SUBSCRIBED") requestReconciliation();
           });
       } catch (error) {
         console.warn("Sticky realtime connection failed", error);
-        void reconcileWorkspace();
+        requestReconciliation();
       }
     }
-
     function reconcileVisibleWorkspace() {
-      if (document.visibilityState === "visible") {
-        void reconcileWorkspace();
-      }
+      if (document.visibilityState === "visible") requestReconciliation();
     }
-
     window.addEventListener("focus", reconcileVisibleWorkspace);
+    window.addEventListener("online", requestReconciliation);
     document.addEventListener("visibilitychange", reconcileVisibleWorkspace);
     void connectRealtime();
-
     return () => {
       disposed = true;
+      persistence.setActive(false);
+      reconcileRef.current = async () => false;
+      if (timer) clearTimeout(timer);
       window.removeEventListener("focus", reconcileVisibleWorkspace);
+      window.removeEventListener("online", requestReconciliation);
       document.removeEventListener("visibilitychange", reconcileVisibleWorkspace);
       if (channel) void platform.realtime.removeChannel(channel);
     };
-  }, [initialData.user.id, mode, supabase]);
+  }, [initialData.user, mode, persistence, supabase]);
+
+  const ensureHistory = useCallback(async (ids: string[]) => {
+    if (mode !== "supabase") return true;
+    const loaded = new Set(workspaceRef.current.history?.loadedListIds ?? []);
+    const missing = ids.filter((id) => !loaded.has(id));
+    if (!missing.length) return true;
+    missing.forEach((id) => requestedHistoryRef.current.add(id));
+    setHistoryLoading(true);
+    await persistence.whenIdle();
+    const applied = await reconcileRef.current();
+    setHistoryLoading(false);
+    return applied;
+  }, [mode, persistence]);
 
   useEffect(() => {
     if (!searchFocused) {
@@ -1485,8 +1477,9 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   }, [restoreDialogReturnFocus]);
 
   useEffect(() => {
-    workspaceRef.current = workspace;
-  }, [workspace]);
+    setTaskViewFilterState(workspace.preferences.taskViewFilter);
+    setTaskSortModeState(workspace.preferences.taskSortMode);
+  }, [workspace.preferences.taskViewFilter, workspace.preferences.taskSortMode]);
 
   useEffect(() => {
     if (window.localStorage.getItem("sticky.rail.collapsed") === "true") {
@@ -1554,7 +1547,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       }
     }
     setDemoReady(true);
-  }, [initialLaunchIntent, mode]);
+  }, [initialLaunchIntent, mode, setWorkspace]);
 
   useEffect(() => {
     if (mode === "demo" && demoReady) {
@@ -1818,20 +1811,27 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
         item.active += 1;
       }
     });
+    if (workspace.history) {
+      for (const [id, counts] of stats) {
+        counts.completed += (workspace.history.completedCounts[id] ?? 0) - (workspace.history.loadedCounts[id] ?? 0);
+        counts.completed = Math.max(0, counts.completed);
+      }
+    }
     return stats;
-  }, [workspace.lists, workspace.tasks]);
+  }, [workspace.lists, workspace.tasks, workspace.history]);
   const totalActiveTasks = useMemo(
     () =>
       workspace.tasks.filter((task) => unarchivedListIds.has(task.listId) && !task.isCompleted)
         .length,
     [unarchivedListIds, workspace.tasks],
   );
-  const totalCompletedTasks = useMemo(
-    () =>
-      workspace.tasks.filter((task) => unarchivedListIds.has(task.listId) && task.isCompleted)
-        .length,
-    [unarchivedListIds, workspace.tasks],
-  );
+  const totalCompletedTasks = [...listStats].reduce((total, [id, stats]) => total + (unarchivedListIds.has(id) ? stats.completed : 0), 0);
+  useEffect(() => {
+    const ids = workspace.lists.filter((list) =>
+      Boolean(workspace.preferences.completedOpenByList[list.id]) || Boolean(searchQuery) || viewMode === "calendar" || overviewOpen || pulseOpen,
+    ).map((list) => list.id);
+    void ensureHistory(ids);
+  }, [ensureHistory, overviewOpen, pulseOpen, searchQuery, viewMode, workspace.lists, workspace.preferences.completedOpenByList]);
   const unarchivedTaskIds = useMemo(
     () =>
       new Set(
@@ -2084,11 +2084,13 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
         activeTasks: listActiveTasks,
         visibleTasks: visibleTasksForList(listActiveTasks),
         completedTasks: listCompletedTasks,
+        completedCount: listStats.get(list.id)?.completed ?? listCompletedTasks.length,
         completedOpen: workspace.preferences.completedOpenByList[list.id] ?? false,
       };
     });
   }, [
     recurrenceByTask,
+    listStats,
     searchQuery,
     subtasksByTask,
     taskSortMode,
@@ -2173,16 +2175,6 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       })
       .filter((item): item is NonNullable<typeof item> => Boolean(item));
   }, [activeListId, recurrenceByTask, workspace.tasks]);
-
-  const completedTasks = useMemo(() => {
-    return workspace.tasks
-      .filter((task) => task.listId === activeListId && task.isCompleted)
-      .sort((a, b) => {
-        const aOrder = a.completedSortOrder ?? 0;
-        const bOrder = b.completedSortOrder ?? 0;
-        return aOrder - bOrder || (b.completedAt ?? "").localeCompare(a.completedAt ?? "");
-      });
-  }, [activeListId, workspace.tasks]);
 
   const selectedTask = selectedTaskId
     ? workspace.tasks.find((task) => task.id === selectedTaskId) ?? null
@@ -2320,7 +2312,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
             id: "action-completed",
             kind: "action" as const,
             title: completedOpen ? "Hide completed pile" : "Open completed pile",
-            detail: `${completedTasks.length} completed ${plural(completedTasks.length, "task")}`,
+            detail: `${activeListId ? listStats.get(activeListId)?.completed ?? 0 : 0} completed tasks`,
             keywords: "completed pile done archive show hide",
             run: toggleCompletedPile,
           },
@@ -2363,13 +2355,13 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           },
         ]
       : []),
-    ...(completedTasks.length
+    ...((activeListId ? listStats.get(activeListId)?.completed ?? 0 : 0)
       ? [
           {
             id: "action-clear-completed",
             kind: "action" as const,
             title: "Clear completed pile",
-            detail: `${completedTasks.length} completed ${plural(completedTasks.length, "task")}`,
+            detail: `${activeListId ? listStats.get(activeListId)?.completed ?? 0 : 0} completed tasks`,
             keywords: "clear delete completed pile archive done",
             run: requestClearCompleted,
           },
@@ -2474,47 +2466,29 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       return true;
     }
 
-    const saveAttempt = latestSaveAttemptRef.current + 1;
-    latestSaveAttemptRef.current = saveAttempt;
-
-    setSaveState((current) => ({
-      ...current,
-      pending: current.pending + 1,
-      error: null,
-    }));
-
-    let rawSaveError: string | null = null;
-
+    setSaveState((current) => ({ ...current, pending: current.pending + 1 }));
+    let saveError: string | null = null;
     try {
-      if (!supabase) {
-        rawSaveError = "Sticky is not connected in this environment.";
-      } else {
+      await persistence.save(rollbackData ?? workspaceRef.current, async () => {
+        if (!supabase) throw new Error("Sticky is not connected in this environment.");
         const result = await operation();
         const results = Array.isArray(result) ? result : [result];
         const failed = results.find(hasResultError);
-        rawSaveError = failed?.error?.message ?? null;
-      }
-    } catch (error) {
-      rawSaveError = errorMessageFromUnknown(error);
-    }
-
-    const saveError = rawSaveError ? userFacingStickySaveMessage(rawSaveError) : null;
-
-    if (saveError) {
-      if (rollbackData && saveAttempt === latestSaveAttemptRef.current) {
-        setWorkspace(rollbackData);
-      }
-      pushToast({
-        title: `${label} did not save`,
-        body: saveError,
+        if (failed?.error?.message) throw new Error(failed.error.message);
       });
+    } catch (error) {
+      saveError = userFacingStickySaveMessage(errorMessageFromUnknown(error));
+      pushToast({ title: `${label} did not save`, body: saveError });
     }
-
     setSaveState((current) => ({
       pending: Math.max(0, current.pending - 1),
       lastSavedAt: saveError ? current.lastSavedAt : nowIso(),
-      error: saveError,
+      error: saveError ?? current.error,
     }));
+    if (!persistence.busy) {
+      const refreshed = await reconcileRef.current();
+      if (refreshed) setSaveState((current) => ({ ...current, error: null }));
+    }
 
     return !saveError;
   }
@@ -2756,7 +2730,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           );
         }
 
-        return Promise.all(operations);
+        return settleWorkspaceOperations(operations);
       },
       before,
     );
@@ -2975,7 +2949,8 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     }
   }
 
-  function requestDeleteList(list: StickyList) {
+  async function requestDeleteList(list: StickyList) {
+    if (!(await ensureHistory([list.id]))) return;
     if (workspace.lists.length <= 1) {
       pushToast({
         title: "Keep one list",
@@ -2992,7 +2967,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       return;
     }
 
-    const taskCount = workspace.tasks.filter((task) => task.listId === list.id).length;
+    const taskCount = workspaceRef.current.tasks.filter((task) => task.listId === list.id).length;
     openConfirmDialog({
       title: `Delete ${list.name}?`,
       body: `This removes ${taskCount} ${plural(taskCount, "task")} and their subtasks.`,
@@ -3003,6 +2978,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   }
 
   function deleteList(list: StickyList) {
+    const workspace = workspaceRef.current;
     const before = workspace;
     const fallbackList = workspace.lists.find((item) => item.id !== list.id && !item.archivedAt) ?? null;
     const deletedTasks = workspace.tasks.filter((task) => task.listId === list.id);
@@ -3711,7 +3687,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
         void persist(
           "Undo delete",
           () =>
-            Promise.all([
+            settleWorkspaceOperations([
               supabase!.from("tasks").insert({
                 id: task.id,
                 user_id: task.userId,
@@ -3894,8 +3870,10 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     });
   }
 
-  function requestClearCompleted() {
-    if (!activeListId || completedTasks.length === 0) {
+  async function requestClearCompleted() {
+    if (!activeListId || !(await ensureHistory([activeListId]))) return;
+    const completedTasks = workspaceRef.current.tasks.filter((task) => task.listId === activeListId && task.isCompleted);
+    if (completedTasks.length === 0) {
       return;
     }
 
@@ -3909,6 +3887,8 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   }
 
   function clearCompleted() {
+    const workspace = workspaceRef.current;
+    const completedTasks = workspace.tasks.filter((task) => task.listId === activeListId && task.isCompleted);
     if (!activeListId) {
       return;
     }
@@ -3949,7 +3929,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
         void persist(
           "Undo clear",
           () =>
-            Promise.all([
+            settleWorkspaceOperations([
               supabase!.from("tasks").insert(
                 deletedTasks.map((task) => ({
                   id: task.id,
@@ -4378,7 +4358,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     void persist(
       "Recurring catch-up",
       () =>
-        Promise.all(
+        settleWorkspaceOperations(
           targets.map((item) =>
             supabase!.rpc("advance_recurring_task", {
               p_task_id: item.task.id,
@@ -5230,6 +5210,13 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           )}
         </section>
 
+        {historyLoading || historyError ? (
+          <div className="recurrence-catchup-banner" role="status">
+            <span>{historyLoading ? "Loading task history…" : historyError}</span>
+            {historyError && !historyLoading ? <button type="button" onClick={() => { void reconcileRef.current(); }}>Retry</button> : null}
+          </div>
+        ) : null}
+
         <TaskDetailsPanel
           task={selectedTask}
           lists={unarchivedLists}
@@ -5544,7 +5531,7 @@ function StickyBoardColumn({
             <HighlightText text={list.name} query={searchQuery} />
           </h2>
           <span>
-            {activeTasks.length} active / {completedTasks.length} done
+            {activeTasks.length} active / {column.completedCount} done
           </span>
         </button>
         <div className="column-header-actions">
@@ -5774,7 +5761,7 @@ function StickyBoardColumn({
             <ChevronRight size={17} />
           </motion.span>
           <span>Completed</span>
-          <AnimatedNumber value={completedTasks.length} className="completed-count" />
+          <AnimatedNumber value={column.completedCount} className="completed-count" />
         </button>
 
         <AnimatePresence initial={false}>
