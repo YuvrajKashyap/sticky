@@ -841,9 +841,14 @@ test.describe("Sticky workspace", () => {
     await expect(app).toHaveAttribute("data-interface-size-mode", "manual");
     await expect(app).toHaveAttribute("data-interface-scale", "115");
 
+    await settings.getByLabel("Manual interface size", { exact: true }).fill("50");
+    await expect(app).toHaveAttribute("data-interface-scale", "50");
+    await settings.getByLabel("Manual interface size", { exact: true }).fill("250");
+    await expect(app).toHaveAttribute("data-interface-scale", "250");
+
     await page.reload();
     await expect(page.locator(".sticky-app")).toHaveAttribute("data-interface-size-mode", "manual");
-    await expect(page.locator(".sticky-app")).toHaveAttribute("data-interface-scale", "115");
+    await expect(page.locator(".sticky-app")).toHaveAttribute("data-interface-scale", "250");
     await expectNoHorizontalOverflow(page);
   });
 

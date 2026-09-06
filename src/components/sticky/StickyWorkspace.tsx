@@ -4976,8 +4976,8 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                         </div>
                         <input
                           type="range"
-                          min="80"
-                          max="125"
+                          min="50"
+                          max="250"
                           step="5"
                           value={workspace.preferences.interfaceScale}
                           aria-label="Manual interface size"

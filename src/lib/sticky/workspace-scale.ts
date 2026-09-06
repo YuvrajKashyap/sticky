@@ -9,7 +9,7 @@ type WorkspaceScaleInput = {
 };
 
 export function clampWorkspaceScale(percent: number): number {
-  return Math.min(125, Math.max(80, Math.round(percent)));
+  return Math.min(250, Math.max(50, Math.round(percent)));
 }
 
 export function resolveWorkspaceScale(input: WorkspaceScaleInput): number {
