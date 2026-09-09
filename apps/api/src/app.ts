@@ -87,7 +87,7 @@ const webCommandColumns: Record<string, ReadonlySet<string>> = {
   lists: new Set(["id", "user_id", "name", "color", "sort_order", "is_visible_on_board", "archived_at"]),
   tasks: new Set(["id", "user_id", "list_id", "title", "details", "color", "due_date", "due_time", "timezone", "is_completed", "completed_at", "sort_order", "completed_sort_order"]),
   subtasks: new Set(["id", "user_id", "task_id", "title", "due_date", "is_completed", "completed_at", "sort_order"]),
-  task_recurrence_rules: new Set(["id", "user_id", "task_id", "frequency", "interval_count", "days_of_week", "month_day", "starts_on", "end_type", "end_date", "occurrence_count", "timezone", "paused"]),
+  task_recurrence_rules: new Set(["id", "user_id", "task_id", "frequency", "interval_count", "days_of_week", "month_day", "month_days", "starts_on", "end_type", "end_date", "occurrence_count", "timezone", "paused"]),
 };
 
 function validateWebCommandPayload(table: string, action: string, payload: unknown, userId: string) {

@@ -9,6 +9,7 @@ export const recurrenceScheduleSchema = z.object({
   intervalCount: z.number().int().min(1).max(365).default(1),
   daysOfWeek: z.array(z.number().int().min(0).max(6)).max(7).default([]),
   monthDay: z.number().int().min(1).max(31).nullable().default(null),
+  monthDays: z.array(z.union([z.literal(-1), z.number().int().min(1).max(31)])).max(32).optional(),
   startsOn: z.iso.date(),
   endType: recurrenceEndTypeSchema.default("never"),
   endDate: z.iso.date().nullable().default(null),
@@ -16,6 +17,9 @@ export const recurrenceScheduleSchema = z.object({
   timezone: z.string().min(1).max(100).default("America/Chicago"),
   paused: z.boolean().default(false),
 }).superRefine((value, context) => {
+  if (value.monthDays && new Set(value.monthDays).size !== value.monthDays.length) {
+    context.addIssue({ code: "custom", path: ["monthDays"], message: "Month days must be unique." });
+  }
   if (new Set(value.daysOfWeek).size !== value.daysOfWeek.length) {
     context.addIssue({ code: "custom", path: ["daysOfWeek"], message: "Weekdays must be unique." });
   }
@@ -44,6 +48,7 @@ export const recurrenceRuleDtoSchema = z.object({
   intervalCount: z.number().int(),
   daysOfWeek: z.array(z.number().int()),
   monthDay: z.number().int().nullable(),
+  monthDays: z.array(z.number().int()).optional(),
   startsOn: z.iso.date(),
   endType: recurrenceEndTypeSchema,
   endDate: z.iso.date().nullable(),

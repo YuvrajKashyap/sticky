@@ -196,6 +196,7 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
     intervalCount: z.int().min(1).max(365).default(1),
     daysOfWeek: z.array(z.int().min(0).max(6)).max(7).default([]),
     monthDay: z.int().min(1).max(31).nullable().default(null),
+    monthDays: z.array(z.union([z.literal(-1), z.int().min(1).max(31)])).max(32).optional().describe("Monthly dates; -1 means last day. Empty uses monthDay."),
     startsOn: z.iso.date(),
     endType: recurrenceEndTypeSchema.default("never"),
     endDate: z.iso.date().nullable().default(null),

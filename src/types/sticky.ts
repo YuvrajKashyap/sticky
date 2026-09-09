@@ -98,6 +98,7 @@ export type StickyRecurrenceRule = {
   intervalCount: number;
   daysOfWeek: number[];
   monthDay: number | null;
+  monthDays?: number[];
   startsOn: string;
   endType: RecurrenceEndType;
   endDate: string | null;
@@ -194,6 +195,7 @@ export type DbRecurrenceRule = {
   interval_count: number;
   days_of_week: number[] | null;
   month_day: number | null;
+  month_days?: number[];
   starts_on: string;
   end_type: RecurrenceEndType;
   end_date: string | null;

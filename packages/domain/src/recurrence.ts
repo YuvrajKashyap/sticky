@@ -1,3 +1,4 @@
+import { monthlyOccurrence } from "./monthly";
 import type { RecurrenceRuleDto, TaskDto } from "@sticky/contracts";
 
 function parseUtcDate(date: string) {
@@ -53,7 +54,9 @@ export function nextRecurrenceDate(rule: RecurrenceRuleDto, task: TaskDto): stri
 
   if (rule.frequency === "daily") nextDate = addUtcDays(anchorDate, interval);
   if (rule.frequency === "weekly") nextDate = nextWeeklyDate(rule, anchorDate);
-  if (rule.frequency === "monthly") nextDate = addUtcMonths(anchorDate, interval, preferredMonthDay);
+  if (rule.frequency === "monthly") nextDate = rule.monthDays?.length
+      ? monthlyOccurrence(rule.startsOn, interval, rule.monthDays, anchorDate)
+      : addUtcMonths(anchorDate, interval, preferredMonthDay);
   if (rule.frequency === "yearly") nextDate = addUtcMonths(anchorDate, interval * 12, preferredMonthDay);
   if (rule.frequency === "custom") {
     const candidates = [

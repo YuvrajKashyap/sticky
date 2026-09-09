@@ -57,6 +57,8 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import { format } from "date-fns";
+import { MonthDaysPicker } from "./MonthDaysPicker";
+import { monthlyOccurrence, monthDaysLabel } from "@sticky/domain";
 import { parentDueDateIssue, reconcileParentDueDate } from "@sticky/domain";
 import { createStickyPlatformClient } from "@/lib/sticky/api-client";
 import { listToDb, recurrenceToDb, subtaskToDb, taskToDb } from "@/lib/sticky/mappers";
@@ -1018,6 +1020,7 @@ function recurrenceCadence(rule: StickyRecurrenceRule) {
   }
 
   if (rule.frequency === "monthly") {
+    if (rule.monthDays?.length) return `${every} ${plural(interval, "month")} on ${monthDaysLabel(rule.monthDays)}`;
     return `${every} ${plural(interval, "month")} on day ${
       rule.monthDay ?? startMonthDay(rule.startsOn)
     }`;
@@ -3208,8 +3211,13 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       : workspace.userState;
     // Composer fields win over parsed ones; a bare time implies today.
     const draftDueTime = captureDraft.dueTime || intent.dueTime;
-    const draftDueDate =
+    let draftDueDate =
       captureDraft.dueDate || intent.dueDate || (draftDueTime ? localDateKey() : null);
+    const monthlyDraft = captureDraft.repeat;
+    if (monthlyDraft?.frequency === "monthly" && monthlyDraft.monthDays?.length) {
+      const start = draftDueDate ?? localDateKey();
+      draftDueDate = monthlyOccurrence(start, monthlyDraft.interval, monthlyDraft.monthDays, new Date(`${start}T00:00:00Z`), true)?.toISOString().slice(0, 10) ?? start;
+    }
     const task: StickyTask = {
       id: createId(),
       userId: workspace.user.id,
@@ -3242,6 +3250,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                 ? [...new Set(repeatDraft.daysOfWeek)].sort((a, b) => a - b)
                 : [startDayOfWeek(task.dueDate ?? localDateKey())]
               : [],
+          monthDays: repeatDraft.frequency === "monthly" ? repeatDraft.monthDays ?? [] : [],
           monthDay: recurrenceUsesMonthDay(repeatDraft.frequency)
             ? startMonthDay(task.dueDate ?? localDateKey())
             : null,
@@ -3726,6 +3735,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                       interval_count: rule.intervalCount,
                       days_of_week: rule.daysOfWeek,
                       month_day: rule.monthDay,
+                      month_days: rule.monthDays ?? [],
                       starts_on: rule.startsOn,
                       end_type: rule.endType,
                       end_date: rule.endDate,
@@ -3970,6 +3980,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                       interval_count: rule.intervalCount,
                       days_of_week: rule.daysOfWeek,
                       month_day: rule.monthDay,
+                      month_days: rule.monthDays ?? [],
                       starts_on: rule.startsOn,
                       end_type: rule.endType,
                       end_date: rule.endDate,
@@ -4255,6 +4266,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
             interval_count: rule.intervalCount,
             days_of_week: rule.daysOfWeek,
             month_day: rule.monthDay,
+            month_days: rule.monthDays ?? [],
             starts_on: rule.startsOn,
             end_type: rule.endType,
             end_date: rule.endDate,
@@ -6828,7 +6840,10 @@ function TaskDetailsPanel({
                   })}
                 </div>
               ) : null}
-              {recurrenceUsesMonthDay(recurrenceRule.frequency) ? (
+              {recurrenceRule.frequency === "monthly" ? (
+                <MonthDaysPicker value={recurrenceRule.monthDays?.length ? recurrenceRule.monthDays : [recurrenceRule.monthDay ?? startMonthDay(recurrenceRule.startsOn)]}
+                  onChange={(monthDays) => onUpdateRecurrence(recurrenceRule.id, { monthDays })} />
+              ) : recurrenceUsesMonthDay(recurrenceRule.frequency) ? (
                 <label className="detail-field">
                   <span>Month day</span>
                   <input

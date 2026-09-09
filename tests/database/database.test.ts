@@ -72,6 +72,20 @@ describe("authenticated Sticky persistence", () => {
     expect(loaded.history.loadedCounts[listId]).toBe(1205);
   });
 
+  it("persists monthly selections and retains them after recurring completion", async () => {
+    const taskId = randomUUID();
+    await command({ kind: "table", table: "tasks", action: "insert", payload: { id: taskId, user_id: owner.userId, list_id: owner.listId, title: "Monthly", due_date: "2026-09-01" } });
+    await command({ kind: "table", table: "task_recurrence_rules", action: "insert", payload: { user_id: owner.userId, task_id: taskId, frequency: "monthly", starts_on: "2026-09-01", month_days: [1, 15, -1] } });
+    const nextId = randomUUID();
+    await command({ kind: "rpc", name: "complete_task_with_recurrence", args: { p_task_id: taskId, p_next_task_id: nextId, p_next_due_date: "2026-09-15", p_next_due_time: null, p_next_occurrence_count: null } });
+    const saved = await owner.client.from("task_recurrence_rules").select("month_days").eq("task_id", nextId).single();
+    expect(saved.error).toBeNull();
+    expect(saved.data?.month_days).toEqual([1, 15, -1]);
+    const { admin } = testEnvironment();
+    const invalid = await admin.from("task_recurrence_rules").update({ month_days: [0, 32] }).eq("task_id", nextId);
+    expect(invalid.error?.code).toBe("23514");
+  });
+
   it("commits recurrence and outbox events atomically, and rolls both back on invalid completion", async () => {
     const { admin } = testEnvironment();
     const taskId = randomUUID();

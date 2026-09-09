@@ -63,6 +63,7 @@ export function mapRecurrenceRuleRow(row: DataRow): RecurrenceRuleDto {
     intervalCount: Number(row.interval_count),
     daysOfWeek: Array.isArray(row.days_of_week) ? row.days_of_week.map(Number) : [],
     monthDay: row.month_day == null ? null : Number(row.month_day),
+    monthDays: (row.month_days as number[] | undefined) ?? [],
     startsOn: String(row.starts_on),
     endType: row.end_type as RecurrenceRuleDto["endType"],
     endDate: row.end_date ? String(row.end_date) : null,

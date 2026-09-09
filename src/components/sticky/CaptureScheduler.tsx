@@ -20,6 +20,8 @@ import {
   startOfWeek,
 } from "date-fns";
 import { useState } from "react";
+import { MonthDaysPicker } from "./MonthDaysPicker";
+import { monthDaysLabel } from "@sticky/domain";
 import { AnimatedNumber, springs } from "./motion";
 
 export type CaptureRepeatFrequency = "daily" | "weekly" | "monthly" | "yearly";
@@ -28,6 +30,7 @@ export type CaptureRepeat = {
   frequency: CaptureRepeatFrequency;
   interval: number;
   daysOfWeek: number[];
+  monthDays?: number[];
 };
 
 export type CaptureSchedule = {
@@ -115,6 +118,7 @@ export function captureRepeatLabel(repeat: CaptureRepeat) {
     return `${base} · ${dayLabel}`;
   }
 
+  if (repeat.frequency === "monthly" && repeat.monthDays?.length) return `${base} · ${monthDaysLabel(repeat.monthDays)}`;
   return base;
 }
 
@@ -129,6 +133,7 @@ export function captureRepeatSummary(repeat: CaptureRepeat) {
     return `${every} on ${list}`;
   }
 
+  if (repeat.frequency === "monthly" && repeat.monthDays?.length) return `${every} on ${monthDaysLabel(repeat.monthDays)}`;
   return every;
 }
 
@@ -527,6 +532,7 @@ function RepeatPanel({
       frequency: key,
       interval: repeat?.interval ?? 1,
       daysOfWeek: key === "weekly" ? (selectedDays.length ? selectedDays : [anchorDay]) : [],
+      monthDays: key === "monthly" ? (repeat?.monthDays?.length ? repeat.monthDays : [Number((dueDate || dateKey(new Date())).slice(8, 10))]) : [],
     });
   }
 
@@ -681,6 +687,9 @@ function RepeatPanel({
                 </motion.div>
               ) : null}
             </AnimatePresence>
+            {repeat.frequency === "monthly" ? <MonthDaysPicker
+              value={repeat.monthDays?.length ? repeat.monthDays : [Number((dueDate || dateKey(new Date())).slice(8, 10))]}
+              onChange={(monthDays) => onChange({ ...repeat, monthDays })} /> : null}
             <div className="scheduler-repeat-summary" aria-live="polite">
               <Repeat2 size={13} />
               <AnimatePresence initial={false} mode="popLayout">

@@ -2299,7 +2299,7 @@ test.describe("Sticky workspace", () => {
       await details.locator('input[aria-label="Due date"]').fill("2026-08-31");
       await details.getByLabel("Not repeating").check();
       await details.getByLabel("Frequency").selectOption("monthly");
-      await expect(details.getByLabel("Month day")).toHaveValue("31");
+      await expect(details.getByRole("button", { name: "Repeat on day 31", exact: true })).toHaveAttribute("aria-pressed", "true");
       await expect(details.getByText("Every month on day 31")).toBeVisible();
 
       await details.getByRole("button", { name: "Complete Monthly closeout" }).click();

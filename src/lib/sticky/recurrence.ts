@@ -1,3 +1,4 @@
+import { monthlyOccurrence } from "@sticky/domain";
 import type { StickyRecurrenceRule, StickyTask } from "@/types/sticky";
 
 export function localDateKey(date = new Date()) {
@@ -117,7 +118,9 @@ export function nextRecurrenceDate(rule: StickyRecurrenceRule, task: StickyTask)
   }
 
   if (rule.frequency === "monthly") {
-    nextDate = addUtcMonths(anchorDate, interval, preferredMonthDay);
+    nextDate = rule.monthDays?.length
+      ? monthlyOccurrence(rule.startsOn, interval, rule.monthDays, anchorDate)
+      : addUtcMonths(anchorDate, interval, preferredMonthDay);
   }
 
   if (rule.frequency === "yearly") {
