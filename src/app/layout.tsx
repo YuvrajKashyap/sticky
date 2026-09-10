@@ -13,6 +13,9 @@ export const metadata: Metadata = {
   title: "Sticky",
   description: "A private, connected task command center for fast capture and focused follow-through.",
   applicationName: "Sticky",
+  verification: {
+    google: "RYwr0jHqEfxAnRJ2MFMMVIR3dpWYvGKRYaS_FgCZQgs",
+  },
   metadataBase: new URL("https://sticky.yuvrajkashyap.com"),
   manifest: "/manifest.webmanifest",
   robots: {
