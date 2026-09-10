@@ -495,9 +495,8 @@ mark.find-highlight {
   }
 }
 
-/* Paperclip and pushpin artwork sit this theme out */
-.column-paperclip,
-.auth-pin {
+/* Paperclip artwork sits this theme out */
+.column-paperclip {
   display: none;
 }
 
@@ -6240,227 +6239,534 @@ mark.find-highlight {
 }
 
 /* ----------------------------------------------------------------------
-   15 · Auth screen & route states
+   15 · Access gate (sign-in) & route states
    ---------------------------------------------------------------------- */
 
-.auth-screen,
-.route-state-screen {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.gate {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
   min-height: 100dvh;
-  padding: 26px 18px;
-  background:
-    radial-gradient(46% 40% at 14% 0%, rgba(var(--accent-rgb), 0.14) 0%, transparent 65%),
-    radial-gradient(48% 42% at 88% 14%, rgba(122, 100, 255, 0.16) 0%, transparent 68%),
-    radial-gradient(circle, rgba(214, 233, 255, 0.35) 0.7px, transparent 1.4px) 0 0 / 220px 220px,
-    var(--canvas);
+  padding: clamp(20px, 4vw, 48px);
+  background: var(--canvas);
+  overflow: hidden;
 }
 
-.auth-intake,
-.route-state-card {
+.gate-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Two pre-blurred aurora blobs drifting on transform only. */
+.gate-aurora {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.gate-aurora i {
+  position: absolute;
+  width: 60vw;
+  height: 60vw;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.8;
+  will-change: transform;
+}
+
+.gate-aurora-a {
+  top: -28vw;
+  left: -18vw;
+  background: radial-gradient(circle, rgba(var(--accent-rgb), 0.18), transparent 64%);
+  animation: gate-aurora-a 52s ease-in-out infinite alternate;
+}
+
+.gate-aurora-b {
+  bottom: -30vw;
+  right: -20vw;
+  background: radial-gradient(circle, rgba(106, 92, 255, 0.22), transparent 64%);
+  animation: gate-aurora-b 64s ease-in-out infinite alternate;
+}
+
+@keyframes gate-aurora-a {
+  to { transform: translate(10vw, 8vh) scale(1.14); }
+}
+
+@keyframes gate-aurora-b {
+  to { transform: translate(-9vw, -8vh) scale(1.1); }
+}
+
+.gate-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: radial-gradient(ellipse 70% 70% at 50% 50%, transparent 30%, rgba(5, 7, 15, 0.72) 100%);
+}
+
+/* Stage: brand statement left, gate card right ------------------------- */
+
+.gate-stage {
   position: relative;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(360px, 440px);
+  gap: clamp(32px, 6vw, 96px);
+  align-items: center;
+  width: min(1180px, 100%);
+}
+
+.gate-brand {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  width: min(430px, 100%);
-  padding: 34px 32px 28px;
-  border-radius: 22px;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  backdrop-filter: blur(26px) saturate(150%);
-  border: 1px solid var(--line);
+  min-width: 0;
+}
+
+.gate-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.gate-eyebrow-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--accent);
+  animation: gate-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes gate-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.8); }
+}
+
+.gate-wordmark {
+  display: flex;
+  margin: 0;
+  font-family: var(--font-hand);
+  font-size: clamp(3.4rem, 8.6vw, 7rem);
+  font-weight: 900;
+  line-height: 0.95;
+  letter-spacing: 0.1em;
+  color: var(--ink);
+  text-shadow: 0 0 34px rgba(var(--accent-rgb), 0.4), 0 0 90px rgba(106, 92, 255, 0.28);
+  perspective: 700px;
+}
+
+.gate-letter {
+  display: inline-block;
+  transition: transform 340ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition-delay: calc(var(--wave-i, 0) * 45ms);
+}
+
+.gate-letter-face {
+  display: inline-block;
+  transition: color 260ms var(--ease-out);
+}
+
+.gate-fine .gate-wordmark:hover .gate-letter {
+  transform: translateY(-10px);
+}
+
+.gate-fine .gate-wordmark:hover .gate-letter-face {
+  color: var(--accent-ink);
+}
+
+.gate-tagline {
+  margin: 0;
+  min-height: 1.6em;
+  font-size: 1.12rem;
+  color: var(--ink-soft);
+}
+
+.gate-decrypt {
+  font-family: var(--font-mono);
+  font-size: 0.98rem;
+  letter-spacing: 0.08em;
+  color: var(--accent-ink);
+  text-shadow: 0 0 14px rgba(var(--accent-rgb), 0.45);
+}
+
+.gate-readouts {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+  text-shadow: 0 0 12px rgba(var(--accent-rgb), 0.45);
+}
+
+.gate-readouts li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Leading tick marker instead of pill chips (house rule). */
+.gate-readouts li::before {
+  content: "";
+  width: 18px;
+  height: 1px;
+  margin-right: 6px;
+  background: linear-gradient(90deg, var(--accent), transparent);
+  box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.6);
+}
+
+.gate-readout-clock i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+  animation: gate-blink 1s steps(2, end) infinite;
+}
+
+@keyframes gate-blink {
+  50% { opacity: 0.2; }
+}
+
+/* Gate card --------------------------------------------------------------- */
+
+.gate-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  padding: 30px 30px 24px;
+  border-radius: 24px;
+  border: 1px solid rgba(150, 180, 255, 0.18);
+  background: linear-gradient(160deg, rgba(24, 32, 66, 0.74), rgba(10, 14, 32, 0.84));
+  backdrop-filter: blur(28px) saturate(140%);
   box-shadow: var(--paper-ring), var(--shadow-float);
-  animation: auth-settle 0.6s var(--ease-out) both;
+  transform-style: preserve-3d;
+  overflow: hidden;
 }
 
-@keyframes auth-settle {
-  from {
-    opacity: 0;
-    transform: translateY(26px) rotate(-0.8deg);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) rotate(0);
-  }
-}
-
-.auth-pin {
+.gate-card-glare {
   position: absolute;
-  top: -18px;
-  left: 50%;
-  width: 40px;
-  height: 46px;
-  margin-left: -20px;
-  background: url("/sticky-materials/premium/pin-violet-light.png") no-repeat 50% 0 / contain;
-  filter: drop-shadow(0 5px 4px rgba(60, 45, 24, 0.3));
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  mix-blend-mode: screen;
 }
 
-.auth-intake-header {
+.gate-card-seam {
+  position: absolute;
+  top: 0;
+  left: 8%;
+  right: 8%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(var(--accent-rgb), 0.75), transparent);
+  box-shadow: 0 0 16px rgba(var(--accent-rgb), 0.55);
+}
+
+.gate-card-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.gate-card-mark {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--hud-line);
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: 0 0 18px -4px rgba(var(--accent-rgb), 0.7), inset 0 0 10px rgba(var(--accent-rgb), 0.18);
+}
+
+.gate-card-head h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+
+.gate-card-head p {
+  margin: 2px 0 0;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+.gate-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Google door: cursor spotlight + arrow lean ------------------------------ */
+
+.gate-google {
+  position: relative;
+  display: grid;
+  grid-template-columns: 34px 1fr 16px;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 220ms var(--ease-out), transform 220ms var(--ease-out), box-shadow 220ms var(--ease-out);
+}
+
+.gate-google::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(180px circle at var(--mx, 50%) var(--my, 50%), rgba(var(--accent-rgb), 0.16), transparent 70%);
+  opacity: 0;
+  transition: opacity 260ms var(--ease-out);
+}
+
+.gate-google:hover:not(:disabled),
+.gate-google:focus-visible {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: 0 0 24px -6px rgba(var(--accent-rgb), 0.6);
+  outline: none;
+}
+
+.gate-google:hover:not(:disabled)::after,
+.gate-google:focus-visible::after {
+  opacity: 1;
+}
+
+.gate-google:active:not(:disabled) {
+  transform: translateY(0) scale(0.985);
+}
+
+.gate-google:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.gate-google-mark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.gate-google-arrow {
+  color: var(--ink-faint);
+  transition: transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1), color 200ms var(--ease-out);
+}
+
+.gate-google:hover:not(:disabled) .gate-google-arrow {
+  transform: translateX(4px);
+  color: var(--accent);
+}
+
+.gate-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.gate-divider::before,
+.gate-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--line-strong), transparent);
+}
+
+/* Email door: field with a spine that draws on focus ---------------------- */
+
+.gate-form {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
-.auth-meta-row {
+.gate-field-wrap {
   display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.auth-brand {
-  display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 8px;
-  font-weight: 900;
-  font-size: 1.02rem;
 }
 
-.auth-mark {
-  position: relative;
-  width: 24px;
-  height: 24px;
-}
-
-.auth-mark span {
-  position: absolute;
-  inset: 2px;
-  border-radius: 5px;
-  box-shadow: 0 1px 4px rgba(74, 58, 34, 0.24);
-}
-
-.auth-mark span:nth-child(1) {
-  background: var(--sun-strong);
-  transform: rotate(-9deg) translateX(-2px);
-}
-
-.auth-mark span:nth-child(2) {
-  background: var(--coral-strong);
-  transform: rotate(5deg) translateX(1px);
-}
-
-.auth-mark span:nth-child(3) {
-  background: linear-gradient(140deg, var(--accent-bright) 0%, var(--accent-deep) 100%);
-  transform: rotate(-2deg);
-}
-
-.auth-meta-rule {
-  flex: 1;
-  height: 1px;
-  background: var(--line);
-}
-
-.auth-kicker {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.1em;
+.gate-field-label {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.26em;
   text-transform: uppercase;
   color: var(--ink-faint);
 }
 
-.auth-intake h1 {
-  font-size: 1.75rem;
-  font-weight: 900;
-  letter-spacing: -0.02em;
+.gate-field {
+  position: relative;
+  display: block;
 }
 
-.auth-intro {
-  font-family: var(--font-hand);
-  font-size: 0.8rem;
-  letter-spacing: 0.05em;
-  color: var(--ink-soft);
-  margin-top: -6px;
-}
-
-.google-action {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 13px 17px;
+.gate-field input {
+  width: 100%;
+  padding: 14px 16px;
   border-radius: 14px;
-  font-weight: 800;
-  font-size: 0.92rem;
-  background: var(--surface-raised);
-  box-shadow: inset 0 0 0 1.5px var(--line-strong);
-  transition: box-shadow var(--speed-fast) var(--ease-out), transform var(--speed-fast) var(--ease-out);
+  border: 1px solid var(--line);
+  background: rgba(9, 13, 30, 0.72);
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 600;
+  caret-color: var(--accent);
+  transition: border-color 220ms var(--ease-out), box-shadow 220ms var(--ease-out), transform 220ms var(--ease-out);
 }
 
-.google-action:hover:not(:disabled) {
-  box-shadow: inset 0 0 0 2px var(--accent), var(--shadow-paper);
+.gate-field input::placeholder {
+  color: var(--ink-faint);
+}
+
+.gate-field input::selection {
+  background: rgba(var(--accent-rgb), 0.35);
+}
+
+.gate-field input:focus {
+  outline: none;
+  border-color: rgba(var(--accent-rgb), 0.6);
+  box-shadow: 0 0 0 3px var(--accent-soft), 0 0 26px -8px rgba(var(--accent-rgb), 0.7);
   transform: translateY(-1px);
 }
 
-.google-mark {
+.gate-field-spine {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-deep));
+  box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.7);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 520ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.gate-field:focus-within .gate-field-spine {
+  transform: scaleX(1);
+}
+
+/* Primary door: fills from the cursor's entry point ----------------------- */
+
+.gate-submit {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  padding: 15px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(var(--accent-rgb), 0.45);
+  background: rgba(var(--accent-rgb), 0.1);
+  color: var(--accent-ink);
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow: 0 0 28px -10px rgba(var(--accent-rgb), 0.6);
+  transition: color 280ms var(--ease-out), border-color 280ms var(--ease-out), box-shadow 320ms var(--ease-out);
+}
+
+.gate-submit-fill {
+  position: absolute;
+  left: var(--fx, 50%);
+  top: var(--fy, 50%);
+  width: 240%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-bright), var(--accent) 45%, var(--accent-deep));
+  transform: translate(-50%, -50%) scale(0);
+  transition: transform 560ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.gate-submit:hover:not(:disabled) .gate-submit-fill,
+.gate-submit:focus-visible .gate-submit-fill {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.gate-submit:hover:not(:disabled),
+.gate-submit:focus-visible {
+  color: var(--on-accent);
+  border-color: transparent;
+  box-shadow: 0 0 44px -8px rgba(var(--accent-rgb), 0.9), 0 12px 32px -12px rgba(var(--accent-rgb), 0.6);
+  outline: none;
+}
+
+.gate-submit:disabled {
+  cursor: progress;
+}
+
+.gate-submit.is-sent {
+  border-color: rgba(60, 232, 168, 0.55);
+  color: var(--success);
+  box-shadow: 0 0 28px -10px rgba(60, 232, 168, 0.7);
+}
+
+.gate-submit.is-sent .gate-submit-fill {
+  background: linear-gradient(135deg, #7df5c9, #3ce8a8 45%, #1fb389);
+}
+
+.gate-submit-label {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  font-weight: 900;
-  color: #fff;
-  background: conic-gradient(from -45deg, #ea4335 0deg 90deg, #4285f4 90deg 180deg, #34a853 180deg 270deg, #fbbc05 270deg 360deg);
+  gap: 10px;
 }
 
-.auth-divider {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: var(--ink-faint);
-  font-size: 0.74rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
+.gate-spinner {
+  animation: spin 0.9s linear infinite;
 }
 
-.auth-divider::before,
-.auth-divider::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--line);
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
-.auth-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
+/* Status + footer ---------------------------------------------------------- */
 
-.auth-form label {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.auth-form label span {
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-
-.auth-form input {
-  border: 0;
-  border-radius: 13px;
-  padding: 13px 15px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  background: var(--surface-raised);
-  box-shadow: inset 0 0 0 1.5px var(--line);
-  transition: box-shadow var(--speed-fast) var(--ease-out);
-}
-
-.auth-form input:focus {
-  outline: none;
-  box-shadow: inset 0 0 0 2px var(--accent);
-}
-
-.auth-status:empty {
+.gate-status:empty {
   display: none;
 }
 
@@ -6487,24 +6793,130 @@ mark.find-highlight {
   color: var(--ink);
 }
 
-.auth-footnote {
+.gate-card-foot {
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.gate-footnote {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  justify-content: center;
-  font-size: 0.74rem;
-  font-weight: 700;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   color: var(--ink-faint);
 }
 
-.auth-spinner {
-  animation: spin 0.9s linear infinite;
+.gate-links {
+  display: flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
+.gate-links a {
+  display: inline-block;
+  color: var(--ink-soft);
+  text-decoration: none;
+  transition: color 200ms var(--ease-out), text-shadow 200ms var(--ease-out),
+    transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.gate-links a + a::before {
+  content: "·";
+  margin: 0 12px;
+  color: var(--ink-faint);
+  text-shadow: none;
+}
+
+.gate-links a:hover,
+.gate-links a:focus-visible {
+  color: var(--accent-ink);
+  text-shadow: 0 0 12px rgba(var(--accent-rgb), 0.6);
+  transform: translateY(-2px);
+  outline: none;
+}
+
+/* Responsive ----------------------------------------------------------------- */
+
+@media (max-width: 960px) {
+  .gate-stage {
+    grid-template-columns: 1fr;
+    gap: 30px;
+    width: min(520px, 100%);
   }
+
+  .gate-brand {
+    align-items: center;
+    text-align: center;
+  }
+
+  .gate-wordmark {
+    justify-content: center;
+    font-size: clamp(3rem, 14vw, 4.6rem);
+  }
+
+  .gate-readouts {
+    align-items: center;
+  }
+}
+
+@media (max-width: 560px) {
+  .gate { padding: 18px 14px; }
+  .gate-card { padding: 22px 18px 18px; border-radius: 20px; }
+  .gate-brand { gap: 12px; }
+  .gate-links a + a::before { margin: 0 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gate-aurora i,
+  .gate-eyebrow-dot,
+  .gate-readout-clock i,
+  .gate-spinner {
+    animation: none;
+  }
+
+  .gate-letter,
+  .gate-submit-fill,
+  .gate-field-spine,
+  .gate-google-arrow,
+  .gate-links a {
+    transition: none;
+  }
+}
+
+/* Route states (loading / error / 404) */
+.route-state-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: 26px 18px;
+  background:
+    radial-gradient(46% 40% at 14% 0%, rgba(var(--accent-rgb), 0.14) 0%, transparent 65%),
+    radial-gradient(48% 42% at 88% 14%, rgba(122, 100, 255, 0.16) 0%, transparent 68%),
+    var(--canvas);
+}
+
+.route-state-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: min(430px, 100%);
+  padding: 34px 32px 28px;
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(26px) saturate(150%);
+  border: 1px solid var(--line);
+  box-shadow: var(--paper-ring), var(--shadow-float);
 }
 
 /* Route states (loading / error / 404) */
