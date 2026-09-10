@@ -164,6 +164,9 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
           <LockKeyhole size={13} aria-hidden="true" />
           Only approved accounts can open this workspace.
         </p>
+        <nav aria-label="About Sticky" style={{ display: "flex", justifyContent: "center", gap: 20, fontSize: 13 }}>
+          <a href="/about">About</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a>
+        </nav>
       </section>
     </main>
   );
