@@ -6663,13 +6663,30 @@ mark.find-highlight {
     transform 240ms var(--ease-out), box-shadow 240ms var(--ease-out);
 }
 
+/* Only the spotlight consumes these coordinates. Avoid invalidating the
+   entire form subtree on every pointer move. Older engines retain the
+   ordinary inherited-variable behavior and the same gradient. */
+@property --gate-pointer-x {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 50%;
+}
+
+@property --gate-pointer-y {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 50%;
+}
+
 .gate-door::after {
+  --gate-pointer-x: inherit;
+  --gate-pointer-y: inherit;
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background: radial-gradient(220px circle at var(--mx, 50%) var(--my, 50%), rgba(var(--accent-rgb), 0.14), transparent 70%);
+  background: radial-gradient(220px circle at var(--gate-pointer-x, 50%) var(--gate-pointer-y, 50%), rgba(var(--accent-rgb), 0.14), transparent 70%);
   opacity: 0;
   transition: opacity 260ms var(--ease-out);
 }

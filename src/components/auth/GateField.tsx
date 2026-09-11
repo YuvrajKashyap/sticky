@@ -48,6 +48,7 @@ export function GateField() {
     let frame = 0;
     let lastTime = 0;
     let running = true;
+    let pointerBounds: DOMRect | null = null;
 
     function seed() {
       count = width < 720 ? 130 : width < 1200 ? 220 : 320;
@@ -67,6 +68,7 @@ export function GateField() {
 
     function resize() {
       const rect = canvas!.getBoundingClientRect();
+      pointerBounds = rect;
       width = Math.max(1, Math.round(rect.width));
       height = Math.max(1, Math.round(rect.height));
       canvas!.width = Math.round(width * dpr);
@@ -96,6 +98,7 @@ export function GateField() {
 
     function tick(now: number) {
       if (!running) return;
+      pointerBounds = null;
       const dt = Math.min(Math.max(now - lastTime, 1), 40);
       lastTime = now;
       const step = dt / 16.67;
@@ -179,7 +182,9 @@ export function GateField() {
     }
 
     function onPointerMove(event: PointerEvent) {
-      const rect = canvas!.getBoundingClientRect();
+      // Every input still contributes to particle velocity, but a burst of
+      // mouse events shares one geometry read until the next frame or scroll.
+      const rect = pointerBounds ?? (pointerBounds = canvas!.getBoundingClientRect());
       pointer.x = event.clientX - rect.left;
       pointer.y = event.clientY - rect.top;
       pointer.active = true;
@@ -195,6 +200,10 @@ export function GateField() {
       pointer.active = false;
       pointer.lastX = -9999;
       pointer.lastY = -9999;
+    }
+
+    function invalidatePointerBounds() {
+      pointerBounds = null;
     }
 
     function onSignal(event: Event) {
@@ -235,6 +244,8 @@ export function GateField() {
       // Keep every event (including its velocity contribution), without a delay.
       window.addEventListener("pointermove", onPointerMove, { passive: true, capture: true });
       window.addEventListener("pointerdown", onPointerMove, { passive: true });
+      window.addEventListener("scroll", invalidatePointerBounds, { passive: true, capture: true });
+      window.addEventListener("resize", invalidatePointerBounds, { passive: true });
       document.addEventListener("pointerleave", onPointerLeave);
       window.addEventListener("blur", onPointerLeave);
       document.addEventListener("visibilitychange", onVisibility);
@@ -247,6 +258,8 @@ export function GateField() {
       observer.disconnect();
       window.removeEventListener("pointermove", onPointerMove, true);
       window.removeEventListener("pointerdown", onPointerMove);
+      window.removeEventListener("scroll", invalidatePointerBounds, true);
+      window.removeEventListener("resize", invalidatePointerBounds);
       document.removeEventListener("pointerleave", onPointerLeave);
       window.removeEventListener("blur", onPointerLeave);
       document.removeEventListener("visibilitychange", onVisibility);

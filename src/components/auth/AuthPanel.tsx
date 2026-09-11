@@ -2,6 +2,8 @@
 
 import {
   AnimatePresence,
+  cancelFrame,
+  frame,
   motion,
   useMotionTemplate,
   useMotionValue,
@@ -15,7 +17,7 @@ import { userFacingStickyMessage } from "@/lib/sticky/messages";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getAuthCallbackUrl } from "@/lib/supabase/redirect";
 import { GateField, emitAuthSignal } from "./GateField";
-import { capturePointerGeometry, pointerBounds, setPointerPercentage } from "./pointer-geometry";
+import { createPointerFrame, setPointerPercentage } from "./pointer-geometry";
 
 type AuthPanelProps = {
   configurationMissing: boolean;
@@ -24,6 +26,7 @@ type AuthPanelProps = {
 
 type AuthStatus = "idle" | "sending" | "sent" | "error";
 type AuthMethod = "email" | "google" | null;
+type GatePointer = { x: number; y: number; door: HTMLElement | null };
 
 const GATE_EASE = [0.16, 1, 0.3, 1] as const;
 const TILT_SPRING = { stiffness: 240, damping: 20, mass: 0.55 };
@@ -99,7 +102,7 @@ function Wordmark() {
 /** Terminal decrypt: glyphs cycle, then lock to the real text left to right. */
 function DecryptText({ text, delay }: { text: string; delay: number }) {
   const reduceMotion = useReducedMotion();
-  const [display, setDisplay] = useState("");
+  const displayRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     if (reduceMotion) return;
@@ -118,7 +121,9 @@ function DecryptText({ text, delay }: { text: string; delay: number }) {
           out += DECRYPT_GLYPHS[Math.floor(Math.random() * DECRYPT_GLYPHS.length)];
         }
       }
-      setDisplay(progress >= 1 ? text : out);
+      // This text-only animation does not need a React render each frame.
+      // Retain the same glyph selection, frame cadence, and completion time.
+      if (displayRef.current) displayRef.current.textContent = progress >= 1 ? text : out;
       if (progress < 1) frame = requestAnimationFrame(step);
     };
     frame = requestAnimationFrame(step);
@@ -127,7 +132,7 @@ function DecryptText({ text, delay }: { text: string; delay: number }) {
 
   return (
     <span className="gate-decrypt" aria-label={text}>
-      <span aria-hidden="true">{reduceMotion ? text : display}</span>
+      <span ref={displayRef} aria-hidden="true">{reduceMotion ? text : null}</span>
     </span>
   );
 }
@@ -139,7 +144,11 @@ function Readouts() {
   useEffect(() => {
     // First tick is deferred so the server-rendered placeholder hydrates cleanly.
     const first = window.setTimeout(() => setNow(new Date()), 0);
-    const timer = window.setInterval(() => setNow(new Date()), 1000);
+    const timer = window.setInterval(() => {
+      const next = new Date();
+      setNow(previous => previous && previous.getHours() === next.getHours() && previous.getMinutes() === next.getMinutes()
+        ? previous : next);
+    }, 1000);
     return () => {
       window.clearTimeout(first);
       window.clearInterval(timer);
@@ -186,6 +195,7 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
 
   const cardRef = useRef<HTMLDivElement | null>(null);
   const submitRef = useRef<HTMLButtonElement | null>(null);
+  const pointerFrameRef = useRef<ReturnType<typeof createPointerFrame<GatePointer>> | null>(null);
 
   // Tilt + glare: pointer position across the card, spring-smoothed.
   const px = useMotionValue(0.5);
@@ -262,40 +272,46 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
     window.location.assign("/auth/google");
   }
 
-  function measureCardPointer(event: React.PointerEvent<HTMLDivElement>) {
-    if (event.pointerType !== "mouse") return;
-    const door = event.target instanceof Element ? event.target.closest(".gate-door") : null;
-    capturePointerGeometry(event.nativeEvent, [
-      door,
-      ...(!reduceMotion && finePointer ? [cardRef.current, submitRef.current] : []),
-    ]);
-  }
-
-  function handleCardPointer(event: React.PointerEvent<HTMLDivElement>) {
-    if (reduceMotion || !finePointer || event.pointerType !== "mouse") return;
-    const card = cardRef.current;
-    if (!card) return;
-    const bounds = pointerBounds(event.nativeEvent, card);
-    px.set((event.clientX - bounds.left) / bounds.width);
-    py.set((event.clientY - bounds.top) / bounds.height);
-
-    const button = submitRef.current;
-    if (!button) return;
-    const rect = pointerBounds(event.nativeEvent, button);
-    const dx = event.clientX - (rect.left + rect.width / 2);
-    const dy = event.clientY - (rect.top + rect.height / 2);
-    const distance = Math.hypot(dx, dy);
-    if (distance < MAGNET_REACH) {
-      const pull = (1 - distance / MAGNET_REACH) * 0.34;
+  useEffect(() => {
+    const pointerFrame = createPointerFrame<GatePointer>(point => {
+      const tilt = !reduceMotion && finePointer;
+      // Read all current geometry before writing any spotlight or motion values.
+      const doorBounds = point.door?.getBoundingClientRect();
+      const bounds = tilt ? cardRef.current?.getBoundingClientRect() : null;
+      const rect = tilt ? submitRef.current?.getBoundingClientRect() : null;
+      if (point.door && doorBounds) {
+        setPointerPercentage(point.door.style, "--gate-pointer-x", (point.x - doorBounds.left) / doorBounds.width);
+        setPointerPercentage(point.door.style, "--gate-pointer-y", (point.y - doorBounds.top) / doorBounds.height);
+      }
+      if (!bounds) return;
+      px.set((point.x - bounds.left) / bounds.width);
+      py.set((point.y - bounds.top) / bounds.height);
+      if (!rect) return;
+      const dx = point.x - (rect.left + rect.width / 2);
+      const dy = point.y - (rect.top + rect.height / 2);
+      const distance = Math.hypot(dx, dy);
+      const pull = distance < MAGNET_REACH ? (1 - distance / MAGNET_REACH) * 0.34 : 0;
       magnetX.set(dx * pull);
       magnetY.set(dy * pull);
-    } else {
-      magnetX.set(0);
-      magnetY.set(0);
-    }
+    }, callback => frame.read(callback), cancelFrame);
+    pointerFrameRef.current = pointerFrame;
+    return () => {
+      pointerFrame.cancel();
+      pointerFrameRef.current = null;
+    };
+  }, [finePointer, reduceMotion, px, py, magnetX, magnetY]);
+
+  function handleCardPointer(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.pointerType !== "mouse") return;
+    pointerFrameRef.current?.push({
+      x: event.clientX,
+      y: event.clientY,
+      door: event.target instanceof Element ? event.target.closest<HTMLElement>(".gate-door") : null,
+    });
   }
 
   function resetCardPointer() {
+    pointerFrameRef.current?.flush();
     px.set(0.5);
     py.set(0.5);
     magnetX.set(0);
@@ -308,14 +324,6 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
     const bounds = event.currentTarget.getBoundingClientRect();
     event.currentTarget.style.setProperty("--fx", `${(((event.clientX - bounds.left) / bounds.width) * 100).toFixed(1)}%`);
     event.currentTarget.style.setProperty("--fy", `${(((event.clientY - bounds.top) / bounds.height) * 100).toFixed(1)}%`);
-  }
-
-  /** Persistent spotlight that follows the cursor across the Google button. */
-  function trackSpotlight(event: React.PointerEvent<HTMLElement>) {
-    if (event.pointerType !== "mouse") return;
-    const bounds = pointerBounds(event.nativeEvent, event.currentTarget);
-    setPointerPercentage(event.currentTarget.style, "--mx", (event.clientX - bounds.left) / bounds.width);
-    setPointerPercentage(event.currentTarget.style, "--my", (event.clientY - bounds.top) / bounds.height);
   }
 
   const isSending = status === "sending";
@@ -379,7 +387,6 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
           animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
           transition={reduceMotion ? { duration: 0 } : { duration: 1.05, ease: GATE_EASE, delay: 0.55 }}
           style={{ rotateX, rotateY, transformPerspective: 1300 }}
-          onPointerMoveCapture={measureCardPointer}
           onPointerMove={handleCardPointer}
           onPointerLeave={resetCardPointer}
         >
@@ -424,7 +431,6 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
                     className="gate-door gate-door-google"
                     type="button"
                     onClick={signInWithGoogle}
-                    onPointerMove={trackSpotlight}
                     disabled={isSending}
                   >
                     <span className="gate-door-well" aria-hidden="true">
@@ -450,7 +456,6 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
                   <form
                     className={`gate-door gate-door-link${emailArmed ? " is-armed" : ""}`}
                     onSubmit={signInWithEmail}
-                    onPointerMove={trackSpotlight}
                   >
                     <div className="gate-door-top">
                       <span className="gate-door-well" aria-hidden="true">

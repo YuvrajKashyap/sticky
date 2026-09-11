@@ -1,18 +1,25 @@
 import { describe, expect, it, vi } from "vitest";
-import { capturePointerGeometry, pointerBounds, setPointerPercentage } from "./pointer-geometry";
+import { createPointerFrame, setPointerPercentage } from "./pointer-geometry";
 
 describe("login pointer geometry", () => {
-  it("uses one pre-write snapshot, then refreshes for the next event", () => {
-    let left = 10;
-    const element = { getBoundingClientRect: vi.fn(() => ({ left, width: 100 })) } as unknown as HTMLElement;
-    const first = new Event("pointermove");
-    capturePointerGeometry(first, [element, element]);
-    left = 30;
-    expect(pointerBounds(first, element).left).toBe(10);
-    expect(element.getBoundingClientRect).toHaveBeenCalledTimes(1);
-    const next = new Event("pointermove");
-    capturePointerGeometry(next, [element]);
-    expect(pointerBounds(next, element).left).toBe(30);
+  it("consumes the latest input in the next scheduled frame, without an extra frame", () => {
+    const pending = new Set<() => void>();
+    const consume = vi.fn();
+    const pointer = createPointerFrame<number>(consume, callback => { pending.add(callback); }, callback => { pending.delete(callback); });
+    pointer.push(1);
+    pointer.push(2);
+    pointer.push(3);
+    expect(pending.size).toBe(1);
+    for (const callback of pending) callback();
+    pending.clear();
+    expect(consume.mock.calls).toEqual([[3]]);
+    pointer.push(4);
+    pointer.cancel();
+    expect(pending.size).toBe(0);
+    expect(consume.mock.calls).toEqual([[3]]);
+    pointer.push(5);
+    for (const callback of pending) callback();
+    expect(consume.mock.calls).toEqual([[3], [5]]);
   });
 
   it("preserves rounding and only writes a percentage when it changes", () => {
