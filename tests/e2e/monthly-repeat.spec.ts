@@ -4,9 +4,13 @@ test.setTimeout(90_000);
 
 test("monthly capture selects multiple dates and preserves them through completion", async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.clock.setFixedTime(new Date("2026-09-09T12:00:00Z"));
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
   await page.getByText("Local demo saved", { exact: true }).waitFor({ state: "attached" });
+  // Freeze recurrence calculations only after hydration so server and browser
+  // agree on the initial day-based counters.
+  await page.clock.setFixedTime(new Date("2026-09-09T12:00:00Z"));
   await page.getByRole("button", { name: "Add a task", exact: true }).first().click();
   await page.getByLabel("Quick add task").fill("Monthly dates verification");
   await page.getByRole("button", { name: "Set a repeat cadence", exact: true }).click();
@@ -29,8 +33,10 @@ test("monthly capture selects multiple dates and preserves them through completi
   await expect(details.getByRole("button", { name: "Repeat on day 15", exact: true })).toHaveAttribute("aria-pressed", "true");
   await details.getByRole("button", { name: "Repeat on last day", exact: true }).click();
   await details.getByRole("button", { name: "Complete Monthly dates verification", exact: true }).click();
+  await page.clock.setSystemTime(new Date());
   await page.reload();
   await page.getByText("Monthly dates verification", { exact: true }).first().click();
   await expect(details.getByRole("button", { name: "Repeat on last day", exact: true })).toHaveAttribute("aria-pressed", "true");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(errors).toEqual([]);
 });

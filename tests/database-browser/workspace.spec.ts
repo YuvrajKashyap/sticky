@@ -2,6 +2,19 @@ import { expect, test } from "@playwright/test";
 import { createServerClient } from "@supabase/ssr";
 import { createTestOwner, testEnvironment } from "../database/fixtures";
 
+test.beforeAll(async ({ request }) => {
+  // Compile the authenticated API routes before timing UI interactions. On a
+  // cold CI dev server compilation alone can exceed the assertion timeout.
+  // These unauthenticated probes must still enforce the real auth boundary.
+  test.setTimeout(120_000);
+  const board = await request.get("/api/v1/workspace/board");
+  expect(board.status()).toBe(401);
+  const command = await request.post("/api/v1/web-command", {
+    headers: { Origin: "http://localhost:3198" }, data: {},
+  });
+  expect(command.status()).toBe(401);
+});
+
 test("saved tasks and completed history survive reload and reconnect", async ({ page, context }) => {
   const owner = await createTestOwner();
   try {
