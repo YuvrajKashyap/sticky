@@ -348,8 +348,9 @@ test.describe("Sticky workspace", () => {
   test.beforeEach(async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/");
-    await page.evaluate(() => window.localStorage.clear());
-    await page.reload();
+    // Playwright supplies a fresh browser context for each test. Wait for the
+    // demo restore effect before interacting with server-rendered controls.
+    await expect(page.locator(".save-status")).toContainText("Local demo saved");
   });
 
   test("visible workspace controls avoid empty or generic action names", async ({ page }) => {
@@ -950,13 +951,32 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       const booksColumn = page.locator('.board-column[data-list-slug="books"]');
+      // At Auto 90%, Books is already inside the 420px prefetch margin.
+      // Use a real larger interface size to exercise a genuinely distant list.
+      await page.getByLabel("Open appearance settings").click();
+      const settings = page.getByLabel("Workspace appearance");
+      await settings.getByRole("button", { name: "Manual" }).click();
+      await settings.getByLabel("Manual interface size", { exact: true }).fill("150");
+      await page.keyboard.press("Escape");
+      await expect(page.locator(".sticky-app")).toHaveAttribute("data-interface-scale", "150");
 
       await expect(booksColumn.getByRole("button", { name: "Load 12 tasks in Books" })).toBeVisible();
       await expect(booksColumn.locator(".task-card")).toHaveCount(0);
 
-      await booksColumn.scrollIntoViewIfNeeded();
+      // Scroll the board itself; scrollIntoView can choose a different ancestor
+      // while the workspace's automatic sizing is settling.
+      await page.locator(".board-scroll").evaluate((board) => {
+        board.scrollTo({ left: board.scrollWidth, behavior: "instant" });
+      });
+      await expect(booksColumn).toBeInViewport();
       await expect(booksColumn.locator(".task-card")).toHaveCount(12);
     });
+  });
+
+  test("automatic sizing loads lists inside the prefetch margin", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "desktop automatic sizing check");
+    await expect(page.locator(".sticky-app")).toHaveAttribute("data-interface-scale", "90");
+    await expect(page.locator('[data-list-slug="books"] .task-card')).toHaveCount(12);
   });
 
   test("desktop workflow covers lists, tasks, subtasks, due dates, recurrence, completed pile, and persistence", async ({ page }, testInfo) => {
@@ -1809,8 +1829,10 @@ test.describe("Sticky workspace", () => {
       });
 
       await page.reload();
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
       const completedToggle = page.locator('button[aria-controls="completed-stickies-list"]');
+      await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
       await completedToggle.click();
 
       const completedList = page.locator("#completed-stickies-list");

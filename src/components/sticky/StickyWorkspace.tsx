@@ -5548,7 +5548,9 @@ function StickyBoardColumn({
 
     const root = node.closest<HTMLElement>(".board-scroll");
     const observer = new IntersectionObserver(
-      ([entry]) => setNearViewport(entry?.isIntersecting ?? false),
+      // Resize and scroll can queue multiple observations before delivery.
+      // The last entry is the current visibility, not the first queued state.
+      (entries) => setNearViewport(entries.at(-1)?.isIntersecting ?? false),
       {
         root,
         rootMargin: "0px 420px",
