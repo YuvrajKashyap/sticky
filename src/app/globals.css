@@ -1024,6 +1024,7 @@ mark.find-highlight {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
   padding: 0 6px;
 }
@@ -2097,6 +2098,7 @@ mark.find-highlight {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
   margin: 8px 18px 0;
   animation: fade-down 0.45s 0.16s var(--ease-out) both;
 }
@@ -2109,6 +2111,7 @@ mark.find-highlight {
 
 .task-sort-control {
   width: fit-content;
+  flex: none;
 }
 
 .task-sort-control button {
@@ -3513,7 +3516,7 @@ mark.find-highlight {
 .completed-pile {
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  min-height: 44px;
   margin: 0 12px 12px;
   border-radius: 13px;
   background: var(--surface-sunken);
@@ -3522,6 +3525,8 @@ mark.find-highlight {
 
 .completed-toggle {
   display: flex;
+  flex-shrink: 0;
+  min-height: 44px;
   align-items: center;
   gap: 8px;
   width: 100%;
@@ -9202,3 +9207,102 @@ mark.find-highlight {
 .capture-scheduler .scheduler-chip { max-width: 100%; min-width: 0; }
 .capture-scheduler .scheduler-chip-label { min-width: 0; text-overflow: ellipsis; }
 .capture-scheduler .scheduler-chip-icon { flex-shrink: 0; }
+
+/* Keep mobile scroll ownership explicit: the calendar scrolls as one surface,
+   while task lanes retain their independent scroll inside the board carousel. */
+@media (max-width: 860px) {
+  .task-stage { overflow-y: auto; overscroll-behavior-y: contain; }
+  .workspace-topbar, .task-filter-bar, .task-sort-row, .filter-banner,
+  .recurrence-catchup-banner { flex-shrink: 0; }
+  .task-sort-row { gap: 6px 12px; }
+  .task-sort-row > span { flex-basis: 100%; line-height: 1.4; }
+  .task-sort-control button { min-height: 44px; }
+  .filter-banner > svg, .workspace-history-status button { flex-shrink: 0; }
+  .workspace-history-status { align-items: flex-start; }
+  .workspace-history-status > span { min-width: 0; overflow-wrap: anywhere; }
+  .workspace-history-status button { min-height: 44px; }
+  .board-scroll { flex-shrink: 0; min-height: 380px; }
+  .board-column { min-height: 240px; }
+  .task-lane { overscroll-behavior-y: contain; }
+  .task-lane > * { flex-shrink: 0; }
+  .completed-toggle, .column-header, .board-add-task { flex-shrink: 0; }
+  .completed-pile { min-height: 46px; }
+  .board-pager { max-width: calc(100vw - 28px); overflow-x: auto; scrollbar-width: none; }
+  .board-pager-dot { flex: none; }
+  .task-stage:has(.calendar-view) { overflow: hidden; }
+  .calendar-view { flex: 1 1 0; min-height: 0; overscroll-behavior-y: contain; animation: none; }
+  .calendar-header { flex: none; }
+  .calendar-heading-icon { flex-shrink: 0; }
+  .calendar-month-title { white-space: normal; overflow-wrap: anywhere; }
+  .calendar-summary { flex-wrap: wrap; }
+  .calendar-controls button, .calendar-view-switcher button { min-height: 44px; }
+  .calendar-nav-btn { width: 44px; }
+  .calendar-layout { flex: none; grid-template-rows: auto auto; padding-bottom: 0; }
+  .calendar-month, .calendar-agenda { min-height: auto; }
+  .calendar-grid { flex: none; grid-auto-rows: minmax(72px, auto); overflow: visible; }
+  .calendar-cell { padding: 3px; }
+  .calendar-cell-header { flex: 1; min-height: 44px; flex-wrap: wrap; justify-content: center; gap: 2px; padding: 2px 0; }
+  .calendar-day-count { padding: 1px 4px; }
+  .calendar-cell-tasks { display: none; }
+  .calendar-agenda-list { flex: none; overflow: visible; }
+  .calendar-agenda-header { flex-shrink: 0; }
+  .calendar-week-view, .calendar-day-view { flex: none; }
+  .toast-stack { bottom: calc(var(--safe-b) + var(--dock-h) + 62px); }
+  .deck-overlay { padding-top: calc(12px + var(--safe-t)); padding-bottom: calc(24px + var(--safe-b)); overscroll-behavior: contain; scroll-padding-top: 190px; }
+  .deck-topbar { position: sticky; top: 0; z-index: 3; flex-shrink: 0; background: linear-gradient(var(--surface), var(--surface)), var(--canvas); }
+  .deck-reactor { width: min(280px, 76vw); }
+  .deck-close { min-width: 44px; min-height: 44px; justify-content: center; }
+  .deck-close kbd { display: none; }
+  .deck-topbar-side { gap: 12px; }
+}
+
+/* Rotation uses the existing surfaces and controls, with space given back to
+   content. This class is limited to short, landscape touch-device viewports. */
+.sticky-app.phone-landscape {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  --workspace-column-width: 300px;
+}
+.phone-landscape .list-rail { flex-direction: row; align-items: center; padding: 4px 12px; gap: 8px; overflow-x: auto; border-right: 0; }
+.phone-landscape .brand-block { flex: none; margin: 0; padding: 0; }
+.phone-landscape .brand-block h1, .phone-landscape .rail-menu-button,
+.phone-landscape .rail-section-heading, .phone-landscape .archived-list-stack,
+.phone-landscape .rail-add-list-button, .phone-landscape .archived-heading,
+.phone-landscape .list-tab-actions, .phone-landscape .list-tab-counts,
+.phone-landscape .list-board-toggle { display: none; }
+.phone-landscape .rail-primary-nav, .phone-landscape .new-list-button,
+.phone-landscape .list-tab-wrap { flex: none; }
+.phone-landscape .list-stack { flex-direction: row; overflow: visible; min-height: 0; padding: 0; }
+.phone-landscape .list-tab, .phone-landscape .rail-primary-nav button { white-space: nowrap; padding: 8px 10px; }
+.phone-landscape .task-stage { overflow-y: auto; }
+.phone-landscape .workspace-topbar { position: sticky; top: 0; z-index: 45; flex-shrink: 0; flex-direction: row; align-items: center; gap: 8px; padding: 6px 12px; animation: none; background: var(--canvas); }
+.phone-landscape .workspace-title > p, .phone-landscape .metric-strip { display: none; }
+.phone-landscape .workspace-title h2 { font-size: 1.1rem; }
+.phone-landscape .workspace-tools { position: static; transform: none; animation: none; margin-left: auto; padding: 3px 6px; flex-wrap: nowrap; align-self: center; }
+.phone-landscape .workspace-tools .tool-button { width: 40px; height: 40px; }
+.phone-landscape .task-filter-bar { flex-shrink: 0; margin-top: 0; margin-bottom: 4px; }
+.phone-landscape .task-sort-row { flex-shrink: 0; gap: 8px; }
+.phone-landscape .task-sort-row > span { flex-basis: auto; }
+.phone-landscape .board-scroll { flex: 1 0 280px; min-height: 280px; padding: 8px 12px 12px; scroll-snap-type: x proximity; }
+.phone-landscape .board-column { flex: 0 0 300px; width: 300px; min-height: 250px; transform: none; opacity: 1; scroll-snap-align: start; }
+.phone-landscape .task-lane > * { flex-shrink: 0; }
+.phone-landscape .board-pager { display: none; }
+.phone-landscape .task-stage:has(.calendar-view) { overflow: hidden; }
+.phone-landscape .calendar-view { overflow-y: auto; padding: 4px 12px 12px; gap: 8px; animation: none; }
+.phone-landscape .calendar-header { flex: none; padding: 6px 10px; gap: 8px; }
+.phone-landscape .calendar-heading p, .phone-landscape .calendar-summary { display: none; }
+.phone-landscape .calendar-month-title { font-size: 1rem; }
+.phone-landscape .calendar-view-switcher button { padding: 6px 10px; min-height: 40px; }
+.phone-landscape .calendar-controls button { min-height: 40px; }
+.phone-landscape .calendar-layout { flex: none; grid-template-columns: minmax(0, 1.7fr) minmax(220px, 1fr); grid-template-rows: auto; gap: 10px; padding: 0; align-items: start; }
+.phone-landscape .calendar-grid { flex: none; grid-auto-rows: minmax(44px, auto); overflow: visible; }
+.phone-landscape .calendar-cell { min-height: 44px; padding: 2px; }
+.phone-landscape .calendar-cell-header { min-height: 40px; justify-content: space-between; }
+.phone-landscape .calendar-cell-tasks { display: none; }
+.phone-landscape .calendar-agenda-list { overflow: visible; }
+.phone-landscape .calendar-week-view { flex: none; grid-template-columns: repeat(7, minmax(130px, 1fr)); overflow-x: auto; }
+.phone-landscape .calendar-day-view { flex: none; }
+.phone-landscape .toast-stack { bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); }
+.phone-landscape .preference-controls { top: 100px; bottom: auto; max-height: calc(100dvh - 112px); }

@@ -587,7 +587,13 @@ test.describe("Sticky workspace", () => {
       await calendar.getByRole("button", { name: "Today" }).click();
       await expect(calendar.locator(".calendar-month-title")).toHaveText(initialMonth ?? "");
 
-      await calendar.locator(".calendar-task", { hasText: "Daily planning pass" }).first().click();
+      if (testInfo.project.name === "mobile") {
+        await expect(calendar.locator(".calendar-cell-tasks").first()).toBeHidden();
+        await calendar.locator(".calendar-cell.today .calendar-cell-header").click();
+        await calendar.locator(".calendar-agenda-task", { hasText: "Daily planning pass" }).click();
+      } else {
+        await calendar.locator(".calendar-task", { hasText: "Daily planning pass" }).first().click();
+      }
       await expect(page.getByRole("complementary", { name: "Task details", exact: true })).toBeVisible();
     });
   });
@@ -2434,7 +2440,7 @@ test.describe("Sticky workspace", () => {
       await expect(page.getByRole("heading", { name: "Sign in to Sticky" })).toBeVisible();
       await expect(page.getByText("Magic link expired")).toBeVisible();
       await expect(page.getByText("Your lists are right where you left them.")).toBeVisible();
-      await expect(page.getByText("Only approved accounts can open this workspace.")).toBeVisible();
+      await expect(page.getByText("Approved accounts only").first()).toBeVisible();
       await expect(page.getByText("sticky.allowed_emails")).toHaveCount(0);
       await expect(page.getByText("row-level security")).toHaveCount(0);
       await expect(page.getByText("Supabase Auth")).toHaveCount(0);

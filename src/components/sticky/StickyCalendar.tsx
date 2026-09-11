@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   addDays,
@@ -124,6 +124,7 @@ function eventTime(event: StickyCalendarEvent) {
 }
 
 export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, mode }: StickyCalendarProps) {
+  const calendarRef = useRef<HTMLElement>(null);
   const today = useMemo(() => new Date(), []);
   const todayKey = format(today, "yyyy-MM-dd");
   const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
@@ -272,6 +273,15 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
     if (!isSameMonth(day, monthStart)) {
       setAnchorDate(day);
     }
+    if (window.matchMedia("(max-width: 860px) and (orientation: portrait)").matches) {
+      requestAnimationFrame(() => {
+        const calendar = calendarRef.current;
+        const agenda = calendar?.querySelector<HTMLElement>(".calendar-agenda");
+        if (calendar && agenda) {
+          calendar.scrollTo({ top: calendar.scrollTop + agenda.getBoundingClientRect().top - calendar.getBoundingClientRect().top - 12, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+        }
+      });
+    }
   }
 
   function openDay(day: Date) {
@@ -336,7 +346,7 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
   }
 
   return (
-    <section className={`calendar-view calendar-mode-${viewMode}`} aria-label="Workspace calendar">
+    <section ref={calendarRef} className={`calendar-view calendar-mode-${viewMode}`} aria-label="Workspace calendar">
       <header className="calendar-header">
         <div className="calendar-heading">
           <span className="calendar-heading-icon" aria-hidden="true">

@@ -729,7 +729,7 @@ function useBoardPan() {
 }
 
 function isPhoneViewport() {
-  return window.matchMedia("(max-width: 860px)").matches;
+  return window.matchMedia("(max-width: 860px) and (orientation: portrait)").matches;
 }
 
 /**
@@ -1254,6 +1254,17 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   const [accentHue, setAccentHue] = useState(DEFAULT_ACCENT_HUE);
   const [captureExpanded, setCaptureExpanded] = useState(false);
   const [viewport, setViewport] = useState({ width: 1920, height: 1080 });
+  const [phoneLandscape, setPhoneLandscape] = useState(false);
+  const [rotationDetailsHidden, setRotationDetailsHidden] = useState(false);
+  const landscapeRef = useRef(false);
+  const portraitViewRef = useRef<{
+    viewMode: "board" | "calendar";
+    overviewOpen: boolean;
+    pulseOpen: boolean;
+    connectionsOpen: boolean;
+    commandOpen: boolean;
+    selectedTaskId: string | null;
+  } | null>(null);
   const [captureDraft, setCaptureDraft] = useState<QuickCaptureDraft>({
     details: "",
     dueDate: "",
@@ -1305,6 +1316,51 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     }),
     [viewport, workspace.preferences.interfaceAutoBias, workspace.preferences.interfaceScale, workspace.preferences.interfaceSizeMode],
   );
+
+  useEffect(() => {
+    // A minimum width keeps a portrait keyboard resize from acting like rotation.
+    const query = window.matchMedia("(pointer: coarse) and (orientation: landscape) and (min-width: 600px) and (max-height: 600px)");
+    let frame = 0;
+    const measure = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const landscape = query.matches;
+        if (landscape === landscapeRef.current) return;
+        landscapeRef.current = landscape;
+        setPhoneLandscape(landscape);
+        if (landscape) {
+          portraitViewRef.current = { viewMode, overviewOpen, pulseOpen, connectionsOpen, commandOpen, selectedTaskId };
+          const onTaskBoard = viewMode === "board" && !overviewOpen && !pulseOpen && !connectionsOpen && !commandOpen && !selectedTaskId;
+          if (!onTaskBoard) {
+            // Commit the same on-blur edits as normal navigation before hiding details.
+            if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+            setViewMode("calendar");
+            setOverviewOpen(false);
+            setPulseOpen(false);
+            setConnectionsOpen(false);
+            setCommandOpen(false);
+            setRotationDetailsHidden(true);
+          }
+        } else if (portraitViewRef.current) {
+          const previous = portraitViewRef.current;
+          portraitViewRef.current = null;
+          setRotationDetailsHidden(false);
+          setViewMode(previous.viewMode);
+          setOverviewOpen(previous.overviewOpen);
+          setPulseOpen(previous.pulseOpen);
+          setConnectionsOpen(previous.connectionsOpen);
+          setCommandOpen(previous.commandOpen);
+          setSelectedTaskId(previous.selectedTaskId);
+        }
+      });
+    };
+    measure();
+    query.addEventListener("change", measure);
+    return () => {
+      cancelAnimationFrame(frame);
+      query.removeEventListener("change", measure);
+    };
+  }, [viewMode, overviewOpen, pulseOpen, connectionsOpen, commandOpen, selectedTaskId]);
 
   useEffect(() => {
     let frame = 0;
@@ -2861,6 +2917,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   }
 
   function openTaskInContext(taskId: string) {
+    setRotationDetailsHidden(false);
     const task = workspace.tasks.find((item) => item.id === taskId);
 
     if (!task) {
@@ -4556,8 +4613,8 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     <MotionConfig reducedMotion="user">
     <main
       className={`sticky-app${
-        selectedTask || pulseOpen ? " details-open" : ""
-      }${railCollapsed ? " rail-collapsed" : ""}`}
+        (selectedTask || pulseOpen) && !rotationDetailsHidden ? " details-open" : ""
+      }${railCollapsed ? " rail-collapsed" : ""}${phoneLandscape ? " phone-landscape" : ""}`}
       data-interface-size-mode={workspace.preferences.interfaceSizeMode}
       data-interface-scale={resolvedInterfaceScale}
       style={{ "--workspace-scale": resolvedInterfaceScale / 100 } as CSSProperties}
@@ -4891,6 +4948,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                 aria-label={pulseOpen ? "Close workspace pulse" : "Open workspace pulse"}
                 aria-pressed={pulseOpen}
                 onClick={() => {
+                  setRotationDetailsHidden(false);
                   if (pulseOpen && !selectedTask) {
                     setPulseOpen(false);
                     return;
@@ -5110,6 +5168,13 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           ) : null}
           </> : null}
 
+          {historyLoading || historyError ? (
+            <div className="recurrence-catchup-banner workspace-history-status" role="status">
+              <span>{historyLoading ? "Loading task history…" : historyError}</span>
+              {historyError && !historyLoading ? <button type="button" onClick={() => { void reconcileRef.current(); }}>Retry</button> : null}
+            </div>
+          ) : null}
+
           {viewMode === "calendar" ? (
             <StickyCalendar
               mode={mode}
@@ -5222,13 +5287,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           )}
         </section>
 
-        {historyLoading || historyError ? (
-          <div className="recurrence-catchup-banner" role="status">
-            <span>{historyLoading ? "Loading task history…" : historyError}</span>
-            {historyError && !historyLoading ? <button type="button" onClick={() => { void reconcileRef.current(); }}>Retry</button> : null}
-          </div>
-        ) : null}
-
+        <div style={{ display: rotationDetailsHidden ? "none" : "contents" }}>
         <TaskDetailsPanel
           task={selectedTask}
           lists={unarchivedLists}
@@ -5270,6 +5329,8 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
             }
           }}
         />
+
+        </div>
 
         {listEditor ? (
           <ListEditorDialog

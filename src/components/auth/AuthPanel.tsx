@@ -5,7 +5,6 @@ import {
   motion,
   useMotionTemplate,
   useMotionValue,
-  useReducedMotion,
   useSpring,
   useTransform,
 } from "framer-motion";
@@ -33,6 +32,20 @@ const WORDMARK = "STICKY";
 const DECRYPT_GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<>/\\|=+*#";
 const FINE_POINTER_QUERY = "(hover: hover) and (pointer: fine)";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
+function subscribeReducedMotion(onChange: () => void) {
+  const query = window.matchMedia(REDUCED_MOTION_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+function readReducedMotion() {
+  return window.matchMedia(REDUCED_MOTION_QUERY).matches;
+}
+function useReducedMotion() {
+  // Match the server's first frame before applying the device preference.
+  return useSyncExternalStore(subscribeReducedMotion, readReducedMotion, () => false);
+}
 
 function subscribeFinePointer(onChange: () => void) {
   const query = window.matchMedia(FINE_POINTER_QUERY);
