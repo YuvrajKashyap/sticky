@@ -6317,7 +6317,7 @@ mark.find-highlight {
   position: relative;
   z-index: 3;
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(360px, 440px);
+  grid-template-columns: minmax(0, 1.1fr) minmax(380px, 470px);
   gap: clamp(32px, 6vw, 96px);
   align-items: center;
   width: min(1180px, 100%);
@@ -6447,233 +6447,394 @@ mark.find-highlight {
   50% { opacity: 0.2; }
 }
 
-/* Gate card --------------------------------------------------------------- */
+/* Gate card: a chamfered glass keycard ------------------------------------ */
 
 .gate-card {
+  --chamfer: 22px;
+  --card-clip: polygon(
+    0 0,
+    calc(100% - var(--chamfer)) 0,
+    100% var(--chamfer),
+    100% 100%,
+    var(--chamfer) 100%,
+    0 calc(100% - var(--chamfer))
+  );
+  position: relative;
+  width: 100%;
+  transform-style: preserve-3d;
+}
+
+/* Soft glow underlay: clip-path swallows box-shadow, so the halo lives here. */
+.gate-card-glow {
+  position: absolute;
+  inset: 12px -4px -18px;
+  border-radius: 30px;
+  background:
+    radial-gradient(60% 50% at 30% 0%, rgba(var(--accent-rgb), 0.28), transparent 70%),
+    radial-gradient(60% 50% at 80% 100%, rgba(106, 92, 255, 0.3), transparent 70%),
+    rgba(1, 3, 10, 0.85);
+  filter: blur(28px);
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.gate-card-frame {
+  position: relative;
+  padding: 1px;
+  clip-path: var(--card-clip);
+  background: linear-gradient(
+    160deg,
+    rgba(var(--accent-rgb), 0.7) 0%,
+    rgba(150, 180, 255, 0.18) 34%,
+    rgba(150, 180, 255, 0.14) 66%,
+    rgba(106, 92, 255, 0.55) 100%
+  );
+}
+
+.gate-card-inner {
+  --chamfer: 21px;
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  width: 100%;
-  padding: 30px 30px 24px;
-  border-radius: 24px;
-  border: 1px solid rgba(150, 180, 255, 0.18);
-  background: linear-gradient(160deg, rgba(24, 32, 66, 0.74), rgba(10, 14, 32, 0.84));
+  gap: 18px;
+  padding: 18px 26px 18px;
+  clip-path: var(--card-clip);
+  background: linear-gradient(160deg, rgba(22, 30, 62, 0.8), rgba(9, 13, 30, 0.9));
   backdrop-filter: blur(28px) saturate(140%);
-  box-shadow: var(--paper-ring), var(--shadow-float);
-  transform-style: preserve-3d;
-  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .gate-card-glare {
   position: absolute;
   inset: 0;
-  border-radius: inherit;
   pointer-events: none;
   mix-blend-mode: screen;
 }
 
-.gate-card-seam {
-  position: absolute;
-  top: 0;
-  left: 8%;
-  right: 8%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(var(--accent-rgb), 0.75), transparent);
-  box-shadow: 0 0 16px rgba(var(--accent-rgb), 0.55);
-}
+/* Header strip: gate id + live status lamp on a ticked rail --------------- */
 
-.gate-card-head {
+.gate-strip {
   display: flex;
   align-items: center;
-  gap: 14px;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  background:
+    repeating-linear-gradient(90deg, var(--line-strong) 0 1px, transparent 1px 9px) left bottom / 100% 3px no-repeat,
+    linear-gradient(90deg, rgba(var(--accent-rgb), 0.5), var(--line) 40%, transparent) left calc(100% - 3px) / 100% 1px no-repeat;
 }
 
-.gate-card-mark {
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 1px solid var(--hud-line);
-  background: var(--accent-soft);
-  color: var(--accent);
-  box-shadow: 0 0 18px -4px rgba(var(--accent-rgb), 0.7), inset 0 0 10px rgba(var(--accent-rgb), 0.18);
-}
-
-.gate-card-head h1 {
-  margin: 0;
-  font-size: 1.5rem;
-  font-weight: 800;
-  letter-spacing: 0.01em;
-  color: var(--ink);
-}
-
-.gate-card-head p {
-  margin: 2px 0 0;
-  font-size: 0.9rem;
+.gate-strip-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   color: var(--ink-soft);
 }
 
-.gate-card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+.gate-strip-id i {
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
 }
 
-/* Google door: cursor spotlight + arrow lean ------------------------------ */
+.gate-lamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent-ink);
+  transition: color 300ms var(--ease-out);
+}
 
-.gate-google {
+.gate-lamp i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+  animation: gate-pulse 2.4s ease-in-out infinite;
+}
+
+.gate-lamp.is-sending { color: #ffe3a1; }
+.gate-lamp.is-sending i { background: var(--warning); box-shadow: 0 0 10px var(--warning); animation: gate-blink 0.7s steps(2, end) infinite; }
+.gate-lamp.is-sent { color: var(--success); }
+.gate-lamp.is-sent i { background: var(--success); box-shadow: 0 0 12px var(--success); animation: none; }
+.gate-lamp.is-error { color: var(--danger-ink); }
+.gate-lamp.is-error i { background: var(--danger); box-shadow: 0 0 10px var(--danger); animation: gate-blink 1s steps(2, end) infinite; }
+
+/* Title ------------------------------------------------------------------- */
+
+.gate-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gate-head h1 {
+  margin: 0;
+  font-size: 1.7rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  line-height: 1.1;
+  color: var(--ink);
+}
+
+.gate-head p {
+  margin: 0;
+  font-size: 0.94rem;
+  color: var(--ink-soft);
+}
+
+/* Two doors on a numbered rail ------------------------------------------- */
+
+.gate-doors {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gate-doors::before {
+  content: "";
+  position: absolute;
+  top: 18px;
+  bottom: 18px;
+  left: 9px;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, var(--line-strong) 20%, var(--line-strong) 80%, transparent);
+}
+
+.gate-door-row {
   position: relative;
   display: grid;
-  grid-template-columns: 34px 1fr 16px;
+  grid-template-columns: 18px 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.gate-door-index {
+  position: relative;
+  z-index: 1;
+  margin-top: 16px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+  background: rgba(9, 13, 30, 0.9);
+  padding: 2px 0;
+  transition: color 240ms var(--ease-out), text-shadow 240ms var(--ease-out);
+}
+
+.gate-door-row:hover .gate-door-index,
+.gate-door-row:focus-within .gate-door-index {
+  color: var(--accent-ink);
+  text-shadow: 0 0 10px rgba(var(--accent-rgb), 0.7);
+}
+
+.gate-door {
+  position: relative;
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 12px 16px;
-  border-radius: 14px;
-  border: 1px solid var(--line-strong);
-  background: var(--surface-raised);
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(9, 13, 30, 0.55);
   color: var(--ink);
-  font-weight: 700;
-  font-size: 0.95rem;
   text-align: left;
-  cursor: pointer;
   overflow: hidden;
-  transition: border-color 220ms var(--ease-out), transform 220ms var(--ease-out), box-shadow 220ms var(--ease-out);
+  transition: border-color 240ms var(--ease-out), background-color 240ms var(--ease-out),
+    transform 240ms var(--ease-out), box-shadow 240ms var(--ease-out);
 }
 
-.gate-google::after {
+.gate-door::after {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background: radial-gradient(180px circle at var(--mx, 50%) var(--my, 50%), rgba(var(--accent-rgb), 0.16), transparent 70%);
+  background: radial-gradient(220px circle at var(--mx, 50%) var(--my, 50%), rgba(var(--accent-rgb), 0.14), transparent 70%);
   opacity: 0;
   transition: opacity 260ms var(--ease-out);
 }
 
-.gate-google:hover:not(:disabled),
-.gate-google:focus-visible {
-  border-color: var(--accent);
-  transform: translateY(-1px);
-  box-shadow: 0 0 24px -6px rgba(var(--accent-rgb), 0.6);
-  outline: none;
-}
-
-.gate-google:hover:not(:disabled)::after,
-.gate-google:focus-visible::after {
+.gate-door:hover::after,
+.gate-door:focus-within::after {
   opacity: 1;
 }
 
-.gate-google:active:not(:disabled) {
-  transform: translateY(0) scale(0.985);
+.gate-door:hover,
+.gate-door:focus-within {
+  border-color: rgba(var(--accent-rgb), 0.55);
+  box-shadow: 0 0 26px -8px rgba(var(--accent-rgb), 0.55);
 }
 
-.gate-google:disabled {
+.gate-door-google {
+  cursor: pointer;
+}
+
+.gate-door-google:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.gate-door-google:active:not(:disabled) {
+  transform: translateY(0) scale(0.99);
+}
+
+.gate-door-google:disabled {
   cursor: progress;
   opacity: 0.7;
 }
 
-.gate-google-mark {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: #fff;
-}
-
-.gate-google-arrow {
-  color: var(--ink-faint);
-  transition: transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1), color 200ms var(--ease-out);
-}
-
-.gate-google:hover:not(:disabled) .gate-google-arrow {
-  transform: translateX(4px);
-  color: var(--accent);
-}
-
-.gate-divider {
+.gate-door-link {
   display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.gate-door-top {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
   align-items: center;
   gap: 12px;
-  font-family: var(--font-mono);
-  font-size: 0.64rem;
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
 }
 
-.gate-divider::before,
-.gate-divider::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--line-strong), transparent);
-}
-
-/* Email door: field with a spine that draws on focus ---------------------- */
-
-.gate-form {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.gate-field-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.gate-field-label {
-  font-family: var(--font-mono);
-  font-size: 0.64rem;
-  letter-spacing: 0.26em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-
-.gate-field {
+.gate-door-well {
   position: relative;
-  display: block;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--hud-line);
+  background: var(--accent-soft);
+  color: var(--accent);
+  transition: box-shadow 260ms var(--ease-out), transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.gate-field input {
-  width: 100%;
-  padding: 14px 16px;
-  border-radius: 14px;
-  border: 1px solid var(--line);
-  background: rgba(9, 13, 30, 0.72);
-  color: var(--ink);
-  font-size: 1rem;
-  font-weight: 600;
-  caret-color: var(--accent);
-  transition: border-color 220ms var(--ease-out), box-shadow 220ms var(--ease-out), transform 220ms var(--ease-out);
+.gate-door-google .gate-door-well {
+  background: #fff;
+  border-color: rgba(255, 255, 255, 0.6);
 }
 
-.gate-field input::placeholder {
-  color: var(--ink-faint);
-}
-
-.gate-field input::selection {
-  background: rgba(var(--accent-rgb), 0.35);
-}
-
-.gate-field input:focus {
-  outline: none;
-  border-color: rgba(var(--accent-rgb), 0.6);
-  box-shadow: 0 0 0 3px var(--accent-soft), 0 0 26px -8px rgba(var(--accent-rgb), 0.7);
+.gate-door:hover .gate-door-well,
+.gate-door:focus-within .gate-door-well {
+  box-shadow: 0 0 20px -4px rgba(var(--accent-rgb), 0.8);
   transform: translateY(-1px);
 }
 
-.gate-field-spine {
+.gate-door-text {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.gate-door-text strong {
+  font-size: 0.98rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+
+.gate-door-text small {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gate-door-meta {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  transition: color 240ms var(--ease-out), text-shadow 240ms var(--ease-out);
+}
+
+.gate-door:hover .gate-door-meta,
+.gate-door:focus-within .gate-door-meta,
+.gate-door-link.is-armed .gate-door-meta {
+  color: var(--accent-ink);
+  text-shadow: 0 0 10px rgba(var(--accent-rgb), 0.6);
+}
+
+.gate-door-arrow {
+  transition: transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.gate-door-google:hover:not(:disabled) .gate-door-arrow {
+  transform: translateX(4px);
+}
+
+/* Key slot: input and submit key fused into one instrument ---------------- */
+
+.gate-slot {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(5, 7, 15, 0.72);
+  transition: border-color 220ms var(--ease-out), box-shadow 220ms var(--ease-out);
+}
+
+.gate-slot:focus-within {
+  border-color: rgba(var(--accent-rgb), 0.6);
+  box-shadow: 0 0 0 3px var(--accent-soft), 0 0 26px -8px rgba(var(--accent-rgb), 0.7);
+}
+
+.gate-slot input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.98rem;
+  font-weight: 600;
+  caret-color: var(--accent);
+}
+
+.gate-slot input:focus {
+  outline: none;
+}
+
+.gate-slot input::placeholder {
+  color: var(--ink-faint);
+}
+
+.gate-slot input::selection {
+  background: rgba(var(--accent-rgb), 0.35);
+}
+
+.gate-slot-spine {
   position: absolute;
-  left: 16px;
-  right: 16px;
+  left: 14px;
+  right: 60px;
   bottom: 0;
   height: 2px;
   border-radius: 2px;
@@ -6684,76 +6845,82 @@ mark.find-highlight {
   transition: transform 520ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.gate-field:focus-within .gate-field-spine {
+.gate-slot:focus-within .gate-slot-spine {
   transform: scaleX(1);
 }
 
-/* Primary door: fills from the cursor's entry point ----------------------- */
-
-.gate-submit {
+.gate-key {
   position: relative;
   display: grid;
   place-items: center;
-  width: 100%;
-  padding: 15px 18px;
-  border-radius: 14px;
-  border: 1px solid rgba(var(--accent-rgb), 0.45);
-  background: rgba(var(--accent-rgb), 0.1);
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  margin: 4px;
+  border-radius: 9px;
+  border: 1px solid rgba(var(--accent-rgb), 0.4);
+  background: var(--accent-soft-2);
   color: var(--accent-ink);
-  font-size: 1rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
   cursor: pointer;
   overflow: hidden;
-  box-shadow: 0 0 28px -10px rgba(var(--accent-rgb), 0.6);
-  transition: color 280ms var(--ease-out), border-color 280ms var(--ease-out), box-shadow 320ms var(--ease-out);
+  transition: color 260ms var(--ease-out), border-color 260ms var(--ease-out), box-shadow 320ms var(--ease-out);
 }
 
-.gate-submit-fill {
+.gate-key-fill {
   position: absolute;
   left: var(--fx, 50%);
   top: var(--fy, 50%);
-  width: 240%;
+  width: 260%;
   aspect-ratio: 1;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--accent-bright), var(--accent) 45%, var(--accent-deep));
   transform: translate(-50%, -50%) scale(0);
-  transition: transform 560ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 480ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.gate-submit:hover:not(:disabled) .gate-submit-fill,
-.gate-submit:focus-visible .gate-submit-fill {
+.gate-key:hover:not(:disabled) .gate-key-fill,
+.gate-key:focus-visible .gate-key-fill {
   transform: translate(-50%, -50%) scale(1);
 }
 
-.gate-submit:hover:not(:disabled),
-.gate-submit:focus-visible {
+.gate-key:hover:not(:disabled),
+.gate-key:focus-visible {
   color: var(--on-accent);
   border-color: transparent;
-  box-shadow: 0 0 44px -8px rgba(var(--accent-rgb), 0.9), 0 12px 32px -12px rgba(var(--accent-rgb), 0.6);
+  box-shadow: 0 0 30px -6px rgba(var(--accent-rgb), 0.95);
   outline: none;
 }
 
-.gate-submit:disabled {
+.gate-key:disabled {
   cursor: progress;
 }
 
-.gate-submit.is-sent {
-  border-color: rgba(60, 232, 168, 0.55);
-  color: var(--success);
-  box-shadow: 0 0 28px -10px rgba(60, 232, 168, 0.7);
+/* Armed: a valid address is in the slot, the key breathes until pressed. */
+.gate-door-link.is-armed .gate-key {
+  border-color: rgba(var(--accent-rgb), 0.8);
+  animation: gate-key-armed 1.8s ease-in-out infinite;
 }
 
-.gate-submit.is-sent .gate-submit-fill {
+@keyframes gate-key-armed {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0.45), 0 0 18px -6px rgba(var(--accent-rgb), 0.8); }
+  50% { box-shadow: 0 0 0 6px rgba(var(--accent-rgb), 0), 0 0 26px -4px rgba(var(--accent-rgb), 1); }
+}
+
+.gate-key.is-sent {
+  border-color: rgba(60, 232, 168, 0.7);
+  color: var(--success);
+  animation: none;
+}
+
+.gate-key.is-sent .gate-key-fill {
   background: linear-gradient(135deg, #7df5c9, #3ce8a8 45%, #1fb389);
 }
 
-.gate-submit-label {
+.gate-key-glyph {
   position: relative;
   z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
+  display: grid;
+  place-items: center;
 }
 
 .gate-spinner {
@@ -6793,11 +6960,13 @@ mark.find-highlight {
   color: var(--ink);
 }
 
-.gate-card-foot {
+.gate-foot {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  background: linear-gradient(90deg, transparent, var(--line) 30%, var(--line) 70%, transparent) top / 100% 1px no-repeat;
 }
 
 .gate-footnote {
@@ -6806,8 +6975,8 @@ mark.find-highlight {
   gap: 6px;
   margin: 0;
   font-family: var(--font-mono);
-  font-size: 0.64rem;
-  letter-spacing: 0.14em;
+  font-size: 0.6rem;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--ink-faint);
 }
@@ -6816,8 +6985,8 @@ mark.find-highlight {
   display: flex;
   align-items: center;
   font-family: var(--font-mono);
-  font-size: 0.64rem;
-  letter-spacing: 0.22em;
+  font-size: 0.6rem;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
 }
 
@@ -6831,7 +7000,7 @@ mark.find-highlight {
 
 .gate-links a + a::before {
   content: "·";
-  margin: 0 12px;
+  margin: 0 10px;
   color: var(--ink-faint);
   text-shadow: none;
 }
@@ -6870,7 +7039,9 @@ mark.find-highlight {
 
 @media (max-width: 560px) {
   .gate { padding: 18px 14px; }
-  .gate-card { padding: 22px 18px 18px; border-radius: 20px; }
+  .gate-card-inner { padding: 16px 16px 14px; }
+  .gate-door-text small { display: none; }
+  .gate-door-meta { display: none; }
   .gate-brand { gap: 12px; }
   .gate-links a + a::before { margin: 0 8px; }
 }
@@ -6879,14 +7050,16 @@ mark.find-highlight {
   .gate-aurora i,
   .gate-eyebrow-dot,
   .gate-readout-clock i,
+  .gate-lamp i,
+  .gate-door-link.is-armed .gate-key,
   .gate-spinner {
     animation: none;
   }
 
   .gate-letter,
-  .gate-submit-fill,
-  .gate-field-spine,
-  .gate-google-arrow,
+  .gate-key-fill,
+  .gate-slot-spine,
+  .gate-door-arrow,
   .gate-links a {
     transition: none;
   }

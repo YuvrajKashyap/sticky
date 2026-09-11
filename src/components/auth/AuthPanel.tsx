@@ -9,7 +9,7 @@ import {
   useSpring,
   useTransform,
 } from "framer-motion";
-import { ArrowRight, LoaderCircle, LockKeyhole } from "lucide-react";
+import { ArrowRight, LoaderCircle, LockKeyhole, Mail } from "lucide-react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { DrawnCheck } from "@/components/sticky/motion";
 import { userFacingStickyMessage } from "@/lib/sticky/messages";
@@ -32,6 +32,7 @@ const MAGNET_REACH = 120;
 const WORDMARK = "STICKY";
 const DECRYPT_GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<>/\\|=+*#";
 const FINE_POINTER_QUERY = "(hover: hover) and (pointer: fine)";
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 function subscribeFinePointer(onChange: () => void) {
   const query = window.matchMedia(FINE_POINTER_QUERY);
@@ -287,7 +288,7 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
   }
 
   /** Persistent spotlight that follows the cursor across the Google button. */
-  function trackSpotlight(event: React.PointerEvent<HTMLButtonElement>) {
+  function trackSpotlight(event: React.PointerEvent<HTMLElement>) {
     if (event.pointerType !== "mouse") return;
     const bounds = event.currentTarget.getBoundingClientRect();
     event.currentTarget.style.setProperty("--mx", `${(((event.clientX - bounds.left) / bounds.width) * 100).toFixed(1)}%`);
@@ -299,6 +300,16 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
   const googleSending = isSending && sendingMethod === "google";
   const submitState = emailSending ? "sending" : status === "sent" ? "sent" : "idle";
   const noticeTone = status === "error" || safeAccessMessage ? "error" : "success";
+  const emailArmed = EMAIL_PATTERN.test(email.trim()) && status !== "sending";
+  const lamp = status === "error" ? "error" : status === "sent" ? "sent" : status === "sending" ? "sending" : "idle";
+  const lampLabel =
+    lamp === "error"
+      ? "Access denied"
+      : lamp === "sent"
+        ? "Link dispatched"
+        : lamp === "sending"
+          ? "Handshaking"
+          : "Secure channel";
 
   return (
     <main className={`gate${finePointer ? " gate-fine" : ""}`}>
@@ -346,156 +357,190 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
           onPointerMove={handleCardPointer}
           onPointerLeave={resetCardPointer}
         >
-          <motion.span className="gate-card-glare" style={{ background: glare }} aria-hidden="true" />
-          <span className="gate-card-seam" aria-hidden="true" />
+          <span className="gate-card-glow" aria-hidden="true" />
+          <div className="gate-card-frame">
+            <div className="gate-card-inner">
+              <motion.span className="gate-card-glare" style={{ background: glare }} aria-hidden="true" />
 
-          <header className="gate-card-head">
-            <span className="gate-card-mark" aria-hidden="true">
-              <LockKeyhole size={15} />
-            </span>
-            <div>
-              <h1>Sign in to Sticky</h1>
-              <p>Pick a door. Both open the same workspace.</p>
-            </div>
-          </header>
-
-          {configurationMissing ? (
-            <div className="notice warning">
-              Sticky sign-in is not connected in this environment. Add the required app settings, or
-              enable demo mode for local UI checks.
-            </div>
-          ) : null}
-
-          <motion.div
-            key={shakeTick}
-            className="gate-card-body"
-            initial={{ x: 0 }}
-            animate={shakeTick && !reduceMotion ? { x: [0, -9, 8, -5, 3, 0] } : { x: 0 }}
-            transition={{ duration: 0.42, ease: [0.4, 0, 0.2, 1] }}
-          >
-            <button
-              className="gate-google"
-              type="button"
-              onClick={signInWithGoogle}
-              onPointerMove={trackSpotlight}
-              disabled={isSending}
-            >
-              <span className="gate-google-mark" aria-hidden="true">
-                <GoogleMark />
-              </span>
-              <span className="gate-google-label">
-                {googleSending ? "Opening Google" : "Continue with Google"}
-              </span>
-              {googleSending ? (
-                <LoaderCircle className="gate-spinner" size={16} aria-hidden="true" />
-              ) : (
-                <ArrowRight className="gate-google-arrow" size={16} aria-hidden="true" />
-              )}
-            </button>
-
-            <div className="gate-divider" aria-hidden="true">
-              <span>or</span>
-            </div>
-
-            <form className="gate-form" onSubmit={signInWithEmail}>
-              <label className="gate-field-wrap">
-                <span className="gate-field-label">Email address</span>
-                <span className="gate-field">
-                  <input
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    type="email"
-                    name="email"
-                    placeholder="you@example.com"
-                    autoComplete="email"
-                    spellCheck={false}
-                    required
-                  />
-                  <i className="gate-field-spine" aria-hidden="true" />
+              <div className="gate-strip" aria-hidden="true">
+                <span className="gate-strip-id">
+                  <i />
+                  Gate // 01
                 </span>
-              </label>
+                <span className={`gate-lamp is-${lamp}`}>
+                  <i />
+                  {lampLabel}
+                </span>
+              </div>
 
-              <motion.button
-                ref={submitRef}
-                className={`gate-submit is-${submitState}`}
-                type="submit"
-                disabled={isSending}
-                onPointerEnter={markEntryPoint}
-                whileTap={reduceMotion ? undefined : { scale: 0.975 }}
-                style={{ x: magnetX, y: magnetY }}
-              >
-                <span className="gate-submit-fill" aria-hidden="true" />
-                <AnimatePresence mode="wait" initial={false}>
-                  {submitState === "sending" ? (
-                    <motion.span
-                      key="sending"
-                      className="gate-submit-label"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.18 }}
-                    >
-                      Transmitting link
-                      <LoaderCircle className="gate-spinner" size={16} aria-hidden="true" />
-                    </motion.span>
-                  ) : submitState === "sent" ? (
-                    <motion.span
-                      key="sent"
-                      className="gate-submit-label"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.18 }}
-                    >
-                      Link sent
-                      <DrawnCheck checked size={17} />
-                    </motion.span>
-                  ) : (
-                    <motion.span
-                      key="idle"
-                      className="gate-submit-label"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.18 }}
-                    >
-                      Send sign-in link
-                      <ArrowRight size={17} aria-hidden="true" />
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              </motion.button>
-            </form>
-          </motion.div>
+              <div className="gate-head">
+                <h1>Sign in to Sticky</h1>
+                <p>Two doors. One workspace.</p>
+              </div>
 
-          <div className="gate-status" aria-live="polite">
-            <AnimatePresence mode="wait" initial={false}>
-              {message ? (
-                <motion.div
-                  key={`${noticeTone}-${message}`}
-                  className={`notice ${noticeTone}`}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.22, ease: GATE_EASE }}
-                >
-                  {message}
-                </motion.div>
+              {configurationMissing ? (
+                <div className="notice warning">
+                  Sticky sign-in is not connected in this environment. Add the required app settings,
+                  or enable demo mode for local UI checks.
+                </div>
               ) : null}
-            </AnimatePresence>
-          </div>
 
-          <footer className="gate-card-foot">
-            <p className="gate-footnote">
-              <LockKeyhole size={12} aria-hidden="true" />
-              Only approved accounts can open this workspace.
-            </p>
-            <nav className="gate-links" aria-label="About Sticky">
-              <a href="/about">About</a>
-              <a href="/privacy">Privacy</a>
-              <a href="/terms">Terms</a>
-            </nav>
-          </footer>
+              <motion.ol
+                key={shakeTick}
+                className="gate-doors"
+                initial={{ x: 0 }}
+                animate={shakeTick && !reduceMotion ? { x: [0, -9, 8, -5, 3, 0] } : { x: 0 }}
+                transition={{ duration: 0.42, ease: [0.4, 0, 0.2, 1] }}
+              >
+                <li className="gate-door-row">
+                  <span className="gate-door-index" aria-hidden="true">01</span>
+                  <button
+                    className="gate-door gate-door-google"
+                    type="button"
+                    onClick={signInWithGoogle}
+                    onPointerMove={trackSpotlight}
+                    disabled={isSending}
+                  >
+                    <span className="gate-door-well" aria-hidden="true">
+                      <GoogleMark />
+                    </span>
+                    <span className="gate-door-text">
+                      <strong>Continue with Google</strong>
+                      <small>One tap if you are already signed in.</small>
+                    </span>
+                    <span className="gate-door-meta" aria-hidden="true">
+                      {googleSending ? "Opening" : "Fast lane"}
+                      {googleSending ? (
+                        <LoaderCircle className="gate-spinner" size={14} />
+                      ) : (
+                        <ArrowRight className="gate-door-arrow" size={14} />
+                      )}
+                    </span>
+                  </button>
+                </li>
+
+                <li className="gate-door-row">
+                  <span className="gate-door-index" aria-hidden="true">02</span>
+                  <form
+                    className={`gate-door gate-door-link${emailArmed ? " is-armed" : ""}`}
+                    onSubmit={signInWithEmail}
+                    onPointerMove={trackSpotlight}
+                  >
+                    <div className="gate-door-top">
+                      <span className="gate-door-well" aria-hidden="true">
+                        <Mail size={17} />
+                      </span>
+                      <span className="gate-door-text">
+                        <strong>Magic link</strong>
+                        <small>No password. We email you a one-time door.</small>
+                      </span>
+                      <span className="gate-door-meta" aria-hidden="true">
+                        {submitState === "sent" ? "Dispatched" : submitState === "sending" ? "Sending" : emailArmed ? "Armed" : "Standby"}
+                      </span>
+                    </div>
+
+                    <label className="gate-slot">
+                      <span className="sr-only">Email address</span>
+                      <input
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        type="email"
+                        name="email"
+                        placeholder="you@example.com"
+                        autoComplete="email"
+                        spellCheck={false}
+                        required
+                      />
+                      <i className="gate-slot-spine" aria-hidden="true" />
+                      <motion.button
+                        ref={submitRef}
+                        className={`gate-key is-${submitState}`}
+                        type="submit"
+                        disabled={isSending}
+                        onPointerEnter={markEntryPoint}
+                        whileTap={reduceMotion ? undefined : { scale: 0.94 }}
+                        style={{ x: magnetX, y: magnetY }}
+                        aria-label={
+                          submitState === "sent"
+                            ? "Sign-in link sent"
+                            : submitState === "sending"
+                              ? "Sending sign-in link"
+                              : "Send sign-in link"
+                        }
+                      >
+                        <span className="gate-key-fill" aria-hidden="true" />
+                        <AnimatePresence mode="wait" initial={false}>
+                          {submitState === "sending" ? (
+                            <motion.span
+                              key="sending"
+                              className="gate-key-glyph"
+                              initial={{ opacity: 0, scale: 0.6, rotate: -30 }}
+                              animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                              exit={{ opacity: 0, scale: 0.6, rotate: 30 }}
+                              transition={{ type: "spring", stiffness: 420, damping: 24 }}
+                            >
+                              <LoaderCircle className="gate-spinner" size={18} aria-hidden="true" />
+                            </motion.span>
+                          ) : submitState === "sent" ? (
+                            <motion.span
+                              key="sent"
+                              className="gate-key-glyph"
+                              initial={{ opacity: 0, scale: 0.6, rotate: -30 }}
+                              animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                              exit={{ opacity: 0, scale: 0.6, rotate: 30 }}
+                              transition={{ type: "spring", stiffness: 420, damping: 24 }}
+                            >
+                              <DrawnCheck checked size={18} />
+                            </motion.span>
+                          ) : (
+                            <motion.span
+                              key="idle"
+                              className="gate-key-glyph"
+                              initial={{ opacity: 0, scale: 0.6, rotate: -30 }}
+                              animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                              exit={{ opacity: 0, scale: 0.6, rotate: 30 }}
+                              transition={{ type: "spring", stiffness: 420, damping: 24 }}
+                            >
+                              <ArrowRight size={18} aria-hidden="true" />
+                            </motion.span>
+                          )}
+                        </AnimatePresence>
+                      </motion.button>
+                    </label>
+                  </form>
+                </li>
+              </motion.ol>
+
+              <div className="gate-status" aria-live="polite">
+                <AnimatePresence mode="wait" initial={false}>
+                  {message ? (
+                    <motion.div
+                      key={`${noticeTone}-${message}`}
+                      className={`notice ${noticeTone}`}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.22, ease: GATE_EASE }}
+                    >
+                      {message}
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
+              </div>
+
+              <footer className="gate-foot">
+                <p className="gate-footnote">
+                  <LockKeyhole size={12} aria-hidden="true" />
+                  Approved accounts only
+                </p>
+                <nav className="gate-links" aria-label="About Sticky">
+                  <a href="/about">About</a>
+                  <a href="/privacy">Privacy</a>
+                  <a href="/terms">Terms</a>
+                </nav>
+              </footer>
+            </div>
+          </div>
         </motion.div>
       </section>
     </main>
