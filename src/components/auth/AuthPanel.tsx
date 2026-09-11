@@ -15,6 +15,7 @@ import { userFacingStickyMessage } from "@/lib/sticky/messages";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getAuthCallbackUrl } from "@/lib/supabase/redirect";
 import { GateField, emitAuthSignal } from "./GateField";
+import { capturePointerGeometry, pointerBounds, setPointerPercentage } from "./pointer-geometry";
 
 type AuthPanelProps = {
   configurationMissing: boolean;
@@ -261,17 +262,26 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
     window.location.assign("/auth/google");
   }
 
+  function measureCardPointer(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.pointerType !== "mouse") return;
+    const door = event.target instanceof Element ? event.target.closest(".gate-door") : null;
+    capturePointerGeometry(event.nativeEvent, [
+      door,
+      ...(!reduceMotion && finePointer ? [cardRef.current, submitRef.current] : []),
+    ]);
+  }
+
   function handleCardPointer(event: React.PointerEvent<HTMLDivElement>) {
     if (reduceMotion || !finePointer || event.pointerType !== "mouse") return;
     const card = cardRef.current;
     if (!card) return;
-    const bounds = card.getBoundingClientRect();
+    const bounds = pointerBounds(event.nativeEvent, card);
     px.set((event.clientX - bounds.left) / bounds.width);
     py.set((event.clientY - bounds.top) / bounds.height);
 
     const button = submitRef.current;
     if (!button) return;
-    const rect = button.getBoundingClientRect();
+    const rect = pointerBounds(event.nativeEvent, button);
     const dx = event.clientX - (rect.left + rect.width / 2);
     const dy = event.clientY - (rect.top + rect.height / 2);
     const distance = Math.hypot(dx, dy);
@@ -303,9 +313,9 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
   /** Persistent spotlight that follows the cursor across the Google button. */
   function trackSpotlight(event: React.PointerEvent<HTMLElement>) {
     if (event.pointerType !== "mouse") return;
-    const bounds = event.currentTarget.getBoundingClientRect();
-    event.currentTarget.style.setProperty("--mx", `${(((event.clientX - bounds.left) / bounds.width) * 100).toFixed(1)}%`);
-    event.currentTarget.style.setProperty("--my", `${(((event.clientY - bounds.top) / bounds.height) * 100).toFixed(1)}%`);
+    const bounds = pointerBounds(event.nativeEvent, event.currentTarget);
+    setPointerPercentage(event.currentTarget.style, "--mx", (event.clientX - bounds.left) / bounds.width);
+    setPointerPercentage(event.currentTarget.style, "--my", (event.clientY - bounds.top) / bounds.height);
   }
 
   const isSending = status === "sending";
@@ -369,6 +379,7 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
           animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
           transition={reduceMotion ? { duration: 0 } : { duration: 1.05, ease: GATE_EASE, delay: 0.55 }}
           style={{ rotateX, rotateY, transformPerspective: 1300 }}
+          onPointerMoveCapture={measureCardPointer}
           onPointerMove={handleCardPointer}
           onPointerLeave={resetCardPointer}
         >

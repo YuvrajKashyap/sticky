@@ -231,7 +231,9 @@ export function GateField() {
     } else {
       lastTime = performance.now();
       frame = requestAnimationFrame(tick);
-      window.addEventListener("pointermove", onPointerMove, { passive: true });
+      // Read the canvas before React's bubbling spotlight handlers write styles.
+      // Keep every event (including its velocity contribution), without a delay.
+      window.addEventListener("pointermove", onPointerMove, { passive: true, capture: true });
       window.addEventListener("pointerdown", onPointerMove, { passive: true });
       document.addEventListener("pointerleave", onPointerLeave);
       window.addEventListener("blur", onPointerLeave);
@@ -243,7 +245,7 @@ export function GateField() {
       running = false;
       cancelAnimationFrame(frame);
       observer.disconnect();
-      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointermove", onPointerMove, true);
       window.removeEventListener("pointerdown", onPointerMove);
       document.removeEventListener("pointerleave", onPointerLeave);
       window.removeEventListener("blur", onPointerLeave);
