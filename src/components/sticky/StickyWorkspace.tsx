@@ -67,6 +67,7 @@ import type { WorkspaceRecords } from "@sticky/data";
 import { userFacingStickySaveMessage } from "@/lib/sticky/messages";
 import { WorkspacePersistence, settleWorkspaceOperations } from "@/lib/sticky/workspace-persistence";
 import { resolveWorkspaceScale } from "@/lib/sticky/workspace-scale";
+import { useMobileWorkspaceZoom } from "./useMobileWorkspaceZoom";
 import {
   compareDueSchedules,
   dueScheduleGroupKey,
@@ -1255,6 +1256,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   const [captureExpanded, setCaptureExpanded] = useState(false);
   const [viewport, setViewport] = useState({ width: 1920, height: 1080 });
   const [phoneLandscape, setPhoneLandscape] = useState(false);
+  const mobileZoom = useMobileWorkspaceZoom(phoneLandscape);
   const [rotationDetailsHidden, setRotationDetailsHidden] = useState(false);
   const landscapeRef = useRef(false);
   const portraitViewRef = useRef<{
@@ -4612,12 +4614,13 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   return (
     <MotionConfig reducedMotion="user">
     <main
+      ref={mobileZoom.ref}
       className={`sticky-app${
         (selectedTask || pulseOpen) && !rotationDetailsHidden ? " details-open" : ""
-      }${railCollapsed ? " rail-collapsed" : ""}${phoneLandscape ? " phone-landscape" : ""}`}
+      }${railCollapsed ? " rail-collapsed" : ""}${phoneLandscape ? " phone-landscape" : ""}${mobileZoom.enabled ? " mobile-resizable" : ""}`}
       data-interface-size-mode={workspace.preferences.interfaceSizeMode}
       data-interface-scale={resolvedInterfaceScale}
-      style={{ "--workspace-scale": resolvedInterfaceScale / 100 } as CSSProperties}
+      style={{ "--workspace-scale": mobileZoom.enabled ? 1 : resolvedInterfaceScale / 100, "--mobile-zoom": mobileZoom.scale } as CSSProperties}
     >
       <DndContext
         id="sticky-workspace-dnd"
@@ -4990,6 +4993,13 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                   </div>
                   <div className="appearance-group">
                     <span className="appearance-group-label">Interface size</span>
+                    {mobileZoom.enabled ? (
+                      <div className="interface-scale-control">
+                        <div className="interface-scale-summary"><span>Pinch to resize</span><strong>{Math.round(mobileZoom.scale * 100)}%</strong></div>
+                        <input type="range" min="60" max="140" step="5" value={Math.round(mobileZoom.scale * 100)} aria-label="Mobile interface size" onChange={(event) => mobileZoom.resize(Number(event.target.value) / 100)} />
+                        <button type="button" className="secondary-action compact" onClick={mobileZoom.reset}>Reset size</button>
+                      </div>
+                    ) : <>
                     <div className="segmented-control interface-size-mode" aria-label="Interface sizing mode">
                       <button
                         type="button"
@@ -5055,6 +5065,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                         />
                       </div>
                     )}
+                    </>}
                   </div>
                   <div className="appearance-group">
                     <span className="appearance-group-label">Accent</span>

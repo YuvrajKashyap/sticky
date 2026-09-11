@@ -278,7 +278,9 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
         const calendar = calendarRef.current;
         const agenda = calendar?.querySelector<HTMLElement>(".calendar-agenda");
         if (calendar && agenda) {
-          calendar.scrollTo({ top: calendar.scrollTop + agenda.getBoundingClientRect().top - calendar.getBoundingClientRect().top - 12, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+          const bounds = calendar.getBoundingClientRect();
+          const scale = bounds.width / calendar.offsetWidth || 1;
+          calendar.scrollTo({ top: calendar.scrollTop + (agenda.getBoundingClientRect().top - bounds.top) / scale - 12, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
         }
       });
     }

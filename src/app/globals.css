@@ -2032,7 +2032,7 @@ mark.find-highlight {
   background: color-mix(in srgb, var(--surface) 72%, transparent);
   box-shadow: inset 0 0 0 1px var(--line);
   width: fit-content;
-  max-width: 100%;
+  max-width: calc(100% - 36px);
   overflow-x: auto;
   scrollbar-width: none;
   animation: fade-down 0.45s 0.12s var(--ease-out) both;
@@ -9306,3 +9306,26 @@ mark.find-highlight {
 .phone-landscape .calendar-day-view { flex: none; }
 .phone-landscape .toast-stack { bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); }
 .phone-landscape .preference-controls { top: 100px; bottom: auto; max-height: calc(100dvh - 112px); }
+
+/* Zoom changes layout density, not the browser's visual viewport. The local
+   containing block keeps fixed sheets and the dock aligned with the screen. */
+.sticky-app.mobile-resizable {
+  --safe-t: calc(env(safe-area-inset-top, 0px) / var(--mobile-zoom));
+  --safe-b: calc(env(safe-area-inset-bottom, 0px) / var(--mobile-zoom));
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: calc(100% / var(--mobile-zoom));
+  height: calc(100dvh / var(--mobile-zoom));
+  transform: scale(var(--mobile-zoom));
+  transform-origin: top left;
+  touch-action: pan-x pan-y;
+}
+.mobile-resizable .details-panel { width: 100%; }
+.mobile-resizable.phone-landscape { padding-left: calc(env(safe-area-inset-left, 0px) / var(--mobile-zoom)); padding-right: calc(env(safe-area-inset-right, 0px) / var(--mobile-zoom)); }
+.mobile-resizable .workspace-tools { max-width: calc(100% - 16px); }
+.mobile-resizable .workspace-tools.search-expanded { width: calc(100% - 16px); }
+.mobile-resizable .board-pager { max-width: calc(100% - 28px); }
+.mobile-resizable .workspace-find-control.expanded { max-width: 100%; }
+.mobile-resizable .task-filter-bar { scroll-padding-inline: 5px; overscroll-behavior-x: contain; }
+.mobile-resizable .task-filter-bar button:last-child { margin-right: 1px; }

@@ -867,6 +867,9 @@ test.describe("Sticky workspace", () => {
     await expect(board).toBeVisible();
     await expect(columns.nth(0)).toBeVisible();
     await expect(columns.nth(1)).toBeVisible();
+    // Coordinate-based panning needs the initial automatic sizing to settle.
+    await expect(page.locator(".sticky-app")).toHaveAttribute("data-interface-scale", "90");
+    await columns.nth(1).hover({ trial: true });
 
     const firstBox = await columns.nth(0).boundingBox();
     const secondBox = await columns.nth(1).boundingBox();
