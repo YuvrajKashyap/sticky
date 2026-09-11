@@ -47,7 +47,8 @@ test.describe("Sticky production smoke", () => {
     await expect(page).toHaveTitle(/Sticky/);
     await expect(page.getByRole("heading", { name: "Sign in to Sticky" })).toBeVisible();
     await expect(page.getByText("Your lists are right where you left them.")).toBeVisible();
-    await expect(page.getByText("Only approved accounts can open this workspace.")).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Continue with Google/ })).toBeVisible();
+    await expect(page.getByText("Approved accounts only", { exact: true }).first()).toBeVisible();
     await expectNoTechnicalTerms(page);
     await expectMobileZoomAllowed(page);
     await expectNoHorizontalOverflow(page);
