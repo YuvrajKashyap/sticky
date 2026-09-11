@@ -4640,9 +4640,8 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
               <Menu size={20} />
             </button>
             <div className="brand-symbol" aria-hidden="true">
-              <span />
-              <span />
-              <span />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/sticky-192.png" width={30} height={30} alt="" style={{ display: "block", borderRadius: 6 }} />
             </div>
             <h1>Sticky</h1>
           </div>

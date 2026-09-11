@@ -35,9 +35,13 @@ export const metadata: Metadata = {
     description: "Fast capture, focused planning, recurring work, reminders, and a connected task API.",
   },
   icons: {
-    icon: "/icon.svg",
-    shortcut: "/icon.svg",
-    apple: "/icon.svg",
+    icon: [
+      { url: "/brand/sticky-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/brand/sticky-16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon.ico?v=glass-s", sizes: "any" },
+    ],
+    shortcut: "/brand/sticky-32.png",
+    apple: { url: "/brand/sticky-180.png", sizes: "180x180", type: "image/png" },
   },
   appleWebApp: {
     capable: true,

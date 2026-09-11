@@ -1,4 +1,6 @@
 import { ImageResponse } from "next/og";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 
 export const alt = "Sticky - premium sticky tasks for fast capture and daily planning";
 export const size = {
@@ -6,43 +8,6 @@ export const size = {
   height: 630,
 };
 export const contentType = "image/png";
-
-function StickyMark() {
-  const notes = [
-    { background: "#ffce3a", left: 0, top: 36, rotate: "-10deg" },
-    { background: "#61c7ff", left: 44, top: 0, rotate: "7deg" },
-    { background: "#ff7d67", left: 76, top: 56, rotate: "10deg" },
-  ];
-
-  return (
-    <div
-      style={{
-        position: "relative",
-        display: "flex",
-        width: 154,
-        height: 136,
-      }}
-    >
-      {notes.map((note) => (
-        <div
-          key={`${note.background}-${note.left}`}
-          style={{
-            position: "absolute",
-            left: note.left,
-            top: note.top,
-            width: 82,
-            height: 82,
-            border: "6px solid #1e2538",
-            borderRadius: 17,
-            background: note.background,
-            transform: `rotate(${note.rotate})`,
-            boxShadow: "8px 11px 0 rgba(30, 37, 56, 0.14)",
-          }}
-        />
-      ))}
-    </div>
-  );
-}
 
 function FeaturePill({ color, label }: { color: string; label: string }) {
   return (
@@ -74,7 +39,8 @@ function FeaturePill({ color, label }: { color: string; label: string }) {
   );
 }
 
-export function createStickySocialImage() {
+export async function createStickySocialImage() {
+  const logo = await readFile(join(process.cwd(), "public/brand/sticky-512.png"));
   return new ImageResponse(
     (
       <div
@@ -131,7 +97,8 @@ export function createStickySocialImage() {
         >
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center" }}>
-              <StickyMark />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`data:image/png;base64,${logo.toString("base64")}`} width={136} height={136} alt="" style={{ borderRadius: 24 }} />
               <div style={{ display: "flex", flexDirection: "column", marginLeft: 22 }}>
                 <div
                   style={{

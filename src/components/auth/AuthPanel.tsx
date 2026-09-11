@@ -335,6 +335,8 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
 
       <section className="gate-stage">
         <div className="gate-brand">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/sticky-192.png" width={80} height={80} alt="Sticky" style={{ borderRadius: 16 }} />
           <motion.p
             className="gate-eyebrow"
             initial={reduceMotion ? false : { opacity: 0, clipPath: "inset(0 100% 0 0)" }}

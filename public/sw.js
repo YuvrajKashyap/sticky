@@ -1,5 +1,5 @@
-const CACHE = "sticky-shell-v1";
-const SHELL = ["/", "/manifest.webmanifest", "/icon.svg"];
+const CACHE = "sticky-shell-glass-s-v2";
+const SHELL = ["/", "/manifest.webmanifest", "/brand/sticky-192.png", "/brand/sticky-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).catch(() => undefined));
