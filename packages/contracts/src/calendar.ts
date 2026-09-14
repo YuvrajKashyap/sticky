@@ -69,6 +69,13 @@ export const updateCalendarEventSchema = z.object({
 
 export const calendarEventDtoSchema = z.object({
   id: idSchema,
+  occurrenceId: z.string().optional(),
+  series: z.object({
+    startAt: z.string().nullable(),
+    endAt: z.string().nullable(),
+    startDate: z.iso.date().nullable(),
+    endDate: z.iso.date().nullable(),
+  }).optional(),
   userId: idSchema,
   calendarId: idSchema,
   taskId: idSchema.nullable(),

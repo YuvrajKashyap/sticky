@@ -3,6 +3,9 @@ import type { StickyColor } from "@/types/sticky";
 
 export type StickyCalendarEvent = {
   id: string;
+  occurrenceId?: string;
+  recurrence?: string[];
+  series?: { startAt: string | null; endAt: string | null; startDate: string | null; endDate: string | null };
   calendarId: string;
   taskId: string | null;
   title: string;

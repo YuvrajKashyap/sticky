@@ -22,7 +22,7 @@ import type {
   UpdateWorkspacePreferencesInput,
   WorkspacePreferencesDto,
 } from "@sticky/contracts";
-import { assertVersion, conflict, nextOccurrenceCount, nextRecurrenceDate, parentDueDateIssue, recurrenceCatchUpTarget, StickyDomainError } from "@sticky/domain";
+import { assertVersion, conflict, expandCalendarEvents, validateCalendarRecurrence, nextOccurrenceCount, nextRecurrenceDate, parentDueDateIssue, recurrenceCatchUpTarget, StickyDomainError } from "@sticky/domain";
 import type { StickySupabaseClient } from "./client";
 import { mapCalendarEventRow, mapCalendarRow, mapListRow, mapRecurrenceRuleRow, mapReminderRow, mapSubtaskRow, mapTaskRow, type DataRow } from "./mappers";
 
@@ -883,15 +883,16 @@ export class StickyRepository {
     const toDate = range.to.slice(0, 10);
     const base = () => this.db.from("calendar_events").select("*")
       .eq("user_id", actor.userId).neq("status", "cancelled");
-    const [timed, allDay] = await Promise.all([
-      base().eq("all_day", false).lt("start_at", range.to).gt("end_at", range.from).order("start_at"),
-      base().eq("all_day", true).lt("start_date", toDate).gt("end_date", fromDate).order("start_date"),
+    const [timed, allDay, repeating] = await Promise.all([
+      readAllPages((from, to) => base().eq("recurrence", "{}").eq("all_day", false).lt("start_at", range.to).gt("end_at", range.from).order("id").range(from, to)),
+      readAllPages((from, to) => base().eq("recurrence", "{}").eq("all_day", true).lt("start_date", toDate).gt("end_date", fromDate).order("id").range(from, to)),
+      readAllPages((from, to) => base().neq("recurrence", "{}").order("id").range(from, to)),
     ]);
     throwQuery(timed.error);
     throwQuery(allDay.error);
-    return ([...(timed.data ?? []), ...(allDay.data ?? [])] as DataRow[])
-      .map(mapCalendarEventRow)
-      .sort((a, b) => (a.startAt ?? a.startDate ?? "").localeCompare(b.startAt ?? b.startDate ?? ""));
+    throwQuery(repeating.error);
+    return expandCalendarEvents(([...(timed.data ?? []), ...(allDay.data ?? []), ...(repeating.data ?? [])] as DataRow[])
+      .map(mapCalendarEventRow), range);
   }
 
   async getCalendarEvent(actor: ActorContext, id: string): Promise<CalendarEventDto> {
@@ -908,6 +909,7 @@ export class StickyRepository {
       : await this.ensureDefaultCalendar(actor);
     if (input.taskId) await this.getTask(actor, input.taskId);
     this.assertEventSchedule(input);
+    validateCalendarRecurrence({ startAt: null, endAt: null, startDate: null, endDate: null, ...input });
     const schedule = input.allDay
       ? { start_date: input.startDate, end_date: input.endDate, start_at: null, end_at: null }
       : { start_at: input.startAt, end_at: input.endAt, start_date: null, end_date: null };
@@ -940,6 +942,7 @@ export class StickyRepository {
     if (input.taskId) await this.getTask(actor, input.taskId);
     const next = { ...current, ...input };
     this.assertEventSchedule(next);
+    validateCalendarRecurrence(next);
     const values: Record<string, unknown> = {};
     if (input.calendarId !== undefined) values.calendar_id = input.calendarId;
     if (input.taskId !== undefined) values.task_id = input.taskId;

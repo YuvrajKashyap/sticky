@@ -7,3 +7,4 @@ export * from "./reminders";
 export * from "./recurrence";
 export * from "./monthly";
 export * from "./task-hierarchy";
+export * from "./calendar-recurrence";

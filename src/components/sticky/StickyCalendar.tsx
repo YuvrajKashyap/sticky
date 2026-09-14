@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "framer-motion";
 import {
@@ -60,6 +61,8 @@ type CalendarContent = "both" | "events" | "tasks";
 
 type EventDraft = {
   id: string | null;
+  timezone: string;
+  repeating: boolean;
   version: number | null;
   title: string;
   details: string;
@@ -428,19 +431,19 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
             title: draft.title,
             details: draft.details,
             location: draft.location,
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago",
+            timezone: draft.timezone,
             status: draft.status,
             transparency: draft.transparency,
             color: draft.color,
           }
         : {
             allDay: false,
-            startAt: new Date(`${draft.date}T${draft.startTime}:00`).toISOString(),
-            endAt: new Date(`${draft.date}T${draft.endTime}:00`).toISOString(),
+            startAt: fromZonedTime(`${draft.date}T${draft.startTime}:00`, draft.timezone).toISOString(),
+            endAt: fromZonedTime(`${draft.date}T${draft.endTime}:00`, draft.timezone).toISOString(),
             title: draft.title,
             details: draft.details,
             location: draft.location,
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago",
+            timezone: draft.timezone,
             status: draft.status,
             transparency: draft.transparency,
             color: draft.color,
@@ -534,14 +537,14 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
     [tasksByDate, viewMode, monthKey, weekStartKey, weekEndKey, selectedDateKey],
   );
   const periodEventCount = useMemo(
-    () => new Set([...occurrencesByDate].flatMap(([key, list]) => (inPeriod(key) ? list.map((item) => item.event.id) : []))).size,
+    () => new Set([...occurrencesByDate].flatMap(([key, list]) => (inPeriod(key) ? list.map((item) => item.event.occurrenceId ?? item.event.id) : []))).size,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [occurrencesByDate, viewMode, monthKey, weekStartKey, weekEndKey, selectedDateKey],
   );
   // Counts for the filter segments always reflect the full visible range,
   // regardless of which class is currently shown.
   const rangeEventTotal = useMemo(
-    () => new Set([...buildOccurrences(allEvents)].flatMap(([key, list]) => (inPeriod(key) ? list.map((item) => item.event.id) : []))).size,
+    () => new Set([...buildOccurrences(allEvents)].flatMap(([key, list]) => (inPeriod(key) ? list.map((item) => item.event.occurrenceId ?? item.event.id) : []))).size,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [allEvents, viewMode, monthKey, weekStartKey, weekEndKey, selectedDateKey],
   );
@@ -634,6 +637,8 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
     setEventMessage(null);
     setEventDraft({
       id: null,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago",
+      repeating: false,
       version: null,
       title: "",
       details: "",
@@ -650,18 +655,23 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
   }
 
   function editEvent(event: StickyCalendarEvent) {
-    const date = event.allDay ? event.startDate ?? selectedDateKey : event.startAt ? dayKey(new Date(event.startAt)) : selectedDateKey;
+    // The displayed occurrence is virtual. Edit the saved series anchor, never
+    // replace its start date with the selected September/October meeting.
+    const schedule = event.series ?? event;
+    const date = event.allDay ? schedule.startDate ?? selectedDateKey : schedule.startAt ? formatInTimeZone(schedule.startAt, event.timezone, "yyyy-MM-dd") : selectedDateKey;
     setEventMessage(null);
     setEventDraft({
       id: event.id,
+      timezone: event.timezone,
+      repeating: Boolean(event.recurrence?.length || event.series),
       version: event.version,
       title: event.title,
       details: event.details,
       location: event.location,
       date,
-      endDate: event.endDate ?? dayKey(addDays(new Date(`${date}T12:00:00`), 1)),
-      startTime: event.startAt ? format(new Date(event.startAt), "HH:mm") : "09:00",
-      endTime: event.endAt ? format(new Date(event.endAt), "HH:mm") : "10:00",
+      endDate: schedule.endDate ?? dayKey(addDays(new Date(`${date}T12:00:00`), 1)),
+      startTime: schedule.startAt ? formatInTimeZone(schedule.startAt, event.timezone, "HH:mm") : "09:00",
+      endTime: schedule.endAt ? formatInTimeZone(schedule.endAt, event.timezone, "HH:mm") : "10:00",
       allDay: event.allDay,
       color: event.color,
       status: event.status,
@@ -878,10 +888,10 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
                         <AnimatePresence mode="popLayout">
                           {shownOccurrences.map((occurrence) => (
                             <motion.button
-                              key={`ev-${occurrence.event.id}`}
+                              key={`ev-${occurrence.event.occurrenceId ?? occurrence.event.id}`}
                               type="button"
                               className={`cal-event cal-event-bar ${eventClass(occurrence.event)}${occurrence.isStart ? "" : " continues-before"}${occurrence.isEnd ? "" : " continues-after"}`}
-                              data-key={`ev-${occurrence.event.id}`}
+                              data-key={`ev-${occurrence.event.occurrenceId ?? occurrence.event.id}`}
                               data-spot=""
                               onClick={() => editEvent(occurrence.event)}
                               title={`${occurrenceTime(occurrence)} · ${occurrence.event.title}`}
@@ -1087,10 +1097,10 @@ function TimeGrid({
               <AnimatePresence>
                 {allDay.map((occurrence, index) => (
                   <motion.button
-                    key={`ev-${occurrence.event.id}`}
+                    key={`ev-${occurrence.event.occurrenceId ?? occurrence.event.id}`}
                     type="button"
                     className={`cal-event cal-event-bar ${eventClass(occurrence.event)}${occurrence.isStart ? "" : " continues-before"}${occurrence.isEnd ? "" : " continues-after"}`}
-                    data-key={`ev-${occurrence.event.id}`}
+                    data-key={`ev-${occurrence.event.occurrenceId ?? occurrence.event.id}`}
                     data-spot=""
                     onClick={() => onEventSelect(occurrence.event)}
                     initial={reduceMotion ? false : { opacity: 0, clipPath: "inset(0 100% 0 0 round 6px)" }}
@@ -1156,11 +1166,11 @@ function TimeGrid({
                   const compact = height < 40;
                   return (
                     <motion.button
-                      key={`ev-${occurrence.event.id}`}
+                      key={`ev-${occurrence.event.occurrenceId ?? occurrence.event.id}`}
                       type="button"
                       className={`cal-event cal-event-block ${eventClass(occurrence.event)}${compact ? " compact" : ""}${occurrence.isStart ? "" : " continues-before"}${occurrence.isEnd ? "" : " continues-after"}`}
                       style={{ top, height, left: `calc(${occurrence.column * width}% + 2px)`, width: `calc(${width}% - 4px)` }}
-                      data-key={`ev-${occurrence.event.id}`}
+                      data-key={`ev-${occurrence.event.occurrenceId ?? occurrence.event.id}`}
                       data-spot=""
                       onClick={() => onEventSelect(occurrence.event)}
                       title={`${occurrenceTime(occurrence)} · ${occurrence.event.title}`}
@@ -1265,7 +1275,7 @@ function CalendarAgenda({
   type Row = { key: string; minutes: number; kind: "event"; occurrence: Occurrence } | { key: string; minutes: number; kind: "task"; task: StickyTask };
   const rows: Row[] = [
     ...occurrences.map((occurrence) => ({
-      key: `ev-${occurrence.event.id}`,
+      key: `ev-${occurrence.event.occurrenceId ?? occurrence.event.id}`,
       minutes: occurrence.event.allDay ? -1 : occurrence.startMin,
       kind: "event" as const,
       occurrence,
@@ -1328,7 +1338,7 @@ function CalendarAgenda({
                   return (
                     <motion.li key={row.key} {...rowMotion}>
                       {nowMarker}
-                      <button type="button" className={`cal-event cal-event-row ${eventClass(event)}`} data-key={`ev-${event.id}`} data-spot="" onClick={() => onEventSelect(event)}>
+                      <button type="button" className={`cal-event cal-event-row ${eventClass(event)}`} data-key={`ev-${event.occurrenceId ?? event.id}`} data-spot="" onClick={() => onEventSelect(event)}>
                         <span className="cal-row-time">
                           <strong>{event.allDay ? "All day" : clockLabel(occurrence.startMin)}</strong>
                           {!event.allDay ? <small>{durationLabel(minutes)}</small> : null}
@@ -1464,13 +1474,15 @@ function EventEditor({ draft, onChange, onClose, onSave, onDelete, saving, delet
         <span className="cal-sheet-seam" aria-hidden="true" />
         <header className="cal-sheet-head">
           <div>
-            <p>{draft.id ? "Edit event" : "Reserve time"}</p>
+            <p>{draft.repeating ? "Edit repeating event" : draft.id ? "Edit event" : "Reserve time"}</p>
             <h3>{draft.title.trim() || "Untitled event"}</h3>
           </div>
           <button type="button" className="cal-sheet-close" onClick={onClose} aria-label="Close event editor">
             <X size={17} />
           </button>
         </header>
+
+        {draft.repeating ? <p>Changes apply to every occurrence. Times are in {draft.timezone}.</p> : null}
 
         <label className="cal-field cal-field-title">
           <span>Title</span>
@@ -1596,7 +1608,7 @@ function EventEditor({ draft, onChange, onClose, onSave, onDelete, saving, delet
               onBlur={() => setConfirmDelete(false)}
             >
               <Trash2 size={14} />
-              {confirmDelete ? "Confirm delete" : "Delete"}
+              {confirmDelete ? (draft.repeating ? "Delete entire series" : "Confirm delete") : "Delete"}
             </button>
           ) : (
             <span />
