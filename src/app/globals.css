@@ -5119,12 +5119,14 @@ mark.find-highlight {
   box-shadow: var(--paper-ring), var(--shadow-paper);
 }
 
+/* Fixed-width heading so the view and content controls never move when the
+   range title or the summary readouts change length. */
 .calendar-heading {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex: 0 0 300px;
   min-width: 0;
-  margin-right: auto;
 }
 
 .calendar-heading-icon {
@@ -5162,6 +5164,8 @@ mark.find-highlight {
   letter-spacing: 0.01em;
   color: var(--ink);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Segmented controls: shared by view switch, content filter, sheet toggles */
@@ -5224,6 +5228,7 @@ mark.find-highlight {
 }
 
 .cal-segmented-label em {
+  min-width: 2ch;
   font-family: var(--font-mono);
   font-style: normal;
   font-size: 0.66rem;
@@ -5242,8 +5247,9 @@ mark.find-highlight {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 4px 0;
-  margin: 0;
+  margin: 0 0 0 auto;
   padding: 0;
   list-style: none;
   font-family: var(--font-mono);
@@ -6586,6 +6592,15 @@ button.cal-timegrid-day:hover {
 }
 
 @media (max-width: 860px) {
+  .calendar-heading {
+    flex-basis: 100%;
+  }
+
+  .calendar-summary {
+    justify-content: flex-start;
+    margin-left: 0;
+  }
+
   /* Phones: the time grid scrolls inside itself (opening at the working day)
      and week columns keep a readable width behind a horizontal scroll. */
   .cal-timegrid-scroll {
