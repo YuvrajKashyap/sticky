@@ -1,23 +1,51 @@
-import { useMemo, useRef, useState, useSyncExternalStore } from "react";
+"use client";
+
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "framer-motion";
 import {
   addDays,
   addMonths,
   addWeeks,
+  differenceInCalendarDays,
   eachDayOfInterval,
   format,
   isSameDay,
   isSameMonth,
   isSameYear,
   isToday,
-  startOfMonth,
   startOfDay,
+  startOfMonth,
   startOfWeek,
 } from "date-fns";
-import { CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, MapPin, Plus, Trash2, X } from "lucide-react";
+import {
+  CalendarDays,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  MapPin,
+  Plus,
+  Repeat2,
+  Trash2,
+  X,
+} from "lucide-react";
 import { createStickyPlatformClient } from "@/lib/sticky/api-client";
+import {
+  deleteDemoEvent,
+  getDemoEventsSnapshot,
+  getServerEventsSnapshot,
+  saveDemoEvent,
+  subscribeDemoEvents,
+  type CalendarEventInput,
+  type StickyCalendarEvent,
+} from "@/lib/sticky/calendar-events";
 import type { AppMode, StickyColor, StickyList, StickyTask } from "@/types/sticky";
-import styles from "./StickyCalendar.module.css";
+import { springs } from "./motion";
+
+/* ------------------------------------------------------------------------
+   Types
+   ------------------------------------------------------------------------ */
 
 type StickyCalendarProps = {
   tasks: StickyTask[];
@@ -27,32 +55,8 @@ type StickyCalendarProps = {
   mode: AppMode;
 };
 
-type StickyCalendarRecord = {
-  id: string;
-  name: string;
-  color: StickyColor;
-  timezone: string;
-  isDefault: boolean;
-};
-
-type StickyCalendarEvent = {
-  id: string;
-  calendarId: string;
-  taskId: string | null;
-  title: string;
-  details: string;
-  location: string;
-  allDay: boolean;
-  startAt: string | null;
-  endAt: string | null;
-  startDate: string | null;
-  endDate: string | null;
-  timezone: string;
-  status: "confirmed" | "tentative" | "cancelled";
-  transparency: "opaque" | "transparent";
-  color: StickyColor | null;
-  version: number;
-};
+type CalendarViewMode = "month" | "week" | "day";
+type CalendarContent = "both" | "events" | "tasks";
 
 type EventDraft = {
   id: string | null;
@@ -61,51 +65,104 @@ type EventDraft = {
   details: string;
   location: string;
   date: string;
+  endDate: string;
   startTime: string;
   endTime: string;
   allDay: boolean;
+  color: StickyColor | null;
+  status: StickyCalendarEvent["status"];
+  transparency: StickyCalendarEvent["transparency"];
 };
 
-type CalendarViewMode = "month" | "week" | "day";
-type CalendarContent = "both" | "events" | "tasks";
-const CONTENT_KEY = "sticky-calendar-content";
-const CONTENT_OPTIONS = [{ value: "both", label: "Both" }, { value: "events", label: "Events" }, { value: "tasks", label: "Tasks" }] as const;
-function readCalendarContent(): CalendarContent {
-  try {
-    const value = window.localStorage.getItem(CONTENT_KEY);
-    return value === "events" || value === "tasks" ? value : "both";
-  } catch { return "both"; }
-}
-function subscribeCalendarContent(onChange: () => void) {
-  window.addEventListener("storage", onChange);
-  return () => window.removeEventListener("storage", onChange);
-}
-function contentSummary(content: CalendarContent, events: number, tasks: number) {
-  return [content !== "tasks" ? `${events} ${events === 1 ? "event" : "events"}` : null,
-    content !== "events" ? `${tasks} ${tasks === 1 ? "task" : "tasks"}` : null].filter(Boolean).join(" · ");
-}
-function emptyContent(content: CalendarContent) {
-  return content === "events" ? "No events this day" : content === "tasks" ? "No tasks due this day" : "Nothing planned yet";
-}
+/** One event's presence on one calendar day. */
+type Occurrence = {
+  event: StickyCalendarEvent;
+  startMin: number;
+  endMin: number;
+  isStart: boolean;
+  isEnd: boolean;
+};
 
+type PlacedOccurrence = Occurrence & { column: number; columns: number };
+
+/* ------------------------------------------------------------------------
+   Constants + helpers
+   ------------------------------------------------------------------------ */
+
+const CONTENT_KEY = "sticky-calendar-content";
+const HOUR_PX = 56;
+const FIRST_VISIBLE_HOUR = 7;
+const MONTH_CELL_CAP = 5;
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const EASE = [0.16, 1, 0.3, 1] as const;
+
 const VIEW_MODES: Array<{ label: string; value: CalendarViewMode }> = [
   { label: "Month", value: "month" },
   { label: "Week", value: "week" },
   { label: "Day", value: "day" },
 ];
 
+const EVENT_COLORS: StickyColor[] = [
+  "sky", "azure", "violet", "magenta", "rose", "coral", "ember", "sun", "lime", "mint", "teal", "ink",
+];
+
+function readCalendarContent(): CalendarContent {
+  try {
+    const value = window.localStorage.getItem(CONTENT_KEY);
+    return value === "events" || value === "tasks" ? value : "both";
+  } catch {
+    return "both";
+  }
+}
+
+function subscribeCalendarContent(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  return () => window.removeEventListener("storage", onChange);
+}
+
+function plural(count: number, word: string) {
+  return `${count} ${word}${count === 1 ? "" : "s"}`;
+}
+
+function contentSummary(content: CalendarContent, events: number, tasks: number) {
+  return [content !== "tasks" ? plural(events, "event") : null, content !== "events" ? plural(tasks, "task") : null]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function emptyContent(content: CalendarContent) {
+  return content === "events" ? "No events" : content === "tasks" ? "No tasks due" : "Nothing planned";
+}
+
+function dayKey(date: Date) {
+  return format(date, "yyyy-MM-dd");
+}
+
+function clockLabel(minutes: number) {
+  const hours = Math.floor(minutes / 60) % 24;
+  const mins = minutes % 60;
+  return format(new Date(2000, 0, 1, hours, mins), mins ? "h:mm a" : "h a");
+}
+
 function formattedTime(value: string | null) {
-  if (!value) {
-    return null;
-  }
-
+  if (!value) return null;
   const [hours, minutes] = value.split(":").map(Number);
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
-    return value;
-  }
-
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return value;
   return format(new Date(2000, 0, 1, hours, minutes), "h:mm a");
+}
+
+function taskMinutes(task: StickyTask): number | null {
+  if (!task.dueTime) return null;
+  const [hours, minutes] = task.dueTime.split(":").map(Number);
+  return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : null;
+}
+
+function durationLabel(minutes: number) {
+  if (minutes >= 1440) return "All day";
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (!hours) return `${mins}m`;
+  return mins ? `${hours}h ${mins}m` : `${hours}h`;
 }
 
 function bySchedule(a: StickyTask, b: StickyTask) {
@@ -118,15 +175,9 @@ function byCalendarPriority(recurringTaskIds: ReadonlySet<string>, a: StickyTask
 }
 
 function weekTitle(start: Date, end: Date) {
-  if (isSameMonth(start, end)) {
-    return `${format(start, "MMM d")} - ${format(end, "d, yyyy")}`;
-  }
-
-  if (isSameYear(start, end)) {
-    return `${format(start, "MMM d")} - ${format(end, "MMM d, yyyy")}`;
-  }
-
-  return `${format(start, "MMM d, yyyy")} - ${format(end, "MMM d, yyyy")}`;
+  if (isSameMonth(start, end)) return `${format(start, "MMM d")} – ${format(end, "d, yyyy")}`;
+  if (isSameYear(start, end)) return `${format(start, "MMM d")} – ${format(end, "MMM d, yyyy")}`;
+  return `${format(start, "MMM d, yyyy")} – ${format(end, "MMM d, yyyy")}`;
 }
 
 function taskStateClass(task: StickyTask, todayKey: string) {
@@ -135,35 +186,196 @@ function taskStateClass(task: StickyTask, todayKey: string) {
   }`;
 }
 
-function eventDateKey(event: StickyCalendarEvent) {
-  return event.allDay ? event.startDate : event.startAt ? format(new Date(event.startAt), "yyyy-MM-dd") : null;
+function eventClass(event: StickyCalendarEvent) {
+  return `color-${event.color ?? "sky"} is-${event.status}${event.transparency === "transparent" ? " is-free" : ""}`;
 }
 
-function eventTime(event: StickyCalendarEvent) {
-  return event.allDay || !event.startAt ? "All day" : format(new Date(event.startAt), "h:mm a");
+function occurrenceTime(occurrence: Occurrence) {
+  if (occurrence.event.allDay) return "All day";
+  return `${clockLabel(occurrence.startMin)} – ${clockLabel(occurrence.endMin)}`;
 }
+
+/**
+ * Expand events onto the days they touch. Timed events are clamped to each
+ * day's 24 hours; all-day events cover every date in their [start, end) range.
+ */
+function buildOccurrences(events: StickyCalendarEvent[]) {
+  const byDay = new Map<string, Occurrence[]>();
+  const push = (key: string, occurrence: Occurrence) => {
+    byDay.set(key, [...(byDay.get(key) ?? []), occurrence]);
+  };
+
+  for (const event of events) {
+    if (event.allDay) {
+      if (!event.startDate) continue;
+      const start = new Date(`${event.startDate}T12:00:00`);
+      const exclusiveEnd = new Date(`${event.endDate ?? event.startDate}T12:00:00`);
+      const total = Math.max(1, differenceInCalendarDays(exclusiveEnd, start));
+      for (let offset = 0; offset < total; offset += 1) {
+        push(dayKey(addDays(start, offset)), {
+          event,
+          startMin: 0,
+          endMin: 1440,
+          isStart: offset === 0,
+          isEnd: offset === total - 1,
+        });
+      }
+      continue;
+    }
+
+    if (!event.startAt || !event.endAt) continue;
+    const start = new Date(event.startAt);
+    const end = new Date(event.endAt);
+    const total = Math.max(1, differenceInCalendarDays(startOfDay(end), startOfDay(start)) + 1);
+    for (let offset = 0; offset < total; offset += 1) {
+      const day = startOfDay(addDays(start, offset));
+      const dayStart = offset === 0 ? start.getHours() * 60 + start.getMinutes() : 0;
+      const isLast = offset === total - 1;
+      const rawEnd = isLast ? end.getHours() * 60 + end.getMinutes() : 1440;
+      const dayEnd = isLast && rawEnd === 0 && total > 1 ? 1440 : rawEnd;
+      if (dayEnd <= dayStart && !(isLast && rawEnd === 0)) continue;
+      push(dayKey(day), {
+        event,
+        startMin: dayStart,
+        endMin: Math.max(dayEnd, dayStart + 15),
+        isStart: offset === 0,
+        isEnd: isLast,
+      });
+    }
+  }
+
+  byDay.forEach((list) =>
+    list.sort((a, b) => {
+      const allDay = Number(b.event.allDay) - Number(a.event.allDay);
+      return allDay || a.startMin - b.startMin || b.endMin - a.endMin || a.event.title.localeCompare(b.event.title);
+    }),
+  );
+  return byDay;
+}
+
+/** Side-by-side columns for overlapping timed events (greedy cluster packing). */
+function placeTimed(occurrences: Occurrence[]): PlacedOccurrence[] {
+  const timed = occurrences.filter((occurrence) => !occurrence.event.allDay);
+  const placed: PlacedOccurrence[] = [];
+  let cluster: PlacedOccurrence[] = [];
+  let clusterEnd = -1;
+  let columnEnds: number[] = [];
+
+  const flush = () => {
+    const columns = Math.max(1, columnEnds.length);
+    cluster.forEach((item) => {
+      item.columns = columns;
+    });
+    placed.push(...cluster);
+    cluster = [];
+    columnEnds = [];
+  };
+
+  for (const occurrence of timed) {
+    if (occurrence.startMin >= clusterEnd && cluster.length) flush();
+    let column = columnEnds.findIndex((end) => end <= occurrence.startMin);
+    if (column === -1) {
+      column = columnEnds.length;
+      columnEnds.push(occurrence.endMin);
+    } else {
+      columnEnds[column] = occurrence.endMin;
+    }
+    cluster.push({ ...occurrence, column, columns: 1 });
+    clusterEnd = Math.max(clusterEnd, occurrence.endMin);
+  }
+  if (cluster.length) flush();
+  return placed;
+}
+
+/* ------------------------------------------------------------------------
+   Small components
+   ------------------------------------------------------------------------ */
+
+type SegmentOption<T extends string> = { value: T; label: string; count?: number };
+
+/** Segmented control with a glowing pill that glides between options. */
+function Segmented<T extends string>({
+  id,
+  options,
+  value,
+  onChange,
+  label,
+  className,
+}: {
+  id: string;
+  options: SegmentOption<T>[];
+  value: T;
+  onChange: (value: T) => void;
+  label: string;
+  className: string;
+}) {
+  const reduceMotion = useReducedMotion();
+  return (
+    <div className={`cal-segmented ${className}`} role="group" aria-label={label}>
+      {options.map((option) => {
+        const active = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            className={active ? "active" : ""}
+            aria-pressed={active}
+            onClick={() => onChange(option.value)}
+          >
+            {active ? (
+              <motion.span
+                className="cal-segmented-pill"
+                layoutId={`${id}-pill`}
+                transition={reduceMotion ? { duration: 0 } : springs.snappy}
+                aria-hidden="true"
+              />
+            ) : null}
+            <span className="cal-segmented-label">
+              {option.label}
+              {option.count !== undefined ? <em>{option.count}</em> : null}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function EventStatusGlyph({ event }: { event: StickyCalendarEvent }) {
+  if (event.status === "tentative") return <span className="cal-event-flag">Tentative</span>;
+  if (event.status === "cancelled") return <span className="cal-event-flag">Cancelled</span>;
+  if (event.transparency === "transparent") return <span className="cal-event-flag">Free</span>;
+  return null;
+}
+
+/* ------------------------------------------------------------------------
+   Calendar
+   ------------------------------------------------------------------------ */
 
 export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, mode }: StickyCalendarProps) {
+  const reduceMotion = useReducedMotion();
   const calendarRef = useRef<HTMLElement>(null);
+  const timeGridRef = useRef<HTMLDivElement>(null);
+  const linkedKey = useRef<string | null>(null);
   const today = useMemo(() => new Date(), []);
-  const todayKey = format(today, "yyyy-MM-dd");
+  const todayKey = dayKey(today);
+
   const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
   const savedContent = useSyncExternalStore(subscribeCalendarContent, readCalendarContent, () => "both" as const);
   const [contentChoice, setContentChoice] = useState<CalendarContent | null>(null);
   const content = contentChoice ?? savedContent;
   const showTasks = content !== "events";
   const showEvents = content !== "tasks";
-  const visibleTasks = useMemo(() => showTasks ? tasks : [], [showTasks, tasks]);
-  function changeContent(next: CalendarContent) {
-    setContentChoice(next);
-    try { window.localStorage.setItem(CONTENT_KEY, next); } catch { /* Filtering still works when storage is unavailable. */ }
-  }
+
   const [anchorDate, setAnchorDate] = useState(today);
   const [selectedDate, setSelectedDate] = useState(today);
   const [eventDraft, setEventDraft] = useState<EventDraft | null>(null);
   const [eventMessage, setEventMessage] = useState<string | null>(null);
-  const client = useMemo(() => mode === "supabase" ? createStickyPlatformClient() : null, [mode]);
+  const [nowMinutes, setNowMinutes] = useState<number | null>(null);
+
+  const client = useMemo(() => (mode === "supabase" ? createStickyPlatformClient() : null), [mode]);
   const queryClient = useQueryClient();
+
   const monthStart = startOfMonth(anchorDate);
   const calendarStart = startOfWeek(monthStart);
   const monthDays = eachDayOfInterval({ start: calendarStart, end: addDays(calendarStart, 41) });
@@ -171,47 +383,99 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
   const weekDays = eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) });
   const weekEnd = weekDays[6];
   const listById = useMemo(() => new Map(lists.map((list) => [list.id, list])), [lists]);
+
   const visibleStart = viewMode === "month" ? calendarStart : viewMode === "week" ? weekStart : startOfDay(selectedDate);
-  const visibleEnd = viewMode === "month" ? addDays(calendarStart, 42) : viewMode === "week" ? addDays(weekStart, 7) : addDays(startOfDay(selectedDate), 1);
+  const visibleEnd =
+    viewMode === "month" ? addDays(calendarStart, 42) : viewMode === "week" ? addDays(weekStart, 7) : addDays(startOfDay(selectedDate), 1);
   const visibleRange = { from: visibleStart.toISOString(), to: visibleEnd.toISOString() };
-  const calendarsQuery = useQuery({
-    queryKey: ["sticky-calendars"],
-    enabled: Boolean(client),
-    queryFn: () => client!.request<{ calendars: StickyCalendarRecord[] }>("/api/v1/calendars"),
-  });
+
+  // Live clock for the "now" line, updated each minute once mounted.
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      setNowMinutes(now.getHours() * 60 + now.getMinutes());
+    };
+    const first = window.setTimeout(tick, 0);
+    const timer = window.setInterval(tick, 60_000);
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  /* --- Event source: Supabase in the real app, local store in demo ------- */
+
   const eventsQuery = useQuery({
     queryKey: ["sticky-calendar-events", visibleRange.from, visibleRange.to],
     enabled: Boolean(client),
-    queryFn: () => client!.request<{ events: StickyCalendarEvent[] }>(`/api/v1/calendar-events?from=${encodeURIComponent(visibleRange.from)}&to=${encodeURIComponent(visibleRange.to)}`),
+    queryFn: () =>
+      client!.request<{ events: StickyCalendarEvent[] }>(
+        `/api/v1/calendar-events?from=${encodeURIComponent(visibleRange.from)}&to=${encodeURIComponent(visibleRange.to)}`,
+      ),
   });
-  const events = useMemo(() => showEvents ? eventsQuery.data?.events ?? [] : [], [eventsQuery.data?.events, showEvents]);
+  const demoEvents = useSyncExternalStore(subscribeDemoEvents, getDemoEventsSnapshot, getServerEventsSnapshot);
+  const serverEvents = eventsQuery.data?.events;
+  const allEvents = useMemo(() => (client ? serverEvents ?? [] : demoEvents), [client, serverEvents, demoEvents]);
+  const events = useMemo(() => (showEvents ? allEvents : []), [allEvents, showEvents]);
+
   const saveEvent = useMutation({
     mutationFn: async (draft: EventDraft) => {
-      if (!client) throw new Error("Sign in to save calendar events.");
-      const schedule = draft.allDay
-        ? { allDay: true, startDate: draft.date, endDate: format(addDays(new Date(`${draft.date}T12:00:00`), 1), "yyyy-MM-dd") }
+      const schedule: CalendarEventInput = draft.allDay
+        ? {
+            allDay: true,
+            startDate: draft.date,
+            endDate: draft.endDate > draft.date ? draft.endDate : dayKey(addDays(new Date(`${draft.date}T12:00:00`), 1)),
+            title: draft.title,
+            details: draft.details,
+            location: draft.location,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago",
+            status: draft.status,
+            transparency: draft.transparency,
+            color: draft.color,
+          }
         : {
             allDay: false,
             startAt: new Date(`${draft.date}T${draft.startTime}:00`).toISOString(),
             endAt: new Date(`${draft.date}T${draft.endTime}:00`).toISOString(),
+            title: draft.title,
+            details: draft.details,
+            location: draft.location,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago",
+            status: draft.status,
+            transparency: draft.transparency,
+            color: draft.color,
           };
-      const common = { title: draft.title, details: draft.details, location: draft.location, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago", ...schedule };
-      if (draft.id && draft.version) {
-        return client.request(`/api/v1/calendar-events/${draft.id}`, { method: "PATCH", body: JSON.stringify({ version: draft.version, ...common }) });
+      if (!client) {
+        saveDemoEvent(schedule, draft.id && draft.version ? { id: draft.id, version: draft.version } : undefined);
+        return;
       }
-      return client.request("/api/v1/calendar-events", { method: "POST", body: JSON.stringify(common) });
+      if (draft.id && draft.version) {
+        return client.request(`/api/v1/calendar-events/${draft.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ version: draft.version, ...schedule }),
+        });
+      }
+      return client.request("/api/v1/calendar-events", { method: "POST", body: JSON.stringify(schedule) });
     },
     onSuccess: () => {
       setEventDraft(null);
-      setEventMessage("Calendar saved.");
+      setEventMessage("Event saved.");
       void queryClient.invalidateQueries({ queryKey: ["sticky-calendar-events"] });
     },
     onError: (error) => setEventMessage(error.message),
   });
+
   const deleteEvent = useMutation({
     mutationFn: async (draft: EventDraft) => {
-      if (!client || !draft.id) return;
-      return client.request(`/api/v1/calendar-events/${draft.id}`, { method: "DELETE", body: JSON.stringify({ confirmation: { confirmed: true, summary: `delete ${draft.id}` } }) });
+      if (!draft.id) return;
+      if (!client) {
+        deleteDemoEvent(draft.id);
+        return;
+      }
+      return client.request(`/api/v1/calendar-events/${draft.id}`, {
+        method: "DELETE",
+        body: JSON.stringify({ confirmation: { confirmed: true, summary: `delete ${draft.id}` } }),
+      });
     },
     onSuccess: () => {
       setEventDraft(null);
@@ -221,87 +485,103 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
     onError: (error) => setEventMessage(error.message),
   });
 
+  /* --- Derived data -------------------------------------------------------- */
+
+  const visibleTasks = useMemo(() => (showTasks ? tasks : []), [showTasks, tasks]);
+
   const tasksByDate = useMemo(() => {
     const grouped = new Map<string, StickyTask[]>();
-
     for (const task of visibleTasks) {
-      if (!task.dueDate) {
-        continue;
-      }
-
-      const dateKey = task.dueDate.slice(0, 10);
-      const dateTasks = grouped.get(dateKey) ?? [];
-      dateTasks.push(task);
-      grouped.set(dateKey, dateTasks);
+      if (!task.dueDate) continue;
+      const key = task.dueDate.slice(0, 10);
+      grouped.set(key, [...(grouped.get(key) ?? []), task]);
     }
-
-    grouped.forEach((dateTasks) =>
-      dateTasks.sort((a, b) => byCalendarPriority(recurringTaskIds, a, b)),
-    );
+    grouped.forEach((list) => list.sort((a, b) => byCalendarPriority(recurringTaskIds, a, b)));
     return grouped;
   }, [recurringTaskIds, visibleTasks]);
 
-  const eventsByDate = useMemo(() => {
-    const grouped = new Map<string, StickyCalendarEvent[]>();
-    for (const event of events) {
-      const startKey = eventDateKey(event);
-      if (!startKey) continue;
-      if (event.allDay && event.endDate) {
-        let cursor = new Date(`${startKey}T12:00:00`);
-        const exclusiveEnd = new Date(`${event.endDate}T12:00:00`);
-        while (cursor < exclusiveEnd) {
-          const key = format(cursor, "yyyy-MM-dd");
-          grouped.set(key, [...(grouped.get(key) ?? []), event]);
-          cursor = addDays(cursor, 1);
-        }
-      } else {
-        grouped.set(startKey, [...(grouped.get(startKey) ?? []), event]);
-      }
-    }
-    grouped.forEach((dayEvents) => dayEvents.sort((a, b) => (a.startAt ?? "").localeCompare(b.startAt ?? "")));
-    return grouped;
-  }, [events]);
+  const occurrencesByDate = useMemo(() => buildOccurrences(events), [events]);
 
-  const selectedDateKey = format(selectedDate, "yyyy-MM-dd");
+  // Time grids open scrolled to the working day, not midnight.
+  useEffect(() => {
+    if (viewMode === "month") return;
+    const node = timeGridRef.current;
+    if (!node) return;
+    const days = viewMode === "week" ? weekDays : [selectedDate];
+    let earliest = FIRST_VISIBLE_HOUR * 60;
+    days.forEach((day) => {
+      (occurrencesByDate.get(dayKey(day)) ?? []).forEach((occurrence) => {
+        if (!occurrence.event.allDay) earliest = Math.min(earliest, occurrence.startMin);
+      });
+    });
+    node.scrollTop = Math.max(0, ((earliest - 20) / 60) * HOUR_PX);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, selectedDate, anchorDate]);
+
+  const selectedDateKey = dayKey(selectedDate);
   const selectedTasks = tasksByDate.get(selectedDateKey) ?? [];
-  const selectedEvents = eventsByDate.get(selectedDateKey) ?? [];
+  const selectedOccurrences = occurrencesByDate.get(selectedDateKey) ?? [];
   const monthKey = format(monthStart, "yyyy-MM");
-  const weekStartKey = format(weekStart, "yyyy-MM-dd");
-  const weekEndKey = format(weekEnd, "yyyy-MM-dd");
-  const periodTaskCount = visibleTasks.filter((task) => {
-    if (!task.dueDate) {
-      return false;
-    }
-    if (viewMode === "month") {
-      return task.dueDate.startsWith(monthKey);
-    }
-    if (viewMode === "week") {
-      return task.dueDate >= weekStartKey && task.dueDate <= weekEndKey;
-    }
-    return task.dueDate === selectedDateKey;
-  }).length;
-  // Count multi-day events once, including events that began before this range.
-  const periodEventCount = new Set([...eventsByDate].flatMap(([key, dayEvents]) => {
-    const inPeriod = viewMode === "month" ? key.startsWith(monthKey)
-      : viewMode === "week" ? key >= weekStartKey && key <= weekEndKey : key === selectedDateKey;
-    return inPeriod ? dayEvents.map(event => event.id) : [];
-  })).size;
-  const overdueCount = visibleTasks.filter(
-    (task) => Boolean(task.dueDate && task.dueDate < todayKey && !task.isCompleted),
-  ).length;
-  const periodLabel = viewMode === "month" ? "this month" : viewMode === "week" ? "this week" : "this day";
+  const weekStartKey = dayKey(weekStart);
+  const weekEndKey = dayKey(weekEnd);
+
+  const inPeriod = (key: string) =>
+    viewMode === "month" ? key.startsWith(monthKey) : viewMode === "week" ? key >= weekStartKey && key <= weekEndKey : key === selectedDateKey;
+
+  const periodTaskCount = useMemo(
+    () => [...tasksByDate].reduce((sum, [key, list]) => (inPeriod(key) ? sum + list.length : sum), 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tasksByDate, viewMode, monthKey, weekStartKey, weekEndKey, selectedDateKey],
+  );
+  const periodEventCount = useMemo(
+    () => new Set([...occurrencesByDate].flatMap(([key, list]) => (inPeriod(key) ? list.map((item) => item.event.id) : []))).size,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [occurrencesByDate, viewMode, monthKey, weekStartKey, weekEndKey, selectedDateKey],
+  );
+  // Counts for the filter segments always reflect the full visible range,
+  // regardless of which class is currently shown.
+  const rangeEventTotal = useMemo(
+    () => new Set([...buildOccurrences(allEvents)].flatMap(([key, list]) => (inPeriod(key) ? list.map((item) => item.event.id) : []))).size,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allEvents, viewMode, monthKey, weekStartKey, weekEndKey, selectedDateKey],
+  );
+  const rangeTaskTotal = useMemo(
+    () => tasks.filter((task) => task.dueDate && inPeriod(task.dueDate.slice(0, 10))).length,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tasks, viewMode, monthKey, weekStartKey, weekEndKey, selectedDateKey],
+  );
+  const overdueCount = visibleTasks.filter((task) => Boolean(task.dueDate && task.dueDate < todayKey && !task.isCompleted)).length;
+  const busyMinutes = useMemo(
+    () =>
+      [...occurrencesByDate].reduce(
+        (sum, [key, list]) =>
+          inPeriod(key)
+            ? sum + list.reduce((acc, item) => (item.event.allDay || item.event.transparency === "transparent" ? acc : acc + (item.endMin - item.startMin)), 0)
+            : sum,
+        0,
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [occurrencesByDate, viewMode, monthKey, weekStartKey, weekEndKey, selectedDateKey],
+  );
+
   const rangeTitle =
-    viewMode === "month"
-      ? format(monthStart, "MMMM yyyy")
-      : viewMode === "week"
-        ? weekTitle(weekStart, weekEnd)
-        : format(selectedDate, "EEEE, MMMM d");
+    viewMode === "month" ? format(monthStart, "MMMM yyyy") : viewMode === "week" ? weekTitle(weekStart, weekEnd) : format(selectedDate, "EEEE, MMMM d");
+  const periodLabel = viewMode === "month" ? "this month" : viewMode === "week" ? "this week" : "today";
+
+  /* --- Actions --------------------------------------------------------------- */
+
+  function changeContent(next: CalendarContent) {
+    setContentChoice(next);
+    try {
+      window.localStorage.setItem(CONTENT_KEY, next);
+    } catch {
+      /* Filtering still works when storage is unavailable. */
+    }
+  }
 
   function selectMonthDate(day: Date) {
     setSelectedDate(day);
-    if (!isSameMonth(day, monthStart)) {
-      setAnchorDate(day);
-    }
+    if (!isSameMonth(day, monthStart)) setAnchorDate(day);
     if (window.matchMedia("(max-width: 860px) and (orientation: portrait)").matches) {
       requestAnimationFrame(() => {
         const calendar = calendarRef.current;
@@ -309,7 +589,10 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
         if (calendar && agenda) {
           const bounds = calendar.getBoundingClientRect();
           const scale = bounds.width / calendar.offsetWidth || 1;
-          calendar.scrollTo({ top: calendar.scrollTop + (agenda.getBoundingClientRect().top - bounds.top) / scale - 12, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+          calendar.scrollTo({
+            top: calendar.scrollTop + (agenda.getBoundingClientRect().top - bounds.top) / scale - 12,
+            behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+          });
         }
       });
     }
@@ -333,7 +616,6 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
       setSelectedDate(startOfMonth(nextDate));
       return;
     }
-
     const nextDate = viewMode === "week" ? addWeeks(selectedDate, direction) : addDays(selectedDate, direction);
     setAnchorDate(nextDate);
     setSelectedDate(nextDate);
@@ -345,7 +627,10 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
     setSelectedDate(nextToday);
   }
 
-  function createEventFor(day = selectedDate) {
+  function createEventFor(day = selectedDate, startMinutes = 9 * 60) {
+    const startHour = Math.floor(startMinutes / 60);
+    const startMin = startMinutes % 60;
+    const endMinutes = Math.min(startMinutes + 60, 23 * 60 + 59);
     setEventMessage(null);
     setEventDraft({
       id: null,
@@ -353,15 +638,19 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
       title: "",
       details: "",
       location: "",
-      date: format(day, "yyyy-MM-dd"),
-      startTime: "09:00",
-      endTime: "09:30",
+      date: dayKey(day),
+      endDate: dayKey(addDays(day, 1)),
+      startTime: `${String(startHour).padStart(2, "0")}:${String(startMin).padStart(2, "0")}`,
+      endTime: `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`,
       allDay: false,
+      color: null,
+      status: "confirmed",
+      transparency: "opaque",
     });
   }
 
   function editEvent(event: StickyCalendarEvent) {
-    const date = eventDateKey(event) ?? selectedDateKey;
+    const date = event.allDay ? event.startDate ?? selectedDateKey : event.startAt ? dayKey(new Date(event.startAt)) : selectedDateKey;
     setEventMessage(null);
     setEventDraft({
       id: event.id,
@@ -370,396 +659,958 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
       details: event.details,
       location: event.location,
       date,
+      endDate: event.endDate ?? dayKey(addDays(new Date(`${date}T12:00:00`), 1)),
       startTime: event.startAt ? format(new Date(event.startAt), "HH:mm") : "09:00",
-      endTime: event.endAt ? format(new Date(event.endAt), "HH:mm") : "09:30",
+      endTime: event.endAt ? format(new Date(event.endAt), "HH:mm") : "10:00",
       allDay: event.allDay,
+      color: event.color,
+      status: event.status,
+      transparency: event.transparency,
     });
   }
 
+  /* --- Render ------------------------------------------------------------------ */
+
+  const contentOptions: SegmentOption<CalendarContent>[] = [
+    { value: "both", label: "All", count: rangeEventTotal + rangeTaskTotal },
+    { value: "events", label: "Events", count: rangeEventTotal },
+    { value: "tasks", label: "Tasks", count: rangeTaskTotal },
+  ];
+
+  const itemMotion = reduceMotion
+    ? {}
+    : {
+        layout: true as const,
+        initial: { opacity: 0, clipPath: "inset(0 100% 0 0 round 6px)" },
+        animate: { opacity: 1, clipPath: "inset(0 0% 0 0 round 6px)" },
+        exit: { opacity: 0, height: 0, marginTop: -3, transition: { duration: 0.22, ease: EASE } },
+        transition: { duration: 0.55, ease: EASE },
+      };
+
+  /** Persistent cursor spotlight on any [data-spot] object under the pointer. */
+  function handleSpotlight(event: React.PointerEvent<HTMLElement>) {
+    if (event.pointerType !== "mouse") return;
+    const target = (event.target as HTMLElement).closest<HTMLElement>("[data-spot]");
+    if (!target) return;
+    const bounds = target.getBoundingClientRect();
+    target.style.setProperty("--mx", `${(((event.clientX - bounds.left) / bounds.width) * 100).toFixed(1)}%`);
+    target.style.setProperty("--my", `${(((event.clientY - bounds.top) / bounds.height) * 100).toFixed(1)}%`);
+  }
+
+  /** Hovering an object lights every other rendering of the same thing. */
+  function handleLinkOver(event: React.PointerEvent<HTMLElement>) {
+    const target = (event.target as HTMLElement).closest<HTMLElement>("[data-key]");
+    const key = target?.dataset.key;
+    const root = calendarRef.current;
+    if (!root) return;
+    if (linkedKey.current && linkedKey.current !== key) {
+      root.querySelectorAll<HTMLElement>(`[data-key="${linkedKey.current}"]`).forEach((node) => node.classList.remove("is-linked"));
+      linkedKey.current = null;
+    }
+    if (key && key !== linkedKey.current) {
+      linkedKey.current = key;
+      root.querySelectorAll<HTMLElement>(`[data-key="${key}"]`).forEach((node) => node.classList.add("is-linked"));
+    }
+  }
+
+  function handleLinkOut(event: React.PointerEvent<HTMLElement>) {
+    const next = event.relatedTarget as HTMLElement | null;
+    if (next && next.closest?.("[data-key]")?.getAttribute("data-key") === linkedKey.current) return;
+    const root = calendarRef.current;
+    if (!root || !linkedKey.current) return;
+    root.querySelectorAll<HTMLElement>(`[data-key="${linkedKey.current}"]`).forEach((node) => node.classList.remove("is-linked"));
+    linkedKey.current = null;
+  }
+
   return (
-    <section ref={calendarRef} className={`calendar-view calendar-mode-${viewMode} ${styles.contentView}`} aria-label="Workspace calendar">
-      <header className="calendar-header">
-        <div className="calendar-heading">
-          <span className="calendar-heading-icon" aria-hidden="true">
-            <CalendarDays size={18} />
-          </span>
-          <div>
-            <p>Workspace calendar</p>
-            <h2 className="calendar-month-title" aria-live="polite">
-              {rangeTitle}
-            </h2>
-          </div>
-        </div>
-
-        <div className="calendar-view-switcher" aria-label="Calendar view">
-          {VIEW_MODES.map((mode) => (
-            <button
-              key={mode.value}
-              type="button"
-              className={viewMode === mode.value ? "active" : ""}
-              aria-pressed={viewMode === mode.value}
-              onClick={() => changeView(mode.value)}
-            >
-              {mode.label}
-            </button>
-          ))}
-        </div>
-
-        <div className={styles.contentFilter} role="group" aria-label="Calendar content">
-          {CONTENT_OPTIONS.map(option => <button key={option.value} type="button" aria-pressed={content === option.value} onClick={() => changeContent(option.value)}>{option.label}</button>)}
-        </div>
-
-        <div className="calendar-summary" aria-label={`Calendar summary for ${calendarsQuery.data?.calendars.find((calendar) => calendar.isDefault)?.name ?? "Sticky"}`}>
-          {showEvents ? <span><strong>{periodEventCount}</strong> {periodEventCount === 1 ? "event" : "events"} {periodLabel}</span> : null}
-          {showTasks ? <span><strong>{periodTaskCount}</strong> {periodTaskCount === 1 ? "task" : "tasks"} {showEvents ? "" : periodLabel}</span> : null}
-          {showTasks && overdueCount > 0 ? <span className="has-overdue"><strong>{overdueCount}</strong> overdue</span> : null}
-        </div>
-
-        <div className="calendar-controls">
-          <button type="button" onClick={() => createEventFor()} className={styles.addEvent} disabled={!client}>
-            <Plus size={16} /> Event
-          </button>
-          <button
-            type="button"
-            onClick={() => shiftRange(-1)}
-            className="calendar-nav-btn"
-            aria-label={`Previous ${viewMode}`}
-          >
-            <ChevronLeft size={18} />
-          </button>
-          <button type="button" onClick={showToday} className="calendar-today-btn">
-            Today
-          </button>
-          <button
-            type="button"
-            onClick={() => shiftRange(1)}
-            className="calendar-nav-btn"
-            aria-label={`Next ${viewMode}`}
-          >
-            <ChevronRight size={18} />
-          </button>
-        </div>
-      </header>
-
-      {eventMessage || (showEvents && eventsQuery.error) ? (
-        <p className={styles.status} role="status">{eventMessage ?? eventsQuery.error?.message}</p>
-      ) : null}
-
-      {viewMode === "month" ? (
-        <div className="calendar-layout">
-          <div className="calendar-month">
-            <div className="calendar-grid-header" aria-hidden="true">
-              {WEEKDAYS.map((day) => (
-                <div key={day} className="calendar-day-name">
-                  {day}
-                </div>
-              ))}
-            </div>
-
-            <div className="calendar-grid">
-              {monthDays.map((day) => {
-                const dateKey = format(day, "yyyy-MM-dd");
-                const dayTasks = tasksByDate.get(dateKey) ?? [];
-                const dayEvents = eventsByDate.get(dateKey) ?? [];
-                const visibleEvents = dayEvents.slice(0, 3);
-                const visibleTasks = dayTasks.slice(0, Math.max(0, 3 - visibleEvents.length));
-                const remainingTasks = dayTasks.length + dayEvents.length - visibleTasks.length - visibleEvents.length;
-                const isCurrentMonth = isSameMonth(day, monthStart);
-                const selected = isSameDay(day, selectedDate);
-
-                return (
-                  <article
-                    key={dateKey}
-                    className={`calendar-cell${!isCurrentMonth ? " out-of-month" : ""}${
-                      isToday(day) ? " today" : ""
-                    }${selected ? " selected" : ""}`}
-                    aria-label={`${format(day, "EEEE, MMMM d")}, ${contentSummary(content, dayEvents.length, dayTasks.length)}`}
-                  >
-                    <button
-                      type="button"
-                      className="calendar-cell-header"
-                      onClick={() => selectMonthDate(day)}
-                      aria-label={`Show ${format(day, "MMMM d")}`}
-                      aria-pressed={selected}
-                    >
-                      <span className="calendar-day-number">{format(day, "d")}</span>
-                      {dayTasks.length + dayEvents.length ? <span className="calendar-day-count">{dayTasks.length + dayEvents.length}</span> : null}
-                    </button>
-
-                    <div className="calendar-cell-tasks">
-                      {visibleEvents.map((event) => (
-                        <button
-                          key={event.id}
-                          type="button"
-                          className={styles.eventPill}
-                          onClick={() => editEvent(event)}
-                          title={`${eventTime(event)} · ${event.title}`}
-                        >
-                          <span>{eventTime(event)}</span>
-                          <strong>{event.title}</strong>
-                        </button>
-                      ))}
-                      {visibleTasks.map((task) => {
-                        const time = formattedTime(task.dueTime);
-                        const list = listById.get(task.listId);
-
-                        return (
-                          <button
-                            key={task.id}
-                            type="button"
-                            className={`calendar-task color-${task.color}${taskStateClass(task, todayKey)}`}
-                            onClick={() => onTaskSelect(task.id)}
-                            title={`${task.title || "Untitled task"}${list ? ` - ${list.name}` : ""}`}
-                          >
-                            <i aria-hidden="true" />
-                            {time ? <span className="calendar-task-time">{time}</span> : null}
-                            <span className="calendar-task-title">{task.title || "Untitled"}</span>
-                            {task.isCompleted ? <Check size={11} aria-hidden="true" /> : null}
-                          </button>
-                        );
-                      })}
-
-                      {remainingTasks > 0 ? (
-                        <button type="button" className="calendar-more" onClick={() => selectMonthDate(day)}>
-                          +{remainingTasks} more
-                        </button>
-                      ) : null}
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          </div>
-
-          <CalendarAgenda
-            date={selectedDate}
-            content={content}
-            tasks={selectedTasks}
-            events={selectedEvents}
-            listById={listById}
-            onTaskSelect={onTaskSelect}
-            onEventSelect={editEvent}
-            onCreateEvent={() => createEventFor(selectedDate)}
-          />
-        </div>
-      ) : null}
-
-      {viewMode === "week" ? (
-        <div className="calendar-week-view" aria-label={`Week of ${format(weekStart, "MMMM d")}`}>
-          {weekDays.map((day) => {
-            const dateKey = format(day, "yyyy-MM-dd");
-            const dayTasks = tasksByDate.get(dateKey) ?? [];
-            const dayEvents = eventsByDate.get(dateKey) ?? [];
-
-            return (
-              <article
-                key={dateKey}
-                className={`calendar-week-day${isToday(day) ? " today" : ""}${
-                  isSameDay(day, selectedDate) ? " selected" : ""
-                }`}
-              >
-                <button
-                  type="button"
-                  className="calendar-week-day-header"
-                  onClick={() => openDay(day)}
-                  aria-label={`Open ${format(day, "EEEE, MMMM d")} in day view`}
-                >
-                  <span>{format(day, "EEE")}</span>
-                  <strong>{format(day, "d")}</strong>
-                  <small>{dayTasks.length + dayEvents.length || ""}</small>
-                </button>
-
-                <div className="calendar-week-task-list">
-                  {dayEvents.length > 0 ? <p className={styles.sectionLabel}>Events</p> : null}
-                  {dayEvents.map((event) => (
-                    <button key={event.id} type="button" className={styles.weekEvent} onClick={() => editEvent(event)}>
-                      <span>{eventTime(event)}</span>
-                      <strong>{event.title}</strong>
-                    </button>
-                  ))}
-                  {dayTasks.length > 0 ? <p className={styles.sectionLabel}>Tasks</p> : null}
-                  {dayTasks.map((task) => {
-                    const list = listById.get(task.listId);
-                    const time = formattedTime(task.dueTime);
-
-                    return (
-                      <button
-                        key={task.id}
-                        type="button"
-                        className={`calendar-week-task color-${task.color}${taskStateClass(task, todayKey)}`}
-                        onClick={() => onTaskSelect(task.id)}
-                      >
-                        <i aria-hidden="true" />
-                        <span className="calendar-week-task-copy">
-                          <span>{time ?? "Any time"}</span>
-                          <strong>{task.title || "Untitled task"}</strong>
-                          {list ? <small>{list.name}</small> : null}
-                        </span>
-                        {task.isCompleted ? <Check size={13} aria-hidden="true" /> : null}
-                      </button>
-                    );
-                  })}
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      ) : null}
-
-      {viewMode === "day" ? (
-        <div className="calendar-day-view" aria-label={`Day view for ${format(selectedDate, "MMMM d")}`}>
-          <header className="calendar-day-focus-header">
-            <span className="calendar-day-focus-date">
-              <small>{format(selectedDate, "EEE")}</small>
-              <strong>{format(selectedDate, "d")}</strong>
+    <LayoutGroup id="sticky-calendar">
+      <section
+        ref={calendarRef}
+        className={`calendar-view calendar-mode-${viewMode} content-${content}`}
+        aria-label="Workspace calendar"
+        onPointerMove={handleSpotlight}
+        onPointerOver={handleLinkOver}
+        onPointerOut={handleLinkOut}
+      >
+        <header className="calendar-header">
+          <div className="calendar-heading">
+            <span className="calendar-heading-icon" aria-hidden="true">
+              <CalendarDays size={18} />
             </span>
-            <div>
-              <p>{isToday(selectedDate) ? "Today" : format(selectedDate, "EEEE")}</p>
-              <h3>{format(selectedDate, "MMMM d, yyyy")}</h3>
-              <span>{contentSummary(content, selectedEvents.length, selectedTasks.length)}</span>
+            <div className="calendar-heading-copy">
+              <p>Workspace calendar</p>
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.h2
+                  key={rangeTitle}
+                  className="calendar-month-title"
+                  aria-live="polite"
+                  initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={reduceMotion ? undefined : { opacity: 0, y: -8 }}
+                  transition={{ duration: 0.22, ease: EASE }}
+                >
+                  {rangeTitle}
+                </motion.h2>
+              </AnimatePresence>
             </div>
-            <button type="button" className={styles.dayAdd} onClick={() => createEventFor(selectedDate)}><Plus size={16} />Add event</button>
-          </header>
+          </div>
 
-          <div className="calendar-day-schedule">
-            {selectedEvents.length > 0 ? <p className={styles.sectionLabel}>Events</p> : null}
-            {selectedEvents.map((event) => (
-              <button key={event.id} type="button" className={styles.dayEvent} onClick={() => editEvent(event)}>
-                <span><Clock3 size={14} />{eventTime(event)}</span>
-                <i aria-hidden="true" />
-                <span><strong>{event.title}</strong>{event.location ? <small><MapPin size={12} />{event.location}</small> : null}</span>
-              </button>
-            ))}
-            {selectedTasks.length > 0 ? <p className={styles.sectionLabel}>Tasks</p> : null}
-            {selectedTasks.length ? selectedTasks.map((task) => {
-                const list = listById.get(task.listId);
-                const time = formattedTime(task.dueTime);
+          <Segmented
+            id="cal-view"
+            className="calendar-view-switcher"
+            label="Calendar view"
+            options={VIEW_MODES}
+            value={viewMode}
+            onChange={changeView}
+          />
 
-                return (
-                  <button
-                    key={task.id}
-                    type="button"
-                    className={`calendar-day-task color-${task.color}${taskStateClass(task, todayKey)}`}
-                    onClick={() => onTaskSelect(task.id)}
-                  >
-                    <span className="calendar-day-task-time">
-                      {time ? <><Clock3 size={14} /> {time}</> : "Any time"}
-                    </span>
-                    <i aria-hidden="true" />
-                    <span className="calendar-day-task-copy">
-                      <strong>{task.title || "Untitled task"}</strong>
-                      <span>
-                        {list ? <em>{list.name}</em> : null}
-                        {task.isCompleted ? "Completed" : task.dueTime ? "Scheduled" : "Flexible"}
-                      </span>
-                    </span>
-                    {task.isCompleted ? <Check size={17} aria-hidden="true" /> : null}
-                  </button>
-                );
-              }) : !selectedEvents.length ? (
-              <div className="calendar-day-empty">
-                <CalendarDays size={20} />
-                <span>{emptyContent(content)}</span>
+          <Segmented
+            id="cal-content"
+            className="calendar-content-filter"
+            label="Calendar content"
+            options={contentOptions}
+            value={content}
+            onChange={changeContent}
+          />
+
+          <ul className="calendar-summary" aria-label="Calendar summary">
+            {showEvents ? (
+              <li>
+                <strong>{periodEventCount}</strong> {periodEventCount === 1 ? "event" : "events"} {periodLabel}
+              </li>
+            ) : null}
+            {showEvents && busyMinutes > 0 ? (
+              <li>
+                <strong>{durationLabel(busyMinutes)}</strong> busy
+              </li>
+            ) : null}
+            {showTasks ? (
+              <li>
+                <strong>{periodTaskCount}</strong> {periodTaskCount === 1 ? "task" : "tasks"} {showEvents ? "due" : periodLabel}
+              </li>
+            ) : null}
+            {showTasks && overdueCount > 0 ? (
+              <li className="has-overdue">
+                <strong>{overdueCount}</strong> overdue
+              </li>
+            ) : null}
+          </ul>
+
+          <div className="calendar-controls">
+            <button type="button" onClick={() => createEventFor()} className="calendar-add-event">
+              <Plus size={15} /> <span>Event</span>
+            </button>
+            <button type="button" onClick={() => shiftRange(-1)} className="calendar-nav-btn" aria-label={`Previous ${viewMode}`}>
+              <ChevronLeft size={18} />
+            </button>
+            <button type="button" onClick={showToday} className="calendar-today-btn">
+              Today
+            </button>
+            <button type="button" onClick={() => shiftRange(1)} className="calendar-nav-btn" aria-label={`Next ${viewMode}`}>
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        </header>
+
+        <AnimatePresence initial={false}>
+          {eventMessage || (showEvents && eventsQuery.error) ? (
+            <motion.p
+              key="status"
+              className="calendar-status"
+              role="status"
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.2, ease: EASE }}
+            >
+              {eventMessage ?? eventsQuery.error?.message}
+            </motion.p>
+          ) : null}
+        </AnimatePresence>
+
+        {/* ---------------------------------------------------------- Month */}
+        {viewMode === "month" ? (
+          <div className="calendar-layout">
+            <div className="calendar-month">
+              <div className="calendar-grid-header" aria-hidden="true">
+                {WEEKDAYS.map((day) => (
+                  <div key={day} className="calendar-day-name">
+                    {day}
+                  </div>
+                ))}
               </div>
+
+              <div className="calendar-grid">
+                {monthDays.map((day, cellIndex) => {
+                  const key = dayKey(day);
+                  const weekend = day.getDay() === 0 || day.getDay() === 6;
+                  const dayTasks = tasksByDate.get(key) ?? [];
+                  const dayOccurrences = occurrencesByDate.get(key) ?? [];
+                  const eventSlots = Math.min(dayOccurrences.length, dayTasks.length ? MONTH_CELL_CAP - 1 : MONTH_CELL_CAP);
+                  const shownOccurrences = dayOccurrences.slice(0, eventSlots);
+                  const shownTasks = dayTasks.slice(0, Math.max(0, MONTH_CELL_CAP - shownOccurrences.length));
+                  const hidden = dayOccurrences.length + dayTasks.length - shownOccurrences.length - shownTasks.length;
+                  const isCurrentMonth = isSameMonth(day, monthStart);
+                  const selected = isSameDay(day, selectedDate);
+                  const total = dayOccurrences.length + dayTasks.length;
+
+                  return (
+                    <article
+                      key={key}
+                      className={`calendar-cell${!isCurrentMonth ? " out-of-month" : ""}${isToday(day) ? " today" : ""}${selected ? " selected" : ""}${weekend ? " weekend" : ""}`}
+                      style={{ "--cell-i": (cellIndex % 7) + Math.floor(cellIndex / 7) } as React.CSSProperties}
+                      data-spot=""
+                      aria-label={`${format(day, "EEEE, MMMM d")}, ${contentSummary(content, dayOccurrences.length, dayTasks.length)}`}
+                    >
+                      <button
+                        type="button"
+                        className="calendar-cell-header"
+                        onClick={() => selectMonthDate(day)}
+                        onDoubleClick={() => openDay(day)}
+                        aria-label={`Show ${format(day, "MMMM d")}`}
+                        aria-pressed={selected}
+                      >
+                        <span className="calendar-day-number">{format(day, "d")}</span>
+                        {total ? <span className="calendar-day-count">{total}</span> : null}
+                      </button>
+
+                      <div className="calendar-cell-tasks">
+                        <AnimatePresence mode="popLayout">
+                          {shownOccurrences.map((occurrence) => (
+                            <motion.button
+                              key={`ev-${occurrence.event.id}`}
+                              type="button"
+                              className={`cal-event cal-event-bar ${eventClass(occurrence.event)}${occurrence.isStart ? "" : " continues-before"}${occurrence.isEnd ? "" : " continues-after"}`}
+                              data-key={`ev-${occurrence.event.id}`}
+                              data-spot=""
+                              onClick={() => editEvent(occurrence.event)}
+                              title={`${occurrenceTime(occurrence)} · ${occurrence.event.title}`}
+                              {...itemMotion}
+                            >
+                              {!occurrence.event.allDay && occurrence.isStart ? (
+                                <span className="cal-event-time">{clockLabel(occurrence.startMin)}</span>
+                              ) : null}
+                              <strong>{occurrence.event.title}</strong>
+                            </motion.button>
+                          ))}
+                          {shownTasks.map((task) => {
+                            const time = formattedTime(task.dueTime);
+                            const list = listById.get(task.listId);
+                            return (
+                              <motion.button
+                                key={`tk-${task.id}`}
+                                type="button"
+                                className={`calendar-task color-${task.color}${taskStateClass(task, todayKey)}`}
+                                data-key={`tk-${task.id}`}
+                                data-spot=""
+                                onClick={() => onTaskSelect(task.id)}
+                                title={`${task.title || "Untitled task"}${list ? ` · ${list.name}` : ""}`}
+                                {...itemMotion}
+                              >
+                                <i aria-hidden="true" />
+                                {time ? <span className="calendar-task-time">{time}</span> : null}
+                                <span className="calendar-task-title">{task.title || "Untitled"}</span>
+                                {task.isCompleted ? <Check size={11} aria-hidden="true" /> : null}
+                              </motion.button>
+                            );
+                          })}
+                        </AnimatePresence>
+                        {hidden > 0 ? (
+                          <button type="button" className="calendar-more" onClick={() => selectMonthDate(day)}>
+                            +{hidden} more
+                          </button>
+                        ) : null}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+
+            <CalendarAgenda
+              date={selectedDate}
+              content={content}
+              tasks={selectedTasks}
+              occurrences={selectedOccurrences}
+              listById={listById}
+              recurringTaskIds={recurringTaskIds}
+              nowMinutes={isToday(selectedDate) ? nowMinutes : null}
+              onTaskSelect={onTaskSelect}
+              onEventSelect={editEvent}
+              onCreateEvent={() => createEventFor(selectedDate)}
+              onOpenDay={() => openDay(selectedDate)}
+            />
+          </div>
+        ) : null}
+
+        {/* ------------------------------------------------------ Week / Day */}
+        {viewMode !== "month" ? (
+          <div className={viewMode === "week" ? "calendar-week-view" : "calendar-day-view"}>
+            <TimeGrid
+              days={viewMode === "week" ? weekDays : [selectedDate]}
+              occurrencesByDate={occurrencesByDate}
+              tasksByDate={tasksByDate}
+              listById={listById}
+              selectedDate={selectedDate}
+              nowMinutes={nowMinutes}
+              scrollRef={timeGridRef}
+              onTaskSelect={onTaskSelect}
+              onEventSelect={editEvent}
+              onCreateAt={(day, minutes) => createEventFor(day, minutes)}
+              onDayHeader={viewMode === "week" ? openDay : undefined}
+            />
+            {viewMode === "day" ? (
+              <CalendarAgenda
+                date={selectedDate}
+                content={content}
+                tasks={selectedTasks}
+                occurrences={selectedOccurrences}
+                listById={listById}
+                recurringTaskIds={recurringTaskIds}
+                nowMinutes={isToday(selectedDate) ? nowMinutes : null}
+                onTaskSelect={onTaskSelect}
+                onEventSelect={editEvent}
+                onCreateEvent={() => createEventFor(selectedDate)}
+                rich
+              />
             ) : null}
           </div>
+        ) : null}
+
+        <AnimatePresence>
+          {eventDraft ? (
+            <EventEditor
+              key="editor"
+              draft={eventDraft}
+              onChange={setEventDraft}
+              onClose={() => setEventDraft(null)}
+              onSave={() => saveEvent.mutate(eventDraft)}
+              onDelete={() => deleteEvent.mutate(eventDraft)}
+              saving={saveEvent.isPending}
+              deleting={deleteEvent.isPending}
+            />
+          ) : null}
+        </AnimatePresence>
+      </section>
+    </LayoutGroup>
+  );
+}
+
+/* ------------------------------------------------------------------------
+   Time grid (week + day)
+   ------------------------------------------------------------------------ */
+
+type TimeGridProps = {
+  days: Date[];
+  occurrencesByDate: Map<string, Occurrence[]>;
+  tasksByDate: Map<string, StickyTask[]>;
+  listById: Map<string, StickyList>;
+  selectedDate: Date;
+  nowMinutes: number | null;
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+  onTaskSelect: (taskId: string) => void;
+  onEventSelect: (event: StickyCalendarEvent) => void;
+  onCreateAt: (day: Date, minutes: number) => void;
+  onDayHeader?: (day: Date) => void;
+};
+
+function TimeGrid({
+  days,
+  occurrencesByDate,
+  tasksByDate,
+  listById,
+  selectedDate,
+  nowMinutes,
+  scrollRef,
+  onTaskSelect,
+  onEventSelect,
+  onCreateAt,
+  onDayHeader,
+}: TimeGridProps) {
+  const reduceMotion = useReducedMotion();
+  const todayKey = dayKey(new Date());
+  const hours = Array.from({ length: 24 }, (_, hour) => hour);
+  const columns = days.map((day) => {
+    const key = dayKey(day);
+    const occurrences = occurrencesByDate.get(key) ?? [];
+    const tasks = tasksByDate.get(key) ?? [];
+    return {
+      day,
+      key,
+      allDay: occurrences.filter((occurrence) => occurrence.event.allDay),
+      timed: placeTimed(occurrences),
+      timedTasks: tasks.filter((task) => taskMinutes(task) !== null),
+      floatingTasks: tasks.filter((task) => taskMinutes(task) === null),
+    };
+  });
+  const hasAllDayRow = columns.some((column) => column.allDay.length || column.floatingTasks.length);
+
+  function handleLaneClick(day: Date, event: React.MouseEvent<HTMLDivElement>) {
+    if (event.target !== event.currentTarget) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const minutes = Math.floor(((event.clientY - bounds.top) / HOUR_PX) * 60);
+    onCreateAt(day, Math.max(0, Math.min(23 * 60, Math.round(minutes / 15) * 15)));
+  }
+
+  return (
+    <div className={`cal-timegrid${days.length === 1 ? " single" : ""}`} style={{ "--cal-days": days.length } as React.CSSProperties}>
+      <div className="cal-timegrid-head">
+        <span className="cal-timegrid-corner" aria-hidden="true">
+          <Clock3 size={13} />
+        </span>
+        {columns.map(({ day, key }) => {
+          const header = (
+            <>
+              <span>{format(day, "EEE")}</span>
+              <strong>{format(day, "d")}</strong>
+            </>
+          );
+          const weekend = day.getDay() === 0 || day.getDay() === 6;
+          const className = `cal-timegrid-day${key === todayKey ? " today" : ""}${isSameDay(day, selectedDate) ? " selected" : ""}${weekend ? " weekend" : ""}`;
+          return onDayHeader ? (
+            <button key={key} type="button" className={className} data-key={`lane-${key}`} onClick={() => onDayHeader(day)} aria-label={`Open ${format(day, "EEEE, MMMM d")} in day view`}>
+              {header}
+            </button>
+          ) : (
+            <div key={key} className={className} data-key={`lane-${key}`}>
+              {header}
+            </div>
+          );
+        })}
+      </div>
+
+      {hasAllDayRow ? (
+        <div className="cal-timegrid-allday">
+          <span className="cal-timegrid-corner cal-timegrid-allday-label">All day</span>
+          {columns.map(({ key, allDay, floatingTasks }) => (
+            <div key={key} className="cal-timegrid-allday-cell" data-key={`lane-${key}`}>
+              <AnimatePresence>
+                {allDay.map((occurrence, index) => (
+                  <motion.button
+                    key={`ev-${occurrence.event.id}`}
+                    type="button"
+                    className={`cal-event cal-event-bar ${eventClass(occurrence.event)}${occurrence.isStart ? "" : " continues-before"}${occurrence.isEnd ? "" : " continues-after"}`}
+                    data-key={`ev-${occurrence.event.id}`}
+                    data-spot=""
+                    onClick={() => onEventSelect(occurrence.event)}
+                    initial={reduceMotion ? false : { opacity: 0, clipPath: "inset(0 100% 0 0 round 6px)" }}
+                    animate={{ opacity: 1, clipPath: "inset(0 0% 0 0 round 6px)" }}
+                    exit={reduceMotion ? undefined : { opacity: 0, scale: 0.94 }}
+                    transition={{ duration: 0.6, ease: EASE, delay: 0.1 + index * 0.05 }}
+                  >
+                    <strong>{occurrence.event.title}</strong>
+                  </motion.button>
+                ))}
+                {floatingTasks.map((task) => (
+                  <motion.button
+                    key={`tk-${task.id}`}
+                    type="button"
+                    className={`calendar-task cal-task-pin color-${task.color}${taskStateClass(task, todayKey)}`}
+                    data-key={`tk-${task.id}`}
+                    data-spot=""
+                    onClick={() => onTaskSelect(task.id)}
+                    title={task.title}
+                    initial={reduceMotion ? false : { opacity: 0, scale: 0.94 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={reduceMotion ? undefined : { opacity: 0, scale: 0.94 }}
+                    transition={springs.snappy}
+                  >
+                    <i aria-hidden="true" />
+                    <span className="calendar-task-title">{task.title || "Untitled"}</span>
+                    {task.isCompleted ? <Check size={11} aria-hidden="true" /> : null}
+                  </motion.button>
+                ))}
+              </AnimatePresence>
+            </div>
+          ))}
         </div>
       ) : null}
 
-      {eventDraft ? (
-        <div className={styles.backdrop} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setEventDraft(null); }}>
-          <form className={styles.editor} role="dialog" aria-modal="true" aria-label={eventDraft.id ? "Edit calendar event" : "Create calendar event"} onSubmit={(event) => { event.preventDefault(); saveEvent.mutate(eventDraft); }}>
-            <header>
-              <div><span>Sticky Calendar</span><h3>{eventDraft.id ? "Edit event" : "Reserve time"}</h3></div>
-              <button type="button" onClick={() => setEventDraft(null)} aria-label="Close event editor"><X size={18} /></button>
-            </header>
-            <label className={styles.titleField}>
-              <span>What is happening?</span>
-              <input autoFocus required maxLength={240} value={eventDraft.title} onChange={(event) => setEventDraft({ ...eventDraft, title: event.target.value })} placeholder="Focus block, appointment, workout…" />
-            </label>
-            <div className={styles.whenGrid}>
-              <label><span>Date</span><input required type="date" value={eventDraft.date} onChange={(event) => setEventDraft({ ...eventDraft, date: event.target.value })} /></label>
-              {!eventDraft.allDay ? <>
-                <label><span>Starts</span><input required type="time" value={eventDraft.startTime} onChange={(event) => setEventDraft({ ...eventDraft, startTime: event.target.value })} /></label>
-                <label><span>Ends</span><input required type="time" value={eventDraft.endTime} onChange={(event) => setEventDraft({ ...eventDraft, endTime: event.target.value })} /></label>
-              </> : null}
+      <div className="cal-timegrid-scroll" ref={scrollRef}>
+        <div className="cal-timegrid-body" style={{ height: 24 * HOUR_PX }}>
+          <div className="cal-timegrid-hours" aria-hidden="true">
+            {hours.map((hour) => (
+              <span key={hour} style={{ top: hour * HOUR_PX }}>
+                {hour ? clockLabel(hour * 60) : ""}
+              </span>
+            ))}
+          </div>
+
+          {columns.map(({ day, key, timed, timedTasks }) => (
+            <div
+              key={key}
+              className={`cal-timegrid-lane${key === todayKey ? " today" : ""}${day.getDay() === 0 || day.getDay() === 6 ? " weekend" : ""}`}
+              data-key={`lane-${key}`}
+              onClick={(event) => handleLaneClick(day, event)}
+              role="presentation"
+            >
+              {hours.map((hour) => (
+                <i key={hour} className="cal-timegrid-rule" style={{ top: hour * HOUR_PX }} aria-hidden="true" />
+              ))}
+
+              <AnimatePresence>
+                {timed.map((occurrence, index) => {
+                  const top = (occurrence.startMin / 60) * HOUR_PX;
+                  const height = Math.max(((occurrence.endMin - occurrence.startMin) / 60) * HOUR_PX, 22);
+                  const width = 100 / occurrence.columns;
+                  const compact = height < 40;
+                  return (
+                    <motion.button
+                      key={`ev-${occurrence.event.id}`}
+                      type="button"
+                      className={`cal-event cal-event-block ${eventClass(occurrence.event)}${compact ? " compact" : ""}${occurrence.isStart ? "" : " continues-before"}${occurrence.isEnd ? "" : " continues-after"}`}
+                      style={{ top, height, left: `calc(${occurrence.column * width}% + 2px)`, width: `calc(${width}% - 4px)` }}
+                      data-key={`ev-${occurrence.event.id}`}
+                      data-spot=""
+                      onClick={() => onEventSelect(occurrence.event)}
+                      title={`${occurrenceTime(occurrence)} · ${occurrence.event.title}`}
+                      initial={reduceMotion ? false : { opacity: 0, scaleY: 0 }}
+                      animate={{ opacity: 1, scaleY: 1 }}
+                      exit={reduceMotion ? undefined : { opacity: 0, scaleY: 0.9 }}
+                      transition={{ duration: 0.7, ease: EASE, delay: 0.15 + index * 0.06 }}
+                    >
+                      <span className="cal-event-block-copy">
+                        <strong>{occurrence.event.title}</strong>
+                        <span className="cal-event-time">{occurrenceTime(occurrence)}</span>
+                        {!compact && occurrence.event.location ? (
+                          <span className="cal-event-place">
+                            <MapPin size={10} /> {occurrence.event.location}
+                          </span>
+                        ) : null}
+                      </span>
+                      <EventStatusGlyph event={occurrence.event} />
+                    </motion.button>
+                  );
+                })}
+                {timedTasks.map((task) => {
+                  const minutes = taskMinutes(task) ?? 0;
+                  const list = listById.get(task.listId);
+                  return (
+                    <motion.button
+                      key={`tk-${task.id}`}
+                      type="button"
+                      className={`calendar-task cal-task-pin cal-task-timed color-${task.color}${taskStateClass(task, todayKey)}`}
+                      data-key={`tk-${task.id}`}
+                      data-spot=""
+                      style={{ top: (minutes / 60) * HOUR_PX - 11 }}
+                      onClick={() => onTaskSelect(task.id)}
+                      title={`${formattedTime(task.dueTime)} · ${task.title}${list ? ` · ${list.name}` : ""}`}
+                      initial={reduceMotion ? false : { opacity: 0, x: -6 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={reduceMotion ? undefined : { opacity: 0, x: -6 }}
+                      transition={springs.snappy}
+                    >
+                      <i aria-hidden="true" />
+                      <span className="calendar-task-title">{task.title || "Untitled"}</span>
+                      {task.isCompleted ? <Check size={11} aria-hidden="true" /> : null}
+                    </motion.button>
+                  );
+                })}
+              </AnimatePresence>
+
+              {key === todayKey && nowMinutes !== null ? (
+                <span className="cal-now" style={{ top: (nowMinutes / 60) * HOUR_PX }} aria-hidden="true">
+                  <i />
+                </span>
+              ) : null}
             </div>
-            <label className={styles.allDay}><input type="checkbox" checked={eventDraft.allDay} onChange={(event) => setEventDraft({ ...eventDraft, allDay: event.target.checked })} /><span>All-day event</span></label>
-            <label><span>Location</span><input maxLength={500} value={eventDraft.location} onChange={(event) => setEventDraft({ ...eventDraft, location: event.target.value })} placeholder="Optional" /></label>
-            <label><span>Details</span><textarea maxLength={20_000} rows={3} value={eventDraft.details} onChange={(event) => setEventDraft({ ...eventDraft, details: event.target.value })} placeholder="Anything Poke should know about this block" /></label>
-            <footer>
-              {eventDraft.id ? <button type="button" className={styles.deleteButton} disabled={deleteEvent.isPending} onClick={() => { if (window.confirm(`Delete “${eventDraft.title}”?`)) deleteEvent.mutate(eventDraft); }}><Trash2 size={15} />Delete</button> : <span />}
-              <div><button type="button" onClick={() => setEventDraft(null)}>Cancel</button><button type="submit" className={styles.saveButton} disabled={saveEvent.isPending || !eventDraft.title.trim() || (!eventDraft.allDay && eventDraft.endTime <= eventDraft.startTime)}>{saveEvent.isPending ? "Saving…" : "Save event"}</button></div>
-            </footer>
-          </form>
+          ))}
         </div>
-      ) : null}
-    </section>
+      </div>
+    </div>
   );
 }
+
+/* ------------------------------------------------------------------------
+   Agenda (month sidebar + day briefing)
+   ------------------------------------------------------------------------ */
 
 type CalendarAgendaProps = {
   content: CalendarContent;
   date: Date;
   tasks: StickyTask[];
-  events: StickyCalendarEvent[];
+  occurrences: Occurrence[];
   listById: Map<string, StickyList>;
+  recurringTaskIds: ReadonlySet<string>;
+  nowMinutes: number | null;
   onTaskSelect: (taskId: string) => void;
   onEventSelect: (event: StickyCalendarEvent) => void;
   onCreateEvent: () => void;
+  onOpenDay?: () => void;
+  rich?: boolean;
 };
 
-function CalendarAgenda({ content, date, tasks, events, listById, onTaskSelect, onEventSelect, onCreateEvent }: CalendarAgendaProps) {
+function CalendarAgenda({
+  content,
+  date,
+  tasks,
+  occurrences,
+  listById,
+  recurringTaskIds,
+  nowMinutes,
+  onTaskSelect,
+  onEventSelect,
+  onCreateEvent,
+  onOpenDay,
+  rich,
+}: CalendarAgendaProps) {
+  const reduceMotion = useReducedMotion();
+  const todayKey = dayKey(new Date());
+  const busy = occurrences.reduce(
+    (sum, item) => (item.event.allDay || item.event.transparency === "transparent" ? sum : sum + (item.endMin - item.startMin)),
+    0,
+  );
+
+  // One chronological timeline: events and tasks interleaved by time.
+  type Row = { key: string; minutes: number; kind: "event"; occurrence: Occurrence } | { key: string; minutes: number; kind: "task"; task: StickyTask };
+  const rows: Row[] = [
+    ...occurrences.map((occurrence) => ({
+      key: `ev-${occurrence.event.id}`,
+      minutes: occurrence.event.allDay ? -1 : occurrence.startMin,
+      kind: "event" as const,
+      occurrence,
+    })),
+    ...tasks.map((task) => ({ key: `tk-${task.id}`, minutes: taskMinutes(task) ?? -0.5, kind: "task" as const, task })),
+  ].sort((a, b) => a.minutes - b.minutes);
+
+  const nowIndex = nowMinutes === null ? -1 : rows.findIndex((row) => row.minutes > nowMinutes);
+
   return (
-    <aside className="calendar-agenda" aria-label={`Schedule for ${format(date, "MMMM d")}`}>
+    <aside className={`calendar-agenda${rich ? " rich" : ""}`} aria-label={`Schedule for ${format(date, "MMMM d")}`}>
       <header className="calendar-agenda-header">
-        <span>{format(date, "EEE")}</span>
-        <div>
-          <strong>{format(date, "MMMM d")}</strong>
-          <small>{contentSummary(content, events.length, tasks.length)}</small>
+        <span className="calendar-agenda-date">
+          <small>{format(date, "EEE")}</small>
+          <strong>{format(date, "d")}</strong>
+        </span>
+        <div className="calendar-agenda-copy">
+          <strong>{isToday(date) ? "Today" : format(date, "MMMM d")}</strong>
+          <small>
+            {contentSummary(content, occurrences.length, tasks.length)}
+            {busy ? ` · ${durationLabel(busy)} busy` : ""}
+          </small>
         </div>
-        <button type="button" className={styles.agendaAdd} onClick={onCreateEvent} aria-label={`Add event on ${format(date, "MMMM d")}`}><Plus size={15} /></button>
+        {onOpenDay ? (
+          <button type="button" className="calendar-agenda-open" onClick={onOpenDay} aria-label={`Open ${format(date, "MMMM d")} in day view`}>
+            Day
+          </button>
+        ) : null}
+        <button type="button" className="calendar-agenda-add" onClick={onCreateEvent} aria-label={`Add event on ${format(date, "MMMM d")}`}>
+          <Plus size={15} />
+        </button>
       </header>
 
       <div className="calendar-agenda-list">
-        {events.length > 0 ? <p className={styles.sectionLabel}>Events</p> : null}
-        {events.map((event) => (
-          <button key={event.id} type="button" className={styles.agendaEvent} onClick={() => onEventSelect(event)}>
-            <span>{eventTime(event)}</span>
-            <strong>{event.title}</strong>
-            {event.location ? <small><MapPin size={11} />{event.location}</small> : null}
-          </button>
-        ))}
-        {tasks.length > 0 ? <p className={styles.sectionLabel}>Tasks</p> : null}
-        {tasks.length ? tasks.map((task) => {
-            const list = listById.get(task.listId);
-            const time = formattedTime(task.dueTime);
+        {rows.length ? (
+          <ol className="cal-timeline">
+            <AnimatePresence mode="popLayout">
+              {rows.map((row, index) => {
+                const rowMotion = reduceMotion
+                  ? {}
+                  : {
+                      layout: "position" as const,
+                      initial: { opacity: 0, x: 10 },
+                      animate: { opacity: 1, x: 0 },
+                      exit: { opacity: 0, x: -10 },
+                      transition: { ...springs.paper, delay: 0.08 + index * 0.05 },
+                    };
+                const nowMarker =
+                  nowIndex === index ? (
+                    <span className="cal-timeline-now" aria-hidden="true">
+                      <span>Now</span>
+                      <i />
+                    </span>
+                  ) : null;
 
-            return (
-              <button
-                key={task.id}
-                type="button"
-                className={`calendar-agenda-task color-${task.color}${task.isCompleted ? " completed" : ""}`}
-                onClick={() => onTaskSelect(task.id)}
-              >
-                <i aria-hidden="true" />
-                <span className="calendar-agenda-copy">
-                  <strong>{task.title || "Untitled task"}</strong>
-                  <span>
-                    {time ? <><Clock3 size={12} /> {time}</> : "Any time"}
-                    {list ? <em>{list.name}</em> : null}
-                  </span>
-                </span>
-                {task.isCompleted ? <Check size={15} aria-label="Completed" /> : null}
-              </button>
-            );
-          }) : !events.length ? (
+                if (row.kind === "event") {
+                  const { occurrence } = row;
+                  const { event } = occurrence;
+                  const minutes = occurrence.endMin - occurrence.startMin;
+                  return (
+                    <motion.li key={row.key} {...rowMotion}>
+                      {nowMarker}
+                      <button type="button" className={`cal-event cal-event-row ${eventClass(event)}`} data-key={`ev-${event.id}`} data-spot="" onClick={() => onEventSelect(event)}>
+                        <span className="cal-row-time">
+                          <strong>{event.allDay ? "All day" : clockLabel(occurrence.startMin)}</strong>
+                          {!event.allDay ? <small>{durationLabel(minutes)}</small> : null}
+                        </span>
+                        <i className="cal-row-rail" aria-hidden="true" />
+                        <span className="cal-row-copy">
+                          <strong>{event.title}</strong>
+                          <span className="cal-row-meta">
+                            {!event.allDay ? <span>{clockLabel(occurrence.startMin)} – {clockLabel(occurrence.endMin)}</span> : null}
+                            {event.location ? (
+                              <span>
+                                <MapPin size={10} /> {event.location}
+                              </span>
+                            ) : null}
+                            {rich && event.details ? <em>{event.details}</em> : null}
+                          </span>
+                        </span>
+                        <EventStatusGlyph event={event} />
+                      </button>
+                    </motion.li>
+                  );
+                }
+
+                const { task } = row;
+                const list = listById.get(task.listId);
+                const time = formattedTime(task.dueTime);
+                return (
+                  <motion.li key={row.key} {...rowMotion}>
+                    {nowMarker}
+                    <button
+                      type="button"
+                      className={`calendar-agenda-task cal-task-row color-${task.color}${taskStateClass(task, todayKey)}`}
+                      data-key={`tk-${task.id}`}
+                      data-spot=""
+                      onClick={() => onTaskSelect(task.id)}
+                    >
+                      <span className="cal-row-time">
+                        <strong>{time ?? "Any time"}</strong>
+                        <small>due</small>
+                      </span>
+                      <i className="cal-row-rail" aria-hidden="true" />
+                      <span className="cal-row-copy">
+                        <strong>{task.title || "Untitled task"}</strong>
+                        <span className="cal-row-meta">
+                          {list ? <em>{list.name}</em> : null}
+                          {recurringTaskIds.has(task.id) ? (
+                            <span>
+                              <Repeat2 size={10} /> Repeats
+                            </span>
+                          ) : null}
+                          <span>{task.isCompleted ? "Completed" : task.dueTime ? "Scheduled" : "Flexible"}</span>
+                        </span>
+                      </span>
+                      <span className={`cal-task-check${task.isCompleted ? " done" : ""}`} aria-hidden="true">
+                        {task.isCompleted ? <Check size={12} /> : null}
+                      </span>
+                    </button>
+                  </motion.li>
+                );
+              })}
+            </AnimatePresence>
+          </ol>
+        ) : (
           <div className="calendar-agenda-empty">
             <CalendarDays size={18} />
             <span>{emptyContent(content)}</span>
+            <button type="button" onClick={onCreateEvent}>
+              <Plus size={13} /> Reserve time
+            </button>
           </div>
-        ) : null}
+        )}
       </div>
     </aside>
+  );
+}
+
+/* ------------------------------------------------------------------------
+   Event editor sheet
+   ------------------------------------------------------------------------ */
+
+type EventEditorProps = {
+  draft: EventDraft;
+  onChange: (draft: EventDraft) => void;
+  onClose: () => void;
+  onSave: () => void;
+  onDelete: () => void;
+  saving: boolean;
+  deleting: boolean;
+};
+
+function EventEditor({ draft, onChange, onClose, onSave, onDelete, saving, deleting }: EventEditorProps) {
+  const reduceMotion = useReducedMotion();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const invalidTime = !draft.allDay && draft.endTime <= draft.startTime;
+  const canSave = Boolean(draft.title.trim()) && !invalidTime && !saving;
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  const set = (patch: Partial<EventDraft>) => onChange({ ...draft, ...patch });
+
+  return (
+    <motion.div
+      className="cal-sheet-backdrop"
+      role="presentation"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, transition: { duration: 0.16 } }}
+      transition={{ duration: 0.22 }}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <motion.form
+        className={`cal-sheet color-${draft.color ?? "sky"}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={draft.id ? "Edit calendar event" : "Create calendar event"}
+        initial={reduceMotion ? false : { opacity: 0, y: 28, scale: 0.97 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={reduceMotion ? undefined : { opacity: 0, y: 16, scale: 0.98 }}
+        transition={reduceMotion ? { duration: 0 } : springs.drawer}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (canSave) onSave();
+        }}
+      >
+        <span className="cal-sheet-seam" aria-hidden="true" />
+        <header className="cal-sheet-head">
+          <div>
+            <p>{draft.id ? "Edit event" : "Reserve time"}</p>
+            <h3>{draft.title.trim() || "Untitled event"}</h3>
+          </div>
+          <button type="button" className="cal-sheet-close" onClick={onClose} aria-label="Close event editor">
+            <X size={17} />
+          </button>
+        </header>
+
+        <label className="cal-field cal-field-title">
+          <span>Title</span>
+          <input
+            autoFocus
+            required
+            maxLength={240}
+            value={draft.title}
+            onChange={(event) => set({ title: event.target.value })}
+            placeholder="Focus block, appointment, workout…"
+          />
+        </label>
+
+        <div className="cal-sheet-row">
+          <div className="cal-segmented cal-sheet-toggle" role="group" aria-label="Event length">
+            {[
+              { value: false, label: "Timed" },
+              { value: true, label: "All day" },
+            ].map((option) => (
+              <button
+                key={String(option.value)}
+                type="button"
+                className={draft.allDay === option.value ? "active" : ""}
+                aria-pressed={draft.allDay === option.value}
+                onClick={() => set({ allDay: option.value })}
+              >
+                {draft.allDay === option.value ? (
+                  <motion.span className="cal-segmented-pill" layoutId="cal-sheet-length" transition={reduceMotion ? { duration: 0 } : springs.snappy} aria-hidden="true" />
+                ) : null}
+                <span className="cal-segmented-label">{option.label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="cal-segmented cal-sheet-toggle" role="group" aria-label="Availability">
+            {[
+              { value: "opaque", label: "Busy" },
+              { value: "transparent", label: "Free" },
+            ].map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={draft.transparency === option.value ? "active" : ""}
+                aria-pressed={draft.transparency === option.value}
+                onClick={() => set({ transparency: option.value as EventDraft["transparency"] })}
+              >
+                {draft.transparency === option.value ? (
+                  <motion.span className="cal-segmented-pill" layoutId="cal-sheet-avail" transition={reduceMotion ? { duration: 0 } : springs.snappy} aria-hidden="true" />
+                ) : null}
+                <span className="cal-segmented-label">{option.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className={`cal-sheet-when${draft.allDay ? " all-day" : ""}`}>
+          <label className="cal-field">
+            <span>{draft.allDay ? "From" : "Date"}</span>
+            <input required type="date" value={draft.date} onChange={(event) => set({ date: event.target.value })} />
+          </label>
+          {draft.allDay ? (
+            <label className="cal-field">
+              <span>Until</span>
+              <input type="date" min={draft.date} value={draft.endDate} onChange={(event) => set({ endDate: event.target.value })} />
+            </label>
+          ) : (
+            <>
+              <label className="cal-field">
+                <span>Starts</span>
+                <input required type="time" value={draft.startTime} onChange={(event) => set({ startTime: event.target.value })} />
+              </label>
+              <label className={`cal-field${invalidTime ? " invalid" : ""}`}>
+                <span>Ends</span>
+                <input required type="time" value={draft.endTime} onChange={(event) => set({ endTime: event.target.value })} />
+              </label>
+            </>
+          )}
+        </div>
+
+        <div className="cal-field">
+          <span>Color</span>
+          <div className="cal-swatches" role="radiogroup" aria-label="Event color">
+            {EVENT_COLORS.map((color) => (
+              <button
+                key={color}
+                type="button"
+                role="radio"
+                aria-checked={draft.color === color}
+                aria-label={color}
+                className={`cal-swatch color-${color}${draft.color === color ? " active" : ""}`}
+                onClick={() => set({ color: draft.color === color ? null : color })}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="cal-sheet-row">
+          <label className="cal-field">
+            <span>Location</span>
+            <input maxLength={500} value={draft.location} onChange={(event) => set({ location: event.target.value })} placeholder="Optional" />
+          </label>
+          <label className="cal-field cal-field-status">
+            <span>Status</span>
+            <select value={draft.status} onChange={(event) => set({ status: event.target.value as EventDraft["status"] })}>
+              <option value="confirmed">Confirmed</option>
+              <option value="tentative">Tentative</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </label>
+        </div>
+
+        <label className="cal-field">
+          <span>Details</span>
+          <textarea maxLength={20_000} rows={3} value={draft.details} onChange={(event) => set({ details: event.target.value })} placeholder="Anything worth remembering about this block" />
+        </label>
+
+        <footer className="cal-sheet-foot">
+          {draft.id ? (
+            <button
+              type="button"
+              className={`cal-sheet-delete${confirmDelete ? " armed" : ""}`}
+              disabled={deleting}
+              onClick={() => (confirmDelete ? onDelete() : setConfirmDelete(true))}
+              onBlur={() => setConfirmDelete(false)}
+            >
+              <Trash2 size={14} />
+              {confirmDelete ? "Confirm delete" : "Delete"}
+            </button>
+          ) : (
+            <span />
+          )}
+          <div>
+            <button type="button" className="cal-sheet-cancel" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className="cal-sheet-save" disabled={!canSave}>
+              {saving ? "Saving…" : draft.id ? "Save changes" : "Reserve"}
+            </button>
+          </div>
+        </footer>
+      </motion.form>
+    </motion.div>
   );
 }
