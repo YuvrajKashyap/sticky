@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   addDays,
@@ -67,6 +67,26 @@ type EventDraft = {
 };
 
 type CalendarViewMode = "month" | "week" | "day";
+type CalendarContent = "both" | "events" | "tasks";
+const CONTENT_KEY = "sticky-calendar-content";
+const CONTENT_OPTIONS = [{ value: "both", label: "Both" }, { value: "events", label: "Events" }, { value: "tasks", label: "Tasks" }] as const;
+function readCalendarContent(): CalendarContent {
+  try {
+    const value = window.localStorage.getItem(CONTENT_KEY);
+    return value === "events" || value === "tasks" ? value : "both";
+  } catch { return "both"; }
+}
+function subscribeCalendarContent(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  return () => window.removeEventListener("storage", onChange);
+}
+function contentSummary(content: CalendarContent, events: number, tasks: number) {
+  return [content !== "tasks" ? `${events} ${events === 1 ? "event" : "events"}` : null,
+    content !== "events" ? `${tasks} ${tasks === 1 ? "task" : "tasks"}` : null].filter(Boolean).join(" · ");
+}
+function emptyContent(content: CalendarContent) {
+  return content === "events" ? "No events this day" : content === "tasks" ? "No tasks due this day" : "Nothing planned yet";
+}
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const VIEW_MODES: Array<{ label: string; value: CalendarViewMode }> = [
@@ -128,6 +148,16 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
   const today = useMemo(() => new Date(), []);
   const todayKey = format(today, "yyyy-MM-dd");
   const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
+  const savedContent = useSyncExternalStore(subscribeCalendarContent, readCalendarContent, () => "both" as const);
+  const [contentChoice, setContentChoice] = useState<CalendarContent | null>(null);
+  const content = contentChoice ?? savedContent;
+  const showTasks = content !== "events";
+  const showEvents = content !== "tasks";
+  const visibleTasks = useMemo(() => showTasks ? tasks : [], [showTasks, tasks]);
+  function changeContent(next: CalendarContent) {
+    setContentChoice(next);
+    try { window.localStorage.setItem(CONTENT_KEY, next); } catch { /* Filtering still works when storage is unavailable. */ }
+  }
   const [anchorDate, setAnchorDate] = useState(today);
   const [selectedDate, setSelectedDate] = useState(today);
   const [eventDraft, setEventDraft] = useState<EventDraft | null>(null);
@@ -154,7 +184,7 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
     enabled: Boolean(client),
     queryFn: () => client!.request<{ events: StickyCalendarEvent[] }>(`/api/v1/calendar-events?from=${encodeURIComponent(visibleRange.from)}&to=${encodeURIComponent(visibleRange.to)}`),
   });
-  const events = useMemo(() => eventsQuery.data?.events ?? [], [eventsQuery.data?.events]);
+  const events = useMemo(() => showEvents ? eventsQuery.data?.events ?? [] : [], [eventsQuery.data?.events, showEvents]);
   const saveEvent = useMutation({
     mutationFn: async (draft: EventDraft) => {
       if (!client) throw new Error("Sign in to save calendar events.");
@@ -194,7 +224,7 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
   const tasksByDate = useMemo(() => {
     const grouped = new Map<string, StickyTask[]>();
 
-    for (const task of tasks) {
+    for (const task of visibleTasks) {
       if (!task.dueDate) {
         continue;
       }
@@ -209,7 +239,7 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
       dateTasks.sort((a, b) => byCalendarPriority(recurringTaskIds, a, b)),
     );
     return grouped;
-  }, [recurringTaskIds, tasks]);
+  }, [recurringTaskIds, visibleTasks]);
 
   const eventsByDate = useMemo(() => {
     const grouped = new Map<string, StickyCalendarEvent[]>();
@@ -238,7 +268,7 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
   const monthKey = format(monthStart, "yyyy-MM");
   const weekStartKey = format(weekStart, "yyyy-MM-dd");
   const weekEndKey = format(weekEnd, "yyyy-MM-dd");
-  const periodTaskCount = tasks.filter((task) => {
+  const periodTaskCount = visibleTasks.filter((task) => {
     if (!task.dueDate) {
       return false;
     }
@@ -250,14 +280,13 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
     }
     return task.dueDate === selectedDateKey;
   }).length;
-  const periodEventCount = events.filter((event) => {
-    const key = eventDateKey(event);
-    if (!key) return false;
-    if (viewMode === "month") return key.startsWith(monthKey);
-    if (viewMode === "week") return key >= weekStartKey && key <= weekEndKey;
-    return key === selectedDateKey;
-  }).length;
-  const overdueCount = tasks.filter(
+  // Count multi-day events once, including events that began before this range.
+  const periodEventCount = new Set([...eventsByDate].flatMap(([key, dayEvents]) => {
+    const inPeriod = viewMode === "month" ? key.startsWith(monthKey)
+      : viewMode === "week" ? key >= weekStartKey && key <= weekEndKey : key === selectedDateKey;
+    return inPeriod ? dayEvents.map(event => event.id) : [];
+  })).size;
+  const overdueCount = visibleTasks.filter(
     (task) => Boolean(task.dueDate && task.dueDate < todayKey && !task.isCompleted),
   ).length;
   const periodLabel = viewMode === "month" ? "this month" : viewMode === "week" ? "this week" : "this day";
@@ -348,7 +377,7 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
   }
 
   return (
-    <section ref={calendarRef} className={`calendar-view calendar-mode-${viewMode}`} aria-label="Workspace calendar">
+    <section ref={calendarRef} className={`calendar-view calendar-mode-${viewMode} ${styles.contentView}`} aria-label="Workspace calendar">
       <header className="calendar-header">
         <div className="calendar-heading">
           <span className="calendar-heading-icon" aria-hidden="true">
@@ -376,10 +405,14 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
           ))}
         </div>
 
+        <div className={styles.contentFilter} role="group" aria-label="Calendar content">
+          {CONTENT_OPTIONS.map(option => <button key={option.value} type="button" aria-pressed={content === option.value} onClick={() => changeContent(option.value)}>{option.label}</button>)}
+        </div>
+
         <div className="calendar-summary" aria-label={`Calendar summary for ${calendarsQuery.data?.calendars.find((calendar) => calendar.isDefault)?.name ?? "Sticky"}`}>
-          <span><strong>{periodTaskCount}</strong> {periodLabel}</span>
-          <span><strong>{periodEventCount}</strong> {periodEventCount === 1 ? "event" : "events"}</span>
-          <span className={overdueCount ? "has-overdue" : ""}><strong>{overdueCount}</strong> overdue</span>
+          {showEvents ? <span><strong>{periodEventCount}</strong> {periodEventCount === 1 ? "event" : "events"} {periodLabel}</span> : null}
+          {showTasks ? <span><strong>{periodTaskCount}</strong> {periodTaskCount === 1 ? "task" : "tasks"} {showEvents ? "" : periodLabel}</span> : null}
+          {showTasks && overdueCount > 0 ? <span className="has-overdue"><strong>{overdueCount}</strong> overdue</span> : null}
         </div>
 
         <div className="calendar-controls">
@@ -408,7 +441,7 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
         </div>
       </header>
 
-      {eventMessage || eventsQuery.error ? (
+      {eventMessage || (showEvents && eventsQuery.error) ? (
         <p className={styles.status} role="status">{eventMessage ?? eventsQuery.error?.message}</p>
       ) : null}
 
@@ -428,7 +461,7 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
                 const dateKey = format(day, "yyyy-MM-dd");
                 const dayTasks = tasksByDate.get(dateKey) ?? [];
                 const dayEvents = eventsByDate.get(dateKey) ?? [];
-                const visibleEvents = dayEvents.slice(0, 2);
+                const visibleEvents = dayEvents.slice(0, 3);
                 const visibleTasks = dayTasks.slice(0, Math.max(0, 3 - visibleEvents.length));
                 const remainingTasks = dayTasks.length + dayEvents.length - visibleTasks.length - visibleEvents.length;
                 const isCurrentMonth = isSameMonth(day, monthStart);
@@ -440,7 +473,7 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
                     className={`calendar-cell${!isCurrentMonth ? " out-of-month" : ""}${
                       isToday(day) ? " today" : ""
                     }${selected ? " selected" : ""}`}
-                    aria-label={`${format(day, "EEEE, MMMM d")}, ${dayEvents.length} events and ${dayTasks.length} tasks`}
+                    aria-label={`${format(day, "EEEE, MMMM d")}, ${contentSummary(content, dayEvents.length, dayTasks.length)}`}
                   >
                     <button
                       type="button"
@@ -500,6 +533,7 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
 
           <CalendarAgenda
             date={selectedDate}
+            content={content}
             tasks={selectedTasks}
             events={selectedEvents}
             listById={listById}
@@ -536,12 +570,14 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
                 </button>
 
                 <div className="calendar-week-task-list">
+                  {dayEvents.length > 0 ? <p className={styles.sectionLabel}>Events</p> : null}
                   {dayEvents.map((event) => (
                     <button key={event.id} type="button" className={styles.weekEvent} onClick={() => editEvent(event)}>
                       <span>{eventTime(event)}</span>
                       <strong>{event.title}</strong>
                     </button>
                   ))}
+                  {dayTasks.length > 0 ? <p className={styles.sectionLabel}>Tasks</p> : null}
                   {dayTasks.map((task) => {
                     const list = listById.get(task.listId);
                     const time = formattedTime(task.dueTime);
@@ -580,12 +616,13 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
             <div>
               <p>{isToday(selectedDate) ? "Today" : format(selectedDate, "EEEE")}</p>
               <h3>{format(selectedDate, "MMMM d, yyyy")}</h3>
-              <span>{selectedEvents.length} {selectedEvents.length === 1 ? "event" : "events"} · {selectedTasks.length} {selectedTasks.length === 1 ? "task" : "tasks"}</span>
+              <span>{contentSummary(content, selectedEvents.length, selectedTasks.length)}</span>
             </div>
             <button type="button" className={styles.dayAdd} onClick={() => createEventFor(selectedDate)}><Plus size={16} />Add event</button>
           </header>
 
           <div className="calendar-day-schedule">
+            {selectedEvents.length > 0 ? <p className={styles.sectionLabel}>Events</p> : null}
             {selectedEvents.map((event) => (
               <button key={event.id} type="button" className={styles.dayEvent} onClick={() => editEvent(event)}>
                 <span><Clock3 size={14} />{eventTime(event)}</span>
@@ -593,6 +630,7 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
                 <span><strong>{event.title}</strong>{event.location ? <small><MapPin size={12} />{event.location}</small> : null}</span>
               </button>
             ))}
+            {selectedTasks.length > 0 ? <p className={styles.sectionLabel}>Tasks</p> : null}
             {selectedTasks.length ? selectedTasks.map((task) => {
                 const list = listById.get(task.listId);
                 const time = formattedTime(task.dueTime);
@@ -621,7 +659,7 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
               }) : !selectedEvents.length ? (
               <div className="calendar-day-empty">
                 <CalendarDays size={20} />
-                <span>Nothing planned yet</span>
+                <span>{emptyContent(content)}</span>
               </div>
             ) : null}
           </div>
@@ -661,6 +699,7 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
 }
 
 type CalendarAgendaProps = {
+  content: CalendarContent;
   date: Date;
   tasks: StickyTask[];
   events: StickyCalendarEvent[];
@@ -670,19 +709,20 @@ type CalendarAgendaProps = {
   onCreateEvent: () => void;
 };
 
-function CalendarAgenda({ date, tasks, events, listById, onTaskSelect, onEventSelect, onCreateEvent }: CalendarAgendaProps) {
+function CalendarAgenda({ content, date, tasks, events, listById, onTaskSelect, onEventSelect, onCreateEvent }: CalendarAgendaProps) {
   return (
-    <aside className="calendar-agenda" aria-label={`Tasks for ${format(date, "MMMM d")}`}>
+    <aside className="calendar-agenda" aria-label={`Schedule for ${format(date, "MMMM d")}`}>
       <header className="calendar-agenda-header">
         <span>{format(date, "EEE")}</span>
         <div>
           <strong>{format(date, "MMMM d")}</strong>
-          <small>{events.length} {events.length === 1 ? "event" : "events"} · {tasks.length} {tasks.length === 1 ? "task" : "tasks"}</small>
+          <small>{contentSummary(content, events.length, tasks.length)}</small>
         </div>
         <button type="button" className={styles.agendaAdd} onClick={onCreateEvent} aria-label={`Add event on ${format(date, "MMMM d")}`}><Plus size={15} /></button>
       </header>
 
       <div className="calendar-agenda-list">
+        {events.length > 0 ? <p className={styles.sectionLabel}>Events</p> : null}
         {events.map((event) => (
           <button key={event.id} type="button" className={styles.agendaEvent} onClick={() => onEventSelect(event)}>
             <span>{eventTime(event)}</span>
@@ -690,6 +730,7 @@ function CalendarAgenda({ date, tasks, events, listById, onTaskSelect, onEventSe
             {event.location ? <small><MapPin size={11} />{event.location}</small> : null}
           </button>
         ))}
+        {tasks.length > 0 ? <p className={styles.sectionLabel}>Tasks</p> : null}
         {tasks.length ? tasks.map((task) => {
             const list = listById.get(task.listId);
             const time = formattedTime(task.dueTime);
@@ -715,7 +756,7 @@ function CalendarAgenda({ date, tasks, events, listById, onTaskSelect, onEventSe
           }) : !events.length ? (
           <div className="calendar-agenda-empty">
             <CalendarDays size={18} />
-            <span>Nothing planned yet</span>
+            <span>{emptyContent(content)}</span>
           </div>
         ) : null}
       </div>
