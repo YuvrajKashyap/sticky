@@ -83,6 +83,7 @@ async function expectNoHorizontalOverflow(page: Page) {
 
 test("connected settings and task reminders stay integrated with the workspace", async ({ page }) => {
   await page.goto("/");
+  await expect(page.locator(".save-status")).toContainText("Local demo saved");
   await page.getByRole("button", { name: "Open notifications" }).click();
   const connections = page.getByRole("dialog", { name: "Connections and notifications" });
   await expect(connections).toBeVisible();
@@ -348,6 +349,7 @@ test.describe("Sticky workspace", () => {
   test.beforeEach(async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/");
+    await expect(page.locator(".save-status")).toContainText("Local demo saved");
     // Playwright supplies a fresh browser context for each test. Wait for the
     // demo restore effect before interacting with server-rendered controls.
     await expect(page.locator(".save-status")).toContainText("Local demo saved");
@@ -818,6 +820,7 @@ test.describe("Sticky workspace", () => {
       });
 
       await page.reload();
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await expect(page.locator(".list-tab.active")).toHaveCount(0);
       await expect(page.locator(".board-column.active")).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Current task view: All, 30 tasks" })).toBeVisible();
@@ -855,6 +858,7 @@ test.describe("Sticky workspace", () => {
     await expect(app).toHaveAttribute("data-interface-scale", "250");
 
     await page.reload();
+    await expect(page.locator(".save-status")).toContainText("Local demo saved");
     await expect(page.locator(".sticky-app")).toHaveAttribute("data-interface-size-mode", "manual");
     await expect(page.locator(".sticky-app")).toHaveAttribute("data-interface-scale", "250");
     await expectNoHorizontalOverflow(page);
@@ -908,6 +912,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       const columns = page.locator(".board-column");
       const columnCount = await columns.count();
       expect(columnCount).toBeGreaterThan(1);
@@ -986,6 +991,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await expect(page.getByRole("heading", { name: "All tasks" })).toBeVisible();
       await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
       await expect(page.locator(".list-tab.active")).toHaveCount(0);
@@ -1395,6 +1401,7 @@ test.describe("Sticky workspace", () => {
       await expect(page.locator("button.list-tab", { hasText: "Move Target" })).toHaveCount(0);
 
       await page.reload();
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       const persistedVerificationTab = page.locator("button.list-tab", { hasText: "Verification Prime" });
       await persistedVerificationTab.scrollIntoViewIfNeeded();
       await expect(persistedVerificationTab).toBeVisible();
@@ -1408,6 +1415,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
       await expectMobileZoomAllowed(page);
@@ -1471,6 +1479,7 @@ test.describe("Sticky workspace", () => {
       await expect(activeRegion.locator(".task-card", { hasText: "Mobile capture" })).toBeVisible();
       await expectNoHorizontalOverflow(page);
       await page.reload();
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await expect(activeRegion.locator(".task-card", { hasText: "Mobile capture" })).toBeVisible();
       await expectNoHorizontalOverflow(page);
     });
@@ -1481,6 +1490,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
       const taskViews = page.locator(".task-filter-bar");
@@ -1498,6 +1508,7 @@ test.describe("Sticky workspace", () => {
       await expect(page.getByText(/Due dates stay chronological/)).toBeVisible();
 
       await page.reload();
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await expect(page.getByRole("heading", { name: "All tasks", exact: true })).toBeVisible();
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
@@ -1519,6 +1530,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
 
@@ -1572,6 +1584,7 @@ test.describe("Sticky workspace", () => {
       await expectTextBefore(page, ".task-title", titles.undatedTimeFirst, titles.later);
 
       await page.reload();
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await expect(page.getByRole("button", { name: "Current task sort: Due date" })).toHaveAttribute(
         "aria-pressed",
@@ -1589,6 +1602,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.getByRole("button", { name: "New list" }).click();
       await page.getByRole("textbox", { name: "Name" }).fill("Today reorder proof");
       await page.getByText("Sky", { exact: true }).click();
@@ -1670,6 +1684,7 @@ test.describe("Sticky workspace", () => {
       await expectTextBefore(page, ".task-title", titles.ten, titles.nineSecond);
 
       await page.reload();
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.locator("button.list-tab", { hasText: "Today reorder proof" }).click();
       await expect(page.getByRole("button", { name: "Current task view: Today, 5 tasks" })).toHaveAttribute(
         "aria-pressed",
@@ -1688,6 +1703,7 @@ test.describe("Sticky workspace", () => {
   test("clicking outside quick capture submits a non-empty draft exactly once", async ({ page }) => {
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
 
       const quickAdd = page.getByLabel("Quick add task");
@@ -1710,6 +1726,7 @@ test.describe("Sticky workspace", () => {
   test("clicking outside quick capture does not submit an empty draft", async ({ page }) => {
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
 
       const quickAdd = page.getByLabel("Quick add task");
@@ -1725,6 +1742,7 @@ test.describe("Sticky workspace", () => {
   test("quick capture Enter and Add actions still submit exactly one task each", async ({ page }) => {
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
 
       const quickAdd = page.getByLabel("Quick add task");
@@ -1745,6 +1763,7 @@ test.describe("Sticky workspace", () => {
   test("click-away capture preserves the outside action and saves to the original list", async ({ page }) => {
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       const remindersTab = page.locator("button.list-tab", { hasText: "reminders" });
       const nextTab = page.locator("button.list-tab", { hasText: "Next 3" });
       await remindersTab.click();
@@ -1870,6 +1889,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.locator("button.list-tab", { hasText: "Next 3" }).click();
       await expect(page.getByRole("heading", { name: "Next 3", exact: true })).toBeVisible();
 
@@ -1880,6 +1900,7 @@ test.describe("Sticky workspace", () => {
       await expect(activeRegion.getByText("Prepare the Vercel domain checklist")).toBeVisible();
 
       await page.reload();
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await expect(page.getByRole("heading", { name: "All tasks", exact: true })).toBeVisible();
       await expect(page.locator(".list-tab.active")).toHaveCount(0);
       await expect(page.locator(".board-column.active")).toHaveCount(0);
@@ -1896,6 +1917,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
 
@@ -1921,6 +1943,7 @@ test.describe("Sticky workspace", () => {
       await expect(activeRegion.getByText("Clear the capture tray")).toHaveCount(0);
       await expect(activeRegion.getByText("Daily planning pass")).toBeVisible();
       await page.reload();
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await expect(taskViews.getByRole("button", { name: "Current task view: Daily, 1 task" })).toHaveAttribute(
         "aria-pressed",
         "true",
@@ -2014,6 +2037,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
 
       const futureDailyTitle = "Tomorrow daily proof";
@@ -2040,6 +2064,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
 
       const taskViews = page.locator(".task-filter-bar");
@@ -2060,6 +2085,7 @@ test.describe("Sticky workspace", () => {
   test("adding a nonmatching task preserves the filter and offers an explicit reveal", async ({ page }) => {
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
 
       const taskViews = page.locator(".task-filter-bar");
@@ -2096,6 +2122,7 @@ test.describe("Sticky workspace", () => {
   test("adding a matching task keeps it visible in the current filter", async ({ page }) => {
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
 
       const taskViews = page.locator(".task-filter-bar");
@@ -2124,6 +2151,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.getByRole("button", { name: "New list" }).click();
       await page.getByRole("textbox", { name: "Name" }).fill("Capture Target");
       await page.getByText("Mint", { exact: true }).click();
@@ -2155,6 +2183,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
       const nextFriday = nextWeekdayKey(5);
 
@@ -2174,6 +2203,7 @@ test.describe("Sticky workspace", () => {
       await expect(details.locator('input[aria-label="Due time"]')).toHaveValue("12:00");
 
       await page.reload();
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       const persistedCard = page.locator(".task-card", { hasText: "Plan review" });
       await expect(persistedCard).toBeVisible();
       await expect(persistedCard).toContainText(`${shortDateLabel(nextFriday)} at 12:00 PM`);
@@ -2187,6 +2217,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
       const activeRegion = page.getByRole("region", { name: "Active tasks" });
       const nextWeek = localDateKey(7);
@@ -2227,6 +2258,7 @@ test.describe("Sticky workspace", () => {
       await expect(card).toContainText(`${shortDateLabel(nextWeek)} at 5:00 PM`);
 
       await page.reload();
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       const persistedCard = activeRegion.locator(".task-card", { hasText: "Chip schedule proof" });
       await expect(persistedCard).toBeVisible();
       await expect(persistedCard).toContainText(`${shortDateLabel(nextWeek)} at 5:00 PM`);
@@ -2241,6 +2273,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
       const tomorrow = localDateKey(1);
       await page.getByLabel("Quick add task").fill("Reusable setup tomorrow 9am");
@@ -2269,6 +2302,7 @@ test.describe("Sticky workspace", () => {
       await expect(details.locator(".subtask-title").first()).toHaveValue("First copied subtask");
 
       await page.reload();
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       const copiedCard = page.locator(".task-card", { hasText: "Reusable setup copy" });
       await expect(copiedCard).toBeVisible();
       await expect(copiedCard).not.toContainText(`${shortDateLabel(tomorrow)} at 9:00 AM`);
@@ -2284,6 +2318,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await page.getByLabel("Quick add task").fill("Weekly template");
       await quickAddButton(page, "reminders").click();
@@ -2310,6 +2345,7 @@ test.describe("Sticky workspace", () => {
       await expect(page.locator(".task-card", { hasText: "Weekly template copy" })).toContainText("Every week on Mon");
 
       await page.reload();
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       const copiedCard = page.locator(".task-card", { hasText: "Weekly template copy" });
       await expect(copiedCard).toBeVisible();
       await copiedCard.click();
@@ -2324,6 +2360,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
 
       const details = page.getByRole("complementary", { name: "Task details", exact: true });
@@ -2371,6 +2408,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
 
       const startDate = localDateKey(1);
@@ -2406,6 +2444,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await page.getByLabel("Quick add task").fill("Command action sticky");
       await quickAddButton(page, "reminders").click();
@@ -2419,6 +2458,7 @@ test.describe("Sticky workspace", () => {
       await expect(commandCard).toHaveClass(/color-violet/);
 
       await page.reload();
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       const persistedCard = page.getByRole("region", { name: "Active tasks" }).locator(".task-card", {
         hasText: "Command action sticky",
       });
@@ -2667,6 +2707,7 @@ test.describe("Sticky workspace", () => {
     }
 
     await page.goto("/");
+    await expect(page.locator(".save-status")).toContainText("Local demo saved");
     await expect(page.locator('meta[property="og:image"]')).toHaveAttribute("content", /opengraph-image/);
     await expect(page.locator('meta[name="twitter:image"]')).toHaveAttribute("content", /twitter-image/);
     await expect(page.locator('meta[property="og:image:alt"]')).toHaveAttribute("content", /premium sticky tasks/i);
