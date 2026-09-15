@@ -4,7 +4,6 @@ test.use({ timezoneId: "UTC" });
 test("counts each class meeting and edits the original series without moving its start", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
-  await page.clock.setFixedTime(new Date("2026-09-14T12:00:00Z"));
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.addInitScript(() => {
     localStorage.setItem("sticky.demo.calendar-events.v1", JSON.stringify([14, 16].map((day) => ({
@@ -18,6 +17,9 @@ test("counts each class meeting and edits the original series without moving its
     }))));
   });
   await page.goto("/");
+  await expect(page.locator(".save-status")).toContainText("Local demo saved");
+  // Keep SSR and hydration on the same clock; fix the calendar date only after loading.
+  await page.clock.setFixedTime(new Date("2026-09-14T12:00:00Z"));
   await page.getByRole("button", { name: "Show calendar view" }).click();
   await expect(page.locator(".calendar-summary")).toContainText("2 events this month");
   await page.locator(".calendar-agenda .cal-event").filter({ hasText: "CS 4390" }).first().click();

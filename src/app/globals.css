@@ -10219,17 +10219,18 @@ button.cal-timegrid-day:hover {
 .phone-landscape .task-stage:has(.calendar-view) { overflow: hidden; }
 .phone-landscape .calendar-view { overflow-y: auto; padding: 4px 12px 12px; gap: 8px; animation: none; }
 .phone-landscape .calendar-header { flex: none; padding: 6px 10px; gap: 8px; }
+.phone-landscape .calendar-heading { flex-basis: auto; }
 .phone-landscape .calendar-heading p, .phone-landscape .calendar-summary { display: none; }
 .phone-landscape .calendar-month-title { font-size: 1rem; }
 .phone-landscape .calendar-view-switcher button { padding: 6px 10px; min-height: 40px; }
 .phone-landscape .calendar-controls button { min-height: 40px; }
-.phone-landscape .calendar-layout { flex: none; grid-template-columns: minmax(0, 1.7fr) minmax(220px, 1fr); grid-template-rows: auto; gap: 10px; padding: 0; align-items: start; }
-.phone-landscape .calendar-grid { flex: none; grid-auto-rows: minmax(44px, auto); overflow: visible; }
-.phone-landscape .calendar-cell { min-height: 44px; padding: 2px; }
-.phone-landscape .calendar-cell-header { min-height: 40px; justify-content: space-between; }
+.phone-landscape .calendar-layout { flex: 1; grid-template-columns: minmax(0, 1.7fr) minmax(220px, 1fr); grid-template-rows: minmax(0, 1fr); gap: 10px; padding: 0; }
+.phone-landscape .calendar-grid { flex: 1; min-height: 0; grid-template-rows: repeat(6, minmax(0, 1fr)); grid-auto-rows: auto; }
+.phone-landscape .calendar-cell { min-height: 0; padding: 2px; }
+.phone-landscape .calendar-cell-header { flex: 1; min-height: 0; justify-content: space-between; }
 .phone-landscape .calendar-cell-tasks { display: none; }
 .phone-landscape .calendar-agenda-list { overflow: visible; }
-.phone-landscape .calendar-week-view { flex: none; grid-template-columns: repeat(7, minmax(130px, 1fr)); overflow-x: auto; }
+.phone-landscape .calendar-week-view { flex: none; grid-template-columns: minmax(0, 1fr); }
 .phone-landscape .calendar-day-view { flex: none; }
 .phone-landscape .toast-stack { bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); }
 .phone-landscape .preference-controls { top: 100px; bottom: auto; max-height: calc(100dvh - 112px); }

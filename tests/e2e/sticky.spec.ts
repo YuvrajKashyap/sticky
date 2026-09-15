@@ -610,8 +610,8 @@ test.describe("Sticky workspace", () => {
         "aria-pressed",
         "true",
       );
-      await expect(calendar.locator(".calendar-week-day")).toHaveCount(7);
-      await expect(calendar.locator(".calendar-week-task", { hasText: "Daily planning pass" })).toBeVisible();
+      await expect(calendar.locator(".cal-timegrid-day")).toHaveCount(7);
+      await expect(calendar.locator(".calendar-week-view .calendar-task", { hasText: "Daily planning pass" })).toBeVisible();
 
       if (testInfo.project.name === "desktop") {
         const toolbarBox = await page.locator(".workspace-tools").boundingBox();
@@ -637,14 +637,15 @@ test.describe("Sticky workspace", () => {
           .toBe(true);
       }
 
-      await calendar.locator(".calendar-week-day.today .calendar-week-day-header").click();
+      await calendar.locator(".cal-timegrid-day.today").click();
       await expect(calendar.getByRole("button", { name: "Day", exact: true })).toHaveAttribute(
         "aria-pressed",
         "true",
       );
       await expect(calendar.locator(".calendar-day-view")).toBeVisible();
       await expect(calendar.locator(".calendar-day-view")).toHaveAttribute("aria-label", /Day view for/);
-      await expect(calendar.locator(".calendar-day-task", { hasText: "Daily planning pass" })).toBeVisible();
+      await expect(calendar.locator(".calendar-day-view .cal-timegrid-day")).toHaveCount(1);
+      await expect(calendar.locator(".calendar-day-view .calendar-task", { hasText: "Daily planning pass" })).toBeVisible();
 
       const initialDay = await rangeTitle.textContent();
       await calendar.getByRole("button", { name: "Next day" }).click();
@@ -652,7 +653,7 @@ test.describe("Sticky workspace", () => {
       await calendar.getByRole("button", { name: "Today" }).click();
       await expect(rangeTitle).toHaveText(initialDay ?? "");
 
-      await calendar.locator(".calendar-day-task", { hasText: "Daily planning pass" }).click();
+      await calendar.locator(".calendar-day-view .calendar-task", { hasText: "Daily planning pass" }).click();
       await expect(page.getByRole("complementary", { name: "Task details", exact: true })).toBeVisible();
     });
   });
@@ -1764,6 +1765,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       await page.goto("/");
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
 
@@ -1778,6 +1780,7 @@ test.describe("Sticky workspace", () => {
       });
 
       await page.reload();
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await expect(page.getByRole("heading", { name: "All tasks", exact: true })).toBeVisible();
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();
@@ -1791,6 +1794,7 @@ test.describe("Sticky workspace", () => {
         return Boolean(stored && !JSON.parse(stored).preferences.completedOpenByList["demo-list-reminders"]);
       });
       await page.reload();
+      await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await expect(page.getByRole("heading", { name: "All tasks", exact: true })).toBeVisible();
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await expect(page.getByRole("heading", { name: "reminders", exact: true })).toBeVisible();

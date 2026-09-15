@@ -32,6 +32,8 @@ test("login spotlight preserves its gradient without inheriting through form con
   expect(result.reads).toBe(1);
   await expect(page.locator(".gate-decrypt")).toHaveText("Your lists are right where you left them.");
   await door.focus();
+  // Wait for the focus spotlight to finish fading in before comparing pixels.
+  await expect.poll(() => door.evaluate(element => getComputedStyle(element, "::after").opacity)).toBe("1");
   const optimized = await door.screenshot({ animations: "disabled" });
   // Recreate the original gradient at the identical pointer coordinates.
   await page.addStyleTag({ content: ".gate-door-google::after { background: radial-gradient(220px circle at 25% 75%, rgba(var(--accent-rgb), 0.14), transparent 70%) !important; }" });

@@ -955,7 +955,11 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
 
         {/* ------------------------------------------------------ Week / Day */}
         {viewMode !== "month" ? (
-          <div className={viewMode === "week" ? "calendar-week-view" : "calendar-day-view"}>
+          <div
+            className={viewMode === "week" ? "calendar-week-view" : "calendar-day-view"}
+            role="region"
+            aria-label={`${viewMode === "week" ? "Week" : "Day"} view for ${rangeTitle}`}
+          >
             <TimeGrid
               days={viewMode === "week" ? weekDays : [selectedDate]}
               occurrencesByDate={occurrencesByDate}
