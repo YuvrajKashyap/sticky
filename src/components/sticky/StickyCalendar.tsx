@@ -94,6 +94,7 @@ type PlacedOccurrence = Occurrence & { column: number; columns: number };
    ------------------------------------------------------------------------ */
 
 const CONTENT_KEY = "sticky-calendar-content";
+const VIEW_MODE_KEY = "sticky-calendar-view-mode";
 const HOUR_PX = 56;
 const FIRST_VISIBLE_HOUR = 7;
 const MONTH_CELL_CAP = 5;
@@ -109,6 +110,15 @@ const VIEW_MODES: Array<{ label: string; value: CalendarViewMode }> = [
 const EVENT_COLORS: StickyColor[] = [
   "sky", "azure", "violet", "magenta", "rose", "coral", "ember", "sun", "lime", "mint", "teal", "ink",
 ];
+
+function readCalendarViewMode(): CalendarViewMode {
+  try {
+    const value = window.localStorage.getItem(VIEW_MODE_KEY);
+    return value === "week" || value === "day" ? value : "month";
+  } catch {
+    return "month";
+  }
+}
 
 function readCalendarContent(): CalendarContent {
   try {
@@ -364,7 +374,9 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
   const today = useMemo(() => new Date(), []);
   const todayKey = dayKey(today);
 
-  const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
+  const savedViewMode = useSyncExternalStore(subscribeCalendarContent, readCalendarViewMode, () => "month" as const);
+  const [viewChoice, setViewMode] = useState<CalendarViewMode | null>(null);
+  const viewMode = viewChoice ?? savedViewMode;
   const savedContent = useSyncExternalStore(subscribeCalendarContent, readCalendarContent, () => "both" as const);
   const [contentChoice, setContentChoice] = useState<CalendarContent | null>(null);
   const content = contentChoice ?? savedContent;
@@ -610,6 +622,11 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
 
   function changeView(nextView: CalendarViewMode) {
     setViewMode(nextView);
+    try {
+      window.localStorage.setItem(VIEW_MODE_KEY, nextView);
+    } catch {
+      /* View switching still works when storage is unavailable. */
+    }
     setAnchorDate(selectedDate);
   }
 
