@@ -361,9 +361,9 @@ mark.find-highlight {
    ---------------------------------------------------------------------- */
 
 .sticky-app {
-  /* Interface size: the whole console zooms as one unit, so every px, rem,
-     gap, and shadow scales together. Viewport units inside are divided back
-     out through --vh/--vw so full-height surfaces still fit the screen. */
+  /* Workspace content scales together; the navigation/settings toolbar below
+     counter-scales to stay fixed. Compensated viewport units keep full-height
+     content surfaces fitted to the screen. */
   --workspace-scale: 1;
   --vh: calc(1dvh / var(--workspace-scale));
   --vw: calc(1vw / var(--workspace-scale));
@@ -11320,3 +11320,36 @@ button.cal-timegrid-day:hover {
 .mobile-resizable .workspace-find-control.expanded { max-width: 100%; }
 .mobile-resizable .task-filter-bar { scroll-padding-inline: 5px; overscroll-behavior-x: contain; }
 .mobile-resizable .task-filter-bar button:last-child { margin-right: 1px; }
+
+/* Navigation and resizing controls stay in screen pixels, independent of content density. */
+.workspace-topbar { animation: none; }
+.sticky-app .workspace-tools {
+  zoom: calc(1 / var(--workspace-scale) / var(--mobile-zoom, 1));
+  --vh: 1dvh;
+  --vw: 1vw;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  position: fixed;
+  top: 20px;
+  right: 18px;
+  bottom: auto;
+  left: auto;
+  transform: none;
+  animation: none;
+  max-width: calc(100vw - 32px);
+}
+@media (max-width: 860px) {
+  .sticky-app .workspace-tools {
+    top: auto;
+    right: auto;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+.sticky-app.phone-landscape .workspace-tools {
+  top: 6px;
+  right: 12px;
+  bottom: auto;
+  left: auto;
+  transform: none;
+}

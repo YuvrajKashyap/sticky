@@ -24,7 +24,7 @@ export function InterfaceSizeSlider({ value, min, max, step, label, onChange, cl
     onPointerMove={event => {
       const start = drag.current;
       if (!start || start.pointerId !== event.pointerId) return;
-      const next = start.value + Math.round((event.clientX - start.x) / (4 * step)) * step;
+      const next = start.value + Math.round((event.clientX - start.x) / (80 * step)) * step;
       onChange(Math.max(min, Math.min(max, next)));
     }}
     onPointerUp={event => {

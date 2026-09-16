@@ -227,19 +227,15 @@ async function expectProfileSettingsTriggerVisible(page: Page) {
     const style = window.getComputedStyle(node);
     const icon = node.querySelector(".profile-settings-icon");
     const iconRect = icon?.getBoundingClientRect();
-    // Interface size scales the entire console; preserve the control
-    // dimensions in layout pixels while testing visibility above.
-    const scale = Number(getComputedStyle(document.querySelector(".sticky-app")!).zoom) || 1;
-
     return {
       borderRadius: style.borderRadius,
       color: style.color,
-      height: rect.height / scale,
+      height: rect.height,
       iconColor: icon ? window.getComputedStyle(icon).color : "missing",
-      iconHeight: (iconRect?.height ?? 0) / scale,
-      iconWidth: (iconRect?.width ?? 0) / scale,
+      iconHeight: iconRect?.height ?? 0,
+      iconWidth: iconRect?.width ?? 0,
       opacity: style.opacity,
-      width: rect.width / scale,
+      width: rect.width,
     };
   });
 
