@@ -582,6 +582,21 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
 
   const rangeTitle =
     viewMode === "month" ? format(monthStart, "MMMM yyyy") : viewMode === "week" ? weekTitle(weekStart, weekEnd) : format(selectedDate, "EEEE, MMMM d");
+  // Editorial title: the month or weekday in roman, the year or date in italic.
+  const rangeTitleNode =
+    viewMode === "month" ? (
+      <>
+        {format(monthStart, "MMMM")} <em>{format(monthStart, "yyyy")}</em>
+      </>
+    ) : viewMode === "week" ? (
+      <>
+        {weekTitle(weekStart, weekEnd).replace(/,\s*\d{4}$/, "")}, <em>{format(weekEnd, "yyyy")}</em>
+      </>
+    ) : (
+      <>
+        {format(selectedDate, "EEEE")} <em>{format(selectedDate, "MMM d")}</em>
+      </>
+    );
   const periodLabel = viewMode === "month" ? "this month" : viewMode === "week" ? "this week" : "today";
 
   /* --- Actions --------------------------------------------------------------- */
@@ -777,7 +792,7 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
                   exit={reduceMotion ? undefined : { opacity: 0, y: -8 }}
                   transition={{ duration: 0.22, ease: EASE }}
                 >
-                  {rangeTitle}
+                  {rangeTitleNode}
                 </motion.h2>
               </AnimatePresence>
             </div>
