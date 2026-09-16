@@ -41,7 +41,8 @@ import {
   type CalendarEventInput,
   type StickyCalendarEvent,
 } from "@/lib/sticky/calendar-events";
-import type { AppMode, StickyColor, StickyList, StickyTask } from "@/types/sticky";
+import type { CalendarTaskItem as StickyTask } from "@/lib/sticky/task-filter";
+import type { AppMode, StickyColor, StickyList } from "@/types/sticky";
 import { springs } from "./motion";
 
 /* ------------------------------------------------------------------------
@@ -919,7 +920,7 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
                               >
                                 <i aria-hidden="true" />
                                 {time ? <span className="calendar-task-time">{time}</span> : null}
-                                <span className="calendar-task-title">{task.title || "Untitled"}</span>
+                                <span className="calendar-task-title">{task.title || "Untitled"}{task.parentTitle ? <small className="calendar-parent-context"> · {task.parentTitle}</small> : null}</span>
                                 {task.isCompleted ? <Check size={11} aria-hidden="true" /> : null}
                               </motion.button>
                             );
@@ -1130,7 +1131,7 @@ function TimeGrid({
                     transition={springs.snappy}
                   >
                     <i aria-hidden="true" />
-                    <span className="calendar-task-title">{task.title || "Untitled"}</span>
+                    <span className="calendar-task-title">{task.title || "Untitled"}{task.parentTitle ? <small className="calendar-parent-context"> · {task.parentTitle}</small> : null}</span>
                     {task.isCompleted ? <Check size={11} aria-hidden="true" /> : null}
                   </motion.button>
                 ))}
@@ -1215,7 +1216,7 @@ function TimeGrid({
                       transition={springs.snappy}
                     >
                       <i aria-hidden="true" />
-                      <span className="calendar-task-title">{task.title || "Untitled"}</span>
+                      <span className="calendar-task-title">{task.title || "Untitled"}{task.parentTitle ? <small className="calendar-parent-context"> · {task.parentTitle}</small> : null}</span>
                       {task.isCompleted ? <Check size={11} aria-hidden="true" /> : null}
                     </motion.button>
                   );
@@ -1385,7 +1386,7 @@ function CalendarAgenda({
                       </span>
                       <i className="cal-row-rail" aria-hidden="true" />
                       <span className="cal-row-copy">
-                        <strong>{task.title || "Untitled task"}</strong>
+                        <strong>{task.title || "Untitled task"}</strong>{task.parentTitle ? <span className="calendar-parent-context">{task.parentTitle}</span> : null}
                         <span className="cal-row-meta">
                           {list ? <em>{list.name}</em> : null}
                           {recurringTaskIds.has(task.id) ? (

@@ -227,16 +227,19 @@ async function expectProfileSettingsTriggerVisible(page: Page) {
     const style = window.getComputedStyle(node);
     const icon = node.querySelector(".profile-settings-icon");
     const iconRect = icon?.getBoundingClientRect();
+    // Interface size scales the entire console; preserve the control
+    // dimensions in layout pixels while testing visibility above.
+    const scale = Number(getComputedStyle(document.querySelector(".sticky-app")!).zoom) || 1;
 
     return {
       borderRadius: style.borderRadius,
       color: style.color,
-      height: rect.height,
+      height: rect.height / scale,
       iconColor: icon ? window.getComputedStyle(icon).color : "missing",
-      iconHeight: iconRect?.height ?? 0,
-      iconWidth: iconRect?.width ?? 0,
+      iconHeight: (iconRect?.height ?? 0) / scale,
+      iconWidth: (iconRect?.width ?? 0) / scale,
       opacity: style.opacity,
-      width: rect.width,
+      width: rect.width / scale,
     };
   });
 
@@ -255,10 +258,6 @@ function quickAddButton(page: Page, listName: string) {
 
 async function runCommand(page: Page, query: string) {
   const commandDialog = page.getByRole("dialog", { name: "Command center" });
-  if ((await commandDialog.count()) === 0) {
-    await page.getByRole("button", { name: "Open command center" }).click({ force: true });
-    await page.waitForTimeout(100);
-  }
   if ((await commandDialog.count()) === 0) {
     await page.keyboard.press("Control+K");
   }
@@ -734,11 +733,11 @@ test.describe("Sticky workspace", () => {
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
       await expect(page.locator(".list-tab.active")).toHaveCount(1);
       await expect(page.locator(".board-column.active")).toHaveCount(1);
-      await expect(page.getByRole("button", { name: "Current task view: All, 4 tasks" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Current task view: All, 6 tasks" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Show task view: Today, 1 task" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Show task view: All today, 2 tasks" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Show task view: Scheduled, 2 tasks" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Show task view: Undated, 2 tasks" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Show task view: Undated, 4 tasks" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Show task view: Overdue, 0 tasks" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Show task view: Repeating, 1 task" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Show task view: Subtasks, 2 tasks" })).toBeVisible();
@@ -823,11 +822,11 @@ test.describe("Sticky workspace", () => {
       await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await expect(page.locator(".list-tab.active")).toHaveCount(0);
       await expect(page.locator(".board-column.active")).toHaveCount(0);
-      await expect(page.getByRole("button", { name: "Current task view: All, 30 tasks" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Current task view: All, 32 tasks" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Show task view: Today, 1 task" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Show task view: All today, 2 tasks" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Show task view: Scheduled, 2 tasks" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Show task view: Undated, 28 tasks" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Show task view: Undated, 30 tasks" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Show task view: Overdue, 0 tasks" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Show task view: Repeating, 1 task" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Show task view: Subtasks, 2 tasks" })).toBeVisible();
@@ -876,7 +875,7 @@ test.describe("Sticky workspace", () => {
     await expect(columns.nth(0)).toBeVisible();
     await expect(columns.nth(1)).toBeVisible();
     // Coordinate-based panning needs the initial automatic sizing to settle.
-    await expect(page.locator(".sticky-app")).toHaveAttribute("data-interface-scale", "90");
+    await expect(page.locator(".sticky-app")).toHaveAttribute("data-interface-scale", "85");
     await columns.nth(1).hover({ trial: true });
 
     const firstBox = await columns.nth(0).boundingBox();
@@ -983,7 +982,7 @@ test.describe("Sticky workspace", () => {
 
   test("automatic sizing loads lists inside the prefetch margin", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "desktop automatic sizing check");
-    await expect(page.locator(".sticky-app")).toHaveAttribute("data-interface-scale", "90");
+    await expect(page.locator(".sticky-app")).toHaveAttribute("data-interface-scale", "85");
     await expect(page.locator('[data-list-slug="books"] .task-card')).toHaveCount(12);
   });
 
@@ -1003,7 +1002,7 @@ test.describe("Sticky workspace", () => {
           name: "Open list reminders, 4 active tasks, 8 completed tasks, shown on All tasks, current list",
         }),
       ).toBeVisible();
-      await expect(page.getByRole("button", { name: "Current task view: All, 4 tasks" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Current task view: All, 6 tasks" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Current task sort: Custom order" })).toBeVisible();
       await expectSingleLine(page.locator(".workspace-title h2"));
       await expectNoHorizontalOverflow(page);
@@ -1464,7 +1463,9 @@ test.describe("Sticky workspace", () => {
       await expectNoHorizontalOverflow(page);
       await mobileDetails.getByRole("button", { name: "Complete Mobile capture" }).click();
       const activeRegion = page.getByRole("region", { name: "Active tasks" });
-      await expect(activeRegion.locator(".task-card", { hasText: "Mobile capture" })).toHaveCount(0);
+      // Completing the parent leaves its unfinished children actionable.
+      await expect(activeRegion.locator(".task-card", { hasText: "Mobile capture" })).toHaveAttribute("data-context-only", "true");
+      await expect(activeRegion.getByRole("button", { name: "Complete subtask: Phone first", exact: true })).toBeVisible();
       const completionToast = page.getByRole("group", { name: "Task completed: Mobile capture" });
       await expect(completionToast).toBeVisible();
       const closeDetails = mobileDetails.getByRole("button", { name: "Close details" });
@@ -1670,6 +1671,8 @@ test.describe("Sticky workspace", () => {
       await dragBetween(page, ten.locator(".task-drag"), nineSecond.locator(".task-drag"));
       await expectTextBefore(page, ".task-title", titles.nineFirst, titles.ten);
       await expect(page.getByText("Due-date groups stay chronological")).toBeVisible();
+      // At compact scales this toast overlaps the lower details controls.
+      await page.getByRole("button", { name: "Dismiss Due-date groups stay chronological", exact: true }).click();
 
       await activeRegion.getByText(titles.parent, { exact: true }).click();
       await expect(details.getByRole("textbox", { name: "Subtask title: Tomorrow hidden child" })).toHaveCount(0);
@@ -1688,7 +1691,7 @@ test.describe("Sticky workspace", () => {
       await page.reload();
       await expect(page.locator(".save-status")).toContainText("Local demo saved");
       await page.locator("button.list-tab", { hasText: "Today reorder proof" }).click();
-      await expect(page.getByRole("button", { name: "Current task view: Today, 5 tasks" })).toHaveAttribute(
+      await expect(page.getByRole("button", { name: "Current task view: Today, 6 tasks" })).toHaveAttribute(
         "aria-pressed",
         "true",
       );
@@ -1996,7 +1999,7 @@ test.describe("Sticky workspace", () => {
       await expect(page.getByText(/Reordering is locked while searching/)).toHaveCount(0);
 
       await runCommand(page, "show undated tasks");
-      await expect(taskViews.getByRole("button", { name: "Current task view: Undated, 2 tasks" })).toHaveAttribute(
+      await expect(taskViews.getByRole("button", { name: "Current task view: Undated, 4 tasks" })).toHaveAttribute(
         "aria-pressed",
         "true",
       );
@@ -2014,7 +2017,7 @@ test.describe("Sticky workspace", () => {
       await expect(activeRegion.getByText(overdueTitle)).toHaveCount(0);
 
       await runCommand(page, "show subtasks tasks");
-      await expect(taskViews.getByRole("button", { name: "Current task view: Subtasks, 2 tasks" })).toHaveAttribute(
+      await expect(taskViews.getByRole("button", { name: "Current task view: Subtasks, 3 tasks" })).toHaveAttribute(
         "aria-pressed",
         "true",
       );
@@ -2024,7 +2027,7 @@ test.describe("Sticky workspace", () => {
       await expect(activeRegion.getByText(overdueTitle)).toHaveCount(0);
 
       await runCommand(page, "show all tasks");
-      await expect(taskViews.getByRole("button", { name: "Current task view: All, 5 tasks" })).toHaveAttribute(
+      await expect(taskViews.getByRole("button", { name: "Current task view: All, 8 tasks" })).toHaveAttribute(
         "aria-pressed",
         "true",
       );

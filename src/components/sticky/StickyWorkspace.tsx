@@ -60,6 +60,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSPrope
 import { format } from "date-fns";
 import { MonthDaysPicker } from "./MonthDaysPicker";
 import { monthlyOccurrence, monthDaysLabel } from "@sticky/domain";
+import { calendarTaskItems, itemMatchesView, matchingTaskItems } from "@/lib/sticky/task-filter";
 import { parentDueDateIssue, reconcileParentDueDate } from "@sticky/domain";
 import { createStickyPlatformClient } from "@/lib/sticky/api-client";
 import { listToDb, recurrenceToDb, subtaskToDb, taskToDb } from "@/lib/sticky/mappers";
@@ -541,65 +542,13 @@ function taskFindText(task: StickyTask, subtasks: StickySubtask[], dueLabel: str
     .join(" ");
 }
 
-function taskOrActiveSubtaskIsDueOn(
-  task: StickyTask,
-  subtasks: StickySubtask[],
-  dateKey: string,
-) {
-  return (
-    task.dueDate === dateKey ||
-    subtasks.some((subtask) => !subtask.isCompleted && subtask.dueDate === dateKey)
-  );
+function taskMatchesView(task: StickyTask, subtasks: StickySubtask[], frequency: RecurrenceFrequency | null, filter: StickyTaskViewFilter, today: string) {
+  return matchingTaskItems(task, subtasks, frequency, filter, today).length > 0;
 }
 
-function isTodayTaskView(filter: StickyTaskViewFilter) {
-  return filter === "today" || filter === "all_today";
-}
-
-function taskMatchesView(
-  task: StickyTask,
-  subtasks: StickySubtask[],
-  recurrenceFrequency: RecurrenceFrequency | null,
-  filter: StickyTaskViewFilter,
-  todayKey: string,
-) {
-  if (filter === "due") return Boolean(task.dueDate);
-  if (filter === "today") {
-    return recurrenceFrequency !== "daily" && taskOrActiveSubtaskIsDueOn(task, subtasks, todayKey);
-  }
-  if (filter === "all_today") return taskOrActiveSubtaskIsDueOn(task, subtasks, todayKey);
-  if (filter === "daily") {
-    return recurrenceFrequency === "daily" && taskOrActiveSubtaskIsDueOn(task, subtasks, todayKey);
-  }
-  if (filter === "undated") return !task.dueDate;
-  if (filter === "overdue") return Boolean(task.dueDate && task.dueDate < todayKey);
-  if (filter === "recurring") return recurrenceFrequency !== null;
-  if (filter === "subtasks") return subtasks.some((subtask) => !subtask.isCompleted);
-  return true;
-}
-
-function taskDueScheduleForView(
-  task: StickyTask,
-  subtasks: StickySubtask[],
-  filter: StickyTaskViewFilter,
-  todayKey: string,
-): DueSchedule {
-  if (!isTodayTaskView(filter)) {
-    return task;
-  }
-
-  const candidates: DueSchedule[] = [];
-
-  if (task.dueDate === todayKey) {
-    candidates.push(task);
-  }
-
-  for (const subtask of subtasks) {
-    if (!subtask.isCompleted && subtask.dueDate === todayKey) {
-      candidates.push({ dueDate: subtask.dueDate, dueTime: null });
-    }
-  }
-
+function taskDueScheduleForView(task: StickyTask, subtasks: StickySubtask[], filter: StickyTaskViewFilter, todayKey: string): DueSchedule {
+  const candidates = matchingTaskItems(task, subtasks, null, filter, todayKey)
+    .map(item => ({ dueDate: item.dueDate, dueTime: item.dueTime ?? null }));
   return candidates.sort(compareDueSchedules)[0] ?? task;
 }
 
@@ -1926,9 +1875,9 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
   const activeListTasks = useMemo(() => {
     return workspace.tasks
-      .filter((task) => task.listId === activeListId && !task.isCompleted)
+      .filter((task) => task.listId === activeListId && (!task.isCompleted || (subtasksByTask.get(task.id) ?? []).some(child => !child.isCompleted)))
       .sort(bySortOrder);
-  }, [activeListId, workspace.tasks]);
+  }, [activeListId, subtasksByTask, workspace.tasks]);
 
   const taskFilterScopeTasks = useMemo(() => {
     if (activeListId) {
@@ -1936,73 +1885,31 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     }
 
     return workspace.tasks
-      .filter((task) => visibleBoardListIds.has(task.listId) && !task.isCompleted)
+      .filter((task) => visibleBoardListIds.has(task.listId) && (!task.isCompleted || (subtasksByTask.get(task.id) ?? []).some(child => !child.isCompleted)))
       .sort(bySortOrder);
-  }, [activeListId, activeListTasks, visibleBoardListIds, workspace.tasks]);
+  }, [activeListId, activeListTasks, visibleBoardListIds, workspace.tasks, subtasksByTask]);
 
   const taskFilterCounts = useMemo(() => {
     const todayKey = localDateKey();
 
-    return {
-      all: taskFilterScopeTasks.length,
-      today: taskFilterScopeTasks.filter(
-        (task) =>
-          recurrenceByTask.get(task.id)?.frequency !== "daily" &&
-          taskOrActiveSubtaskIsDueOn(task, subtasksByTask.get(task.id) ?? [], todayKey),
-      ).length,
-      all_today: taskFilterScopeTasks.filter((task) =>
-        taskOrActiveSubtaskIsDueOn(task, subtasksByTask.get(task.id) ?? [], todayKey),
-      ).length,
-      daily: taskFilterScopeTasks.filter(
-        (task) =>
-          recurrenceByTask.get(task.id)?.frequency === "daily" &&
-          taskOrActiveSubtaskIsDueOn(task, subtasksByTask.get(task.id) ?? [], todayKey),
-      ).length,
-      due: taskFilterScopeTasks.filter((task) => Boolean(task.dueDate)).length,
-      undated: taskFilterScopeTasks.filter((task) => !task.dueDate).length,
-      overdue: taskFilterScopeTasks.filter((task) => task.dueDate && task.dueDate < todayKey).length,
-      recurring: taskFilterScopeTasks.filter((task) => recurrenceByTask.has(task.id)).length,
-      subtasks: taskFilterScopeTasks.filter((task) =>
-        (subtasksByTask.get(task.id) ?? []).some((subtask) => !subtask.isCompleted),
-      ).length,
-    };
+    return Object.fromEntries(TASK_VIEW_ORDER.map(filter => [filter,
+      taskFilterScopeTasks.reduce((count, task) => count + matchingTaskItems(
+        task, subtasksByTask.get(task.id) ?? [], recurrenceByTask.get(task.id)?.frequency ?? null,
+        filter, todayKey,
+      ).length, 0),
+    ])) as Record<StickyTaskViewFilter, number>;
   }, [recurrenceByTask, subtasksByTask, taskFilterScopeTasks]);
 
   const activeTasks = useMemo(() => {
     const todayKey = localDateKey();
-
-    const filteredTasks = activeListTasks.filter((task) =>
-      taskMatchesView(
-        task,
-        subtasksByTask.get(task.id) ?? [],
-        recurrenceByTask.get(task.id)?.frequency ?? null,
-        taskViewFilter,
-        todayKey,
-      ),
-    );
-
-    if (taskSortMode === "due") {
-      return filteredTasks
-        .slice()
-        .sort((first, second) =>
-          compareTasksForView(first, second, subtasksByTask, taskViewFilter, todayKey),
-        );
-    }
-
-    return filteredTasks;
+    const filtered = activeListTasks.filter(task => taskMatchesView(task, subtasksByTask.get(task.id) ?? [], recurrenceByTask.get(task.id)?.frequency ?? null, taskViewFilter, todayKey));
+    return taskSortMode === "due" ? filtered.slice().sort((a, b) => compareTasksForView(a, b, subtasksByTask, taskViewFilter, todayKey)) : filtered;
   }, [activeListTasks, recurrenceByTask, subtasksByTask, taskSortMode, taskViewFilter]);
 
-  const calendarTasks = useMemo(
-    () =>
-      workspace.tasks
-        .filter((task) => unarchivedListIds.has(task.listId) && Boolean(task.dueDate))
-        .sort((a, b) => {
-          const aSchedule = `${a.dueDate ?? "9999-12-31"}T${a.dueTime ?? "23:59"}`;
-          const bSchedule = `${b.dueDate ?? "9999-12-31"}T${b.dueTime ?? "23:59"}`;
-          return aSchedule.localeCompare(bSchedule) || bySortOrder(a, b);
-        }),
-    [unarchivedListIds, workspace.tasks],
-  );
+  const calendarTasks = useMemo(() => calendarTaskItems(
+    workspace.tasks.filter(task => unarchivedListIds.has(task.listId)), workspace.subtasks,
+  ).sort((a, b) => compareDueSchedules(a, b) || bySortOrder(a, b)),
+  [unarchivedListIds, workspace.tasks, workspace.subtasks]);
 
   const searchMatchCount = useMemo(() => {
     if (!searchQuery) {
@@ -2104,15 +2011,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     const todayKey = localDateKey();
 
     function visibleTasksForList(tasks: StickyTask[]) {
-      const filteredTasks = tasks.filter((task) =>
-        taskMatchesView(
-          task,
-          subtasksByTask.get(task.id) ?? [],
-          recurrenceByTask.get(task.id)?.frequency ?? null,
-          taskViewFilter,
-          todayKey,
-        ),
-      );
+      const filteredTasks = tasks.filter(task => matchingTaskItems(task, subtasksByTask.get(task.id) ?? [], recurrenceByTask.get(task.id)?.frequency ?? null, taskViewFilter, todayKey, searchQuery).length > 0);
 
       if (taskSortMode === "due") {
         return filteredTasks
@@ -2144,7 +2043,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
     return boardLists.map((list) => {
       const listActiveTasks = workspace.tasks
-        .filter((task) => task.listId === list.id && !task.isCompleted)
+        .filter((task) => task.listId === list.id && (!task.isCompleted || (subtasksByTask.get(task.id) ?? []).some(child => !child.isCompleted)))
         .sort(bySortOrder);
       const listCompletedTasks = workspace.tasks
         .filter((task) => task.listId === list.id && task.isCompleted)
@@ -4187,6 +4086,15 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       subtasks: nextSubtasks,
     });
 
+    if (shouldUpdateParent) {
+      pushToast({
+        title: "Parent deadline adjusted",
+        body: nextParentDueDate
+          ? `Moved to ${humanDate(nextParentDueDate)} so it stays on or after its subtasks.`
+          : "The parent is now undated because one of its subtasks has no date.",
+      });
+    }
+
     if (!save) {
       return;
     }
@@ -4242,12 +4150,9 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       return;
     }
 
-    const visibleSubtasks = (isTodayTaskView(taskViewFilter)
-      ? ordered.filter(
-          (subtask) => !subtask.isCompleted && subtask.dueDate === localDateKey(),
-        )
-      : ordered
-    ).sort(taskSortMode === "due" ? compareSubtasksByDueSchedule : bySortOrder);
+    const visibleSubtasks = (viewMode === "calendar" || taskViewFilter === "all" ? ordered : ordered.filter(
+      subtask => itemMatchesView(subtask, null, taskViewFilter, localDateKey(), true),
+    )    ).sort(taskSortMode === "due" ? compareSubtasksByDueSchedule : bySortOrder);
     const movableSubtasks = taskSortMode === "due"
       ? visibleSubtasks.filter(
           (subtask) => subtaskDueGroupKey(subtask) === subtaskDueGroupKey(movingSubtask),
@@ -4633,12 +4538,9 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
         return;
       }
 
-      const visibleSubtasks = (isTodayTaskView(taskViewFilter)
-        ? ordered.filter(
-            (subtask) => !subtask.isCompleted && subtask.dueDate === localDateKey(),
-          )
-        : ordered
-      ).filter((subtask) =>
+      const visibleSubtasks = (viewMode === "calendar" || taskViewFilter === "all" ? ordered : ordered.filter(
+        subtask => itemMatchesView(subtask, null, taskViewFilter, localDateKey(), true),
+      )).filter((subtask) =>
         taskSortMode === "due"
           ? subtaskDueGroupKey(subtask) === subtaskDueGroupKey(activeSubtask)
           : true,
@@ -4675,7 +4577,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       }${railCollapsed ? " rail-collapsed" : ""}${phoneLandscape ? " phone-landscape" : ""}${mobileZoom.enabled ? " mobile-resizable" : ""}`}
       data-interface-size-mode={workspace.preferences.interfaceSizeMode}
       data-interface-scale={resolvedInterfaceScale}
-      style={{ "--workspace-scale": mobileZoom.enabled ? 1 : resolvedInterfaceScale / 100, "--mobile-zoom": mobileZoom.scale } as CSSProperties}
+      style={{ "--workspace-scale": mobileZoom.enabled ? 1 : (resolvedInterfaceScale / 100) * 0.9, "--mobile-zoom": mobileZoom.scale } as CSSProperties}
     >
       <DndContext
         id="sticky-workspace-dnd"
@@ -5268,7 +5170,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
               lists={unarchivedLists}
               recurringTaskIds={recurringTaskIds}
               onTaskSelect={(taskId) => {
-                setSelectedTaskId(taskId);
+                setSelectedTaskId(calendarTasks.find(task => task.id === taskId)?.parentTaskId ?? taskId);
               }}
             />
           ) : (
@@ -5336,6 +5238,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                     onRenameList={() => openListEditor(column.list)}
                     onDeleteList={() => requestDeleteList(column.list)}
                     onOpenTask={(task) => openTaskInContext(task.id)}
+                    onUpdateSubtask={updateSubtask}
                     onCompleteTask={completeTask}
                     onDeleteTask={requestDeleteTask}
                     onMoveTask={moveTaskInOrder}
@@ -5378,7 +5281,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           task={selectedTask}
           lists={unarchivedLists}
           subtasks={selectedTaskSubtasks}
-          subtaskViewFilter={isTodayTaskView(taskViewFilter) ? "today" : "all"}
+          subtaskViewFilter={viewMode === "calendar" ? "all" : taskViewFilter}
           taskSortMode={taskSortMode}
           reorderLocked={reorderLocked}
           recurrenceRule={selectedTaskRecurrence}
@@ -5518,6 +5421,7 @@ function StickyBoardColumn({
   onDeleteList,
   onOpenTask,
   onCompleteTask,
+  onUpdateSubtask,
   onDeleteTask,
   onMoveTask,
   onToggleCompleted,
@@ -5552,6 +5456,7 @@ function StickyBoardColumn({
   onRenameList: () => void;
   onDeleteList: () => void;
   onOpenTask: (task: StickyTask) => void;
+  onUpdateSubtask: (id: string, patch: Partial<StickySubtask>) => void;
   onCompleteTask: (task: StickyTask) => void;
   onDeleteTask: (task: StickyTask) => void;
   onMoveTask: (taskId: string, direction: -1 | 1) => void;
@@ -5865,6 +5770,8 @@ function StickyBoardColumn({
                     task={task}
                     active={task.id === selectedTaskId}
                     subtasks={subtasksByTask.get(task.id) ?? []}
+                    taskViewFilter={taskViewFilter}
+                    onUpdateSubtask={onUpdateSubtask}
                     recurrenceRule={recurrenceByTask.get(task.id) ?? null}
                     dueLabel={humanDue(task)}
                     searchQuery={searchQuery}
@@ -6189,6 +6096,8 @@ function SortableTaskCard({
   recurrenceRule,
   dueLabel,
   searchQuery,
+  taskViewFilter,
+  onUpdateSubtask,
   reorderDisabled,
   dueGroupKey,
   canMoveUp,
@@ -6205,6 +6114,8 @@ function SortableTaskCard({
   recurrenceRule: StickyRecurrenceRule | null;
   dueLabel: string | null;
   searchQuery: string;
+  taskViewFilter: StickyTaskViewFilter;
+  onUpdateSubtask: (id: string, patch: Partial<StickySubtask>) => void;
   reorderDisabled: boolean;
   dueGroupKey?: string;
   canMoveUp: boolean;
@@ -6227,6 +6138,14 @@ function SortableTaskCard({
   const reduceMotion = useReducedMotion();
   const [completing, setCompleting] = useState(false);
   const completeTimerRef = useRef<number | null>(null);
+  const matchingItems = matchingTaskItems(task, subtasks, recurrenceRule?.frequency ?? null, taskViewFilter, localDateKey(), searchQuery);
+  const matchingIds = new Set(matchingItems.map(item => item.id));
+  const visibleChildren = subtasks.filter(child => matchingIds.has(child.id));
+  const contextOnly = !matchingIds.has(task.id);
+  const showingCompletion = completing && !task.isCompleted;
+  useEffect(() => {
+    if (task.isCompleted) setCompleting(false);
+  }, [task.isCompleted]);
   const openSubtasks = subtasks.filter((subtask) => !subtask.isCompleted).length;
   const recurrenceLabel = recurrenceRule
     ? recurrenceRule.paused
@@ -6266,21 +6185,22 @@ function SortableTaskCard({
       layout
       initial={{ opacity: 0, y: 14, scale: 0.97 }}
       animate={
-        completing
+        showingCompletion
           ? { opacity: 1, y: 0, scale: 0.98, rotate: -1.1 }
           : { opacity: 1, y: 0, scale: 1, rotate: 0 }
       }
       exit={
-        completing
+        showingCompletion
           ? { opacity: 0, y: 44, scale: 0.86, rotate: 2.2, transition: { duration: 0.3, ease: [0.5, 0, 0.75, 0.4] } }
           : { opacity: 0, x: -22, scale: 0.96 }
       }
       transition={springs.paper}
       style={style}
       data-task-id={task.id}
+      data-context-only={contextOnly || undefined}
       data-paper-variant={visualVariant(task.id, 3)}
       data-tape-variant={visualVariant(`${task.id}:tape`, 3)}
-      className={`task-card color-${task.color}${active ? " selected" : ""}${sortable.isDragging ? " dragging" : ""}${completing ? " completing" : ""}`}
+      className={`task-card color-${task.color}${active ? " selected" : ""}${sortable.isDragging ? " dragging" : ""}${showingCompletion ? " completing" : ""}`}
       onClick={(event) => {
         if ((event.target as HTMLElement).closest("button")) {
           return;
@@ -6293,22 +6213,23 @@ function SortableTaskCard({
         className="task-check"
         type="button"
         onClick={handleComplete}
+        disabled={contextOnly}
         aria-label={`Complete ${task.title}`}
       >
         <Check size={15} className="task-check-hint" aria-hidden="true" />
-        <DrawnCheck checked={completing} size={16} />
-        {completing ? <ConfettiBurst /> : null}
+        <DrawnCheck checked={showingCompletion} size={16} />
+        {showingCompletion ? <ConfettiBurst /> : null}
       </button>
       <button className="task-body-button" type="button" onClick={onOpen}>
         <span className="task-title">
           <HighlightText text={task.title} query={searchQuery} />
         </span>
-        {task.details ? (
+        {!contextOnly && task.details ? (
           <span className="task-details">
             <HighlightText text={task.details} query={searchQuery} />
           </span>
         ) : null}
-        {dueLabel || openSubtasks || recurrenceLabel ? (
+        {!contextOnly && (dueLabel || openSubtasks || recurrenceLabel) ? (
           <span className="task-meta-row">
             {dueLabel ? (
               <span className={task.dueDate && task.dueDate < localDateKey() ? "meta-chip overdue" : "meta-chip"}>
@@ -6324,6 +6245,21 @@ function SortableTaskCard({
           </span>
         ) : null}
       </button>
+      {visibleChildren.length ? (
+        <div className="board-subtasks" aria-label={`Subtasks of ${task.title}`}>
+          {visibleChildren.map(child => (
+            <div className="board-subtask" key={child.id} data-subtask-id={child.id}>
+              <button className="task-check" type="button" aria-label={`Complete subtask: ${child.title}`} onClick={() => onUpdateSubtask(child.id, { isCompleted: true, completedAt: nowIso() })}>
+                <Check size={14} className="task-check-hint" aria-hidden="true" />
+              </button>
+              <button className="task-body-button" type="button" aria-label={`Edit subtask: ${child.title}`} onClick={onOpen}>
+                <span className="task-title"><HighlightText text={child.title} query={searchQuery} /></span>
+                {child.dueDate ? <span className={`meta-chip${child.dueDate < localDateKey() ? " overdue" : ""}`}><CalendarDays size={12} />{humanDate(child.dueDate)}</span> : null}
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
       <div className="task-actions">
         <button
           className="task-move"
@@ -6528,7 +6464,7 @@ function TaskDetailsPanel({
   task: StickyTask | null;
   lists: StickyList[];
   subtasks: StickySubtask[];
-  subtaskViewFilter: "all" | "today";
+  subtaskViewFilter: StickyTaskViewFilter;
   taskSortMode: StickyTaskSortMode;
   reorderLocked: boolean;
   recurrenceRule: StickyRecurrenceRule | null;
@@ -6560,12 +6496,9 @@ function TaskDetailsPanel({
   const canRepeat = subtasks.length === 0;
   const recurrenceBlockedBySubtasks = !recurrenceRule && !canRepeat;
   const subtasksBlockedByRepeat = !canHaveSubtasks;
-  const filteredSubtasks =
-    subtaskViewFilter === "today"
-      ? subtasks.filter(
-          (subtask) => !subtask.isCompleted && subtask.dueDate === localDateKey(),
-        )
-      : subtasks;
+  const filteredSubtasks = subtaskViewFilter === "all" ? subtasks : subtasks.filter(
+    subtask => itemMatchesView(subtask, null, subtaskViewFilter, localDateKey(), true),
+  );
   const visibleSubtasks = taskSortMode === "due"
     ? filteredSubtasks.slice().sort(compareSubtasksByDueSchedule)
     : filteredSubtasks;
@@ -7101,7 +7034,7 @@ function TaskDetailsPanel({
             </form>
           ) : (
             <p className="helper-copy">
-              Showing active subtasks due today. Switch to All to add another subtask.
+              {subtaskViewFilter === "today" || subtaskViewFilter === "all_today" ? "Showing active subtasks due today. Switch to All to add another subtask." : "Showing subtasks matching this view. Switch to All to add another subtask."}
             </p>
           )}
 

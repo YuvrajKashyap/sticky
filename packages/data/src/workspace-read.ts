@@ -9,13 +9,14 @@ export type WorkspaceRecords = {
 };
 
 export async function readWorkspaceRecords(db: StickySupabaseClient, userId: string, completedListIds: string[] = []): Promise<WorkspaceRecords> {
-  const [listResult, preferencesResult, stateResult, activeResult] = await Promise.all([
+  const [listResult, preferencesResult, stateResult, activeResult, openChildrenResult] = await Promise.all([
     readAllPages<DataRow>((from, to) => db.from("lists").select("*").eq("user_id", userId).order("sort_order").order("id").range(from, to)),
     db.from("user_preferences").select("*").eq("user_id", userId).maybeSingle(),
     db.from("user_state").select("selected_list_id,search_query").eq("user_id", userId).maybeSingle(),
     readAllPages<DataRow>((from, to) => db.from("tasks").select("*").eq("user_id", userId).eq("is_completed", false).order("id").range(from, to)),
+    readAllPages<DataRow>((from, to) => db.from("subtasks").select("task_id").eq("user_id", userId).eq("is_completed", false).order("id").range(from, to)),
   ]);
-  for (const result of [listResult, preferencesResult, stateResult, activeResult]) {
+  for (const result of [listResult, preferencesResult, stateResult, activeResult, openChildrenResult]) {
     if (result.error) throw new Error(result.error.message);
   }
   const lists = listResult.data ?? [];
@@ -39,8 +40,19 @@ export async function readWorkspaceRecords(db: StickySupabaseClient, userId: str
       return data ?? [];
     })),
   ]);
+  // An unfinished child stays actionable even if its parent is in a closed
+  // completed pile. Fetch just those missing parents, not the entire history.
+  const loadedTaskIds = new Set([...(activeResult.data ?? []), ...completed.flat()].map(task => String(task.id)));
+  const missingParentIds = [...new Set((openChildrenResult.data ?? []).map(child => String(child.task_id)))].filter(id => !loadedTaskIds.has(id));
+  const contextParents: DataRow[] = [];
+  for (let offset = 0; offset < missingParentIds.length; offset += 100) {
+    const ids = missingParentIds.slice(offset, offset + 100);
+    const result = await readAllPages<DataRow>((from, to) => db.from("tasks").select("*").eq("user_id", userId).in("id", ids).order("id").range(from, to));
+    if (result.error) throw new Error(result.error.message);
+    contextParents.push(...(result.data ?? []));
+  }
   // A completion can commit between these reads. Keep the later row once.
-  const tasks = [...new Map([...(activeResult.data ?? []), ...completed.flat()].map((task) => [String(task.id), task])).values()];
+  const tasks = [...new Map([...(activeResult.data ?? []), ...completed.flat(), ...contextParents].map((task) => [String(task.id), task])).values()];
   const subtasks: DataRow[] = [];
   const recurrenceRules: DataRow[] = [];
   // Bound IN filters as well as result pages; a large workspace must not exceed
@@ -58,7 +70,7 @@ export async function readWorkspaceRecords(db: StickySupabaseClient, userId: str
     lists, tasks, subtasks, recurrenceRules, preferences, userState,
     history: {
       completedCounts: Object.fromEntries(counts),
-      loadedCounts: Object.fromEntries(loadedListIds.map((id, index) => [id, completed[index].length])),
+      loadedCounts: Object.fromEntries(lists.map(list => [String(list.id), tasks.filter(task => task.list_id === list.id && task.is_completed).length])),
       loadedListIds,
     },
   };

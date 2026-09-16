@@ -10,7 +10,7 @@ const tasks = [
   { id: "other-done", list_id: "two", user_id: userId, is_completed: true },
 ];
 
-function database(completeDuringRead = false) {
+function database(completeDuringRead = false, withChildren = false) {
   const taskRows = tasks.map((task) => ({ ...task }));
   return createClient("http://localhost:54321", "test-key", {
     global: { fetch: async (input, init) => {
@@ -24,8 +24,18 @@ function database(completeDuringRead = false) {
         rows = taskRows.filter((task) => {
           const completed = url.searchParams.get("is_completed");
           const list = url.searchParams.get("list_id");
-          return (!completed || task.is_completed === (completed === "eq.true")) && (!list || list === `eq.${task.list_id}`);
+          const ids = url.searchParams.get("id")?.slice(4, -1).split(",");
+          return (!ids || ids.includes(task.id)) && (!completed || task.is_completed === (completed === "eq.true")) && (!list || list === `eq.${task.list_id}`);
         });
+      }
+      if (table === "subtasks" && withChildren) {
+        const children = [
+          { id: "open-child", task_id: "done", user_id: userId, is_completed: false },
+          { id: "done-child", task_id: "other-done", user_id: userId, is_completed: true },
+        ];
+        const ids = url.searchParams.get("task_id")?.slice(4, -1).split(",");
+        const completed = url.searchParams.get("is_completed");
+        rows = children.filter(child => (!ids || ids.includes(child.task_id)) && (!completed || child.is_completed === (completed === "eq.true")));
       }
       if (table === "user_preferences") return Response.json({ completed_open_by_list: {} });
       if (table === "user_state") return Response.json({ selected_list_id: "one", search_query: "" });
@@ -60,4 +70,13 @@ describe("workspace loading", () => {
     expect(records.subtasks).toEqual([]);
     expect(records.recurrenceRules).toEqual([]);
   });
+});
+
+it("loads unfinished children of completed parents without opening the completed pile", async () => {
+  const records = await readWorkspaceRecords(database(false, true), userId);
+  expect(records.tasks.map(task => task.id)).toEqual(["active", "done"]);
+  expect(records.subtasks.map(child => child.id)).toEqual(["open-child"]);
+  expect(records.history.loadedCounts).toEqual({ one: 1, two: 0 });
+  expect(records.history.completedCounts).toEqual({ one: 1, two: 1 });
+  expect(records.history.loadedListIds).toEqual([]);
 });
