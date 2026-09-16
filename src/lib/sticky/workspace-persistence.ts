@@ -1,5 +1,13 @@
 type Document = Record<string, unknown>;
 type Change = { path: string[]; value: unknown };
+type PendingSave = {
+  patch: Change[];
+  operation: () => Promise<unknown>;
+  key?: string;
+  readyAt: number;
+  started: boolean;
+  promise: Promise<void>;
+};
 
 export async function settleWorkspaceOperations(operations: unknown[]): Promise<unknown[]> {
   const results = await Promise.allSettled(operations);
@@ -53,7 +61,7 @@ function apply(value: Document, patch: Change[], collections: Set<string>): Docu
 /** Serializes writes, rebases optimistic record changes, and rejects stale reads. */
 export class WorkspacePersistence<T extends object> {
   private base: Document = {};
-  private pending: Change[][] = [];
+  private pending: PendingSave[] = [];
   private tail: Promise<unknown> = Promise.resolve();
   private revision = 0;
   private readRevision = 0;
@@ -72,19 +80,35 @@ export class WorkspacePersistence<T extends object> {
     this.readRevision += 1;
   }
 
-  save(before: T, operation: () => Promise<unknown>): Promise<void> {
+  save(before: T, operation: () => Promise<unknown>, options?: { key: string; delayMs: number }): Promise<void> {
     const after = this.read();
     if (!this.busy) this.base = document(before);
     const patch = changes(document(before), document(after));
-    this.pending.push(patch);
     this.revision += 1;
+    const previous = this.pending.at(-1);
+    if (options && previous?.key === options.key && !previous.started) {
+      previous.patch.push(...patch);
+      previous.operation = operation;
+      previous.readyAt = Date.now() + options.delayMs;
+      return previous.promise;
+    }
+    const entry: PendingSave = {
+      patch, operation, key: options?.key,
+      readyAt: Date.now() + (options?.delayMs ?? 0),
+      started: false, promise: Promise.resolve(),
+    };
+    this.pending.push(entry);
     const run = this.tail.then(async () => {
       try {
-        await operation();
-        this.base = apply(this.base, patch, this.collections);
+        while (entry.readyAt > Date.now()) {
+          await new Promise(resolve => setTimeout(resolve, entry.readyAt - Date.now()));
+        }
+        entry.started = true;
+        await entry.operation();
+        this.base = apply(this.base, entry.patch, this.collections);
       } finally {
         this.pending.shift();
-        const next = this.pending.reduce((value, pending) => apply(value, pending, this.collections), this.base);
+        const next = this.pending.reduce((value, pending) => apply(value, pending.patch, this.collections), this.base);
         if (this.active) {
           this.write(Object.fromEntries(Object.entries(next).map(([key, entry]) => [key,
             Array.isArray(after[key as keyof T]) ? Object.values(entry as Document) : entry,
@@ -92,6 +116,7 @@ export class WorkspacePersistence<T extends object> {
         }
       }
     });
+    entry.promise = run;
     this.tail = run.catch(() => undefined);
     return run;
   }

@@ -10,15 +10,11 @@ test("calendar period selection survives navigation and reload", async ({ page }
     await views.getByRole("button", { name: view, exact: true }).click();
     await page.reload();
     await expect(page.locator(".save-status")).toContainText("Local demo saved");
-    await page.getByRole("button", { name: /^Show all tasks,/ }).click();
-    await page.getByRole("button", { name: "Show calendar view" }).click();
     await expect(views).toBeVisible();
     await expect(views.getByRole("button", { name: view, exact: true })).toHaveAttribute("aria-pressed", "true");
     await page.goto("/archive");
     await page.goto("/");
     await expect(page.locator(".save-status")).toContainText("Local demo saved");
-    await page.getByRole("button", { name: /^Show all tasks,/ }).click();
-    await page.getByRole("button", { name: "Show calendar view" }).click();
     await expect(views).toBeVisible();
     await expect(views.getByRole("button", { name: view, exact: true })).toHaveAttribute("aria-pressed", "true");
   }

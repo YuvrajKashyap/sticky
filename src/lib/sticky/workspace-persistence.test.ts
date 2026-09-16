@@ -10,6 +10,39 @@ function deferred<T>() {
 const initial = () => ({ tasks: [{ id: "a", title: "original" }, { id: "b", title: "other" }], preferences: { density: "compact" } });
 
 describe("workspace persistence", () => {
+  it("coalesces preference bursts and rolls back the whole burst on failure", async () => {
+    let state = initial();
+    const queue = new WorkspacePersistence(() => state, next => { state = next; });
+    const calls: string[] = [];
+    const before = state;
+    state = { ...state, preferences: { density: "first" } };
+    const first = queue.save(before, async () => { calls.push("first"); }, { key: "preferences", delayMs: 10 });
+    const intermediate = state;
+    state = { ...state, preferences: { density: "last" } };
+    const last = queue.save(intermediate, async () => { calls.push("last"); throw new Error("offline"); }, { key: "preferences", delayMs: 10 });
+    await Promise.all([expect(first).rejects.toThrow("offline"), expect(last).rejects.toThrow("offline")]);
+    expect(calls).toEqual(["last"]);
+    expect(state).toEqual(initial());
+  });
+
+  it("saves the latest preference burst without losing an intervening task change", async () => {
+    let state = initial();
+    const queue = new WorkspacePersistence(() => state, next => { state = next; });
+    const calls: string[] = [];
+    const before = state;
+    state = { ...state, preferences: { density: "first" } };
+    const first = queue.save(before, async () => { calls.push("first"); }, { key: "preferences", delayMs: 10 });
+    const middle = state;
+    state = { ...state, tasks: [{ ...state.tasks[0], title: "edited" }, state.tasks[1]] };
+    const task = queue.save(middle, async () => { calls.push("task"); });
+    const previous = state;
+    state = { ...state, preferences: { density: "last" } };
+    const last = queue.save(previous, async () => { calls.push("last"); }, { key: "preferences", delayMs: 10 });
+    await Promise.all([first, task, last]);
+    expect(calls).toEqual(["first", "task", "last"]);
+    expect(state.preferences.density).toBe("last");
+    expect(state.tasks[0].title).toBe("edited");
+  });
   it("does not render malformed records when a later edit depends on a failed creation", async () => {
     let state = initial();
     const queue = new WorkspacePersistence(() => state, (next) => { state = next; });

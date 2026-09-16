@@ -104,6 +104,7 @@ import {
 } from "./CaptureScheduler";
 import { AnimatedNumber, ArcRing, ConfettiBurst, DrawnCheck, springs } from "./motion";
 import { StickyCalendar } from "./StickyCalendar";
+import { InterfaceSizeSlider } from "./InterfaceSizeSlider";
 import { StickyConnections } from "./StickyConnections";
 import { StickyOverview } from "./StickyOverview";
 import { TaskReminderControl } from "./TaskReminderControl";
@@ -263,6 +264,15 @@ type QuickCaptureIntent = {
 };
 
 const DEMO_STORAGE_KEY = "sticky.demo.workspace.v2";
+const WORKSPACE_VIEW_KEY = "sticky.workspace.view";
+
+function saveWorkspaceView(viewMode: "board" | "calendar", overviewOpen: boolean) {
+  try {
+    window.localStorage.setItem(WORKSPACE_VIEW_KEY, JSON.stringify({ viewMode, overviewOpen }));
+  } catch {
+    // Navigation remains available when browser storage is disabled.
+  }
+}
 const COLORS: StickyColor[] = [
   "coral",
   "ember",
@@ -1208,11 +1218,31 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   const [commandIndex, setCommandIndex] = useState(0);
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchResultIndex, setSearchResultIndex] = useState(-1);
-  const [viewMode, setViewMode] = useState<"board" | "calendar">("board");
+  const [viewMode, setViewModeState] = useState<"board" | "calendar">("board");
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [pulseOpen, setPulseOpen] = useState(false);
-  const [overviewOpen, setOverviewOpen] = useState(false);
+  const [overviewOpen, setOverviewOpenState] = useState(false);
+  const setViewMode = useCallback((next: "board" | "calendar") => {
+    setViewModeState(next);
+    saveWorkspaceView(next, false);
+  }, []);
+  const setOverviewOpen = useCallback((next: boolean) => {
+    setOverviewOpenState(next);
+    saveWorkspaceView(viewMode, next);
+  }, [viewMode]);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(WORKSPACE_VIEW_KEY) ?? "null");
+      if (saved?.viewMode === "board" || saved?.viewMode === "calendar") {
+        setViewModeState(saved.viewMode);
+        setOverviewOpenState(saved.overviewOpen === true);
+      }
+    } catch {
+      // Missing or invalid preferences fall back to the task board.
+    }
+  }, []);
   const [accentHue, setAccentHue] = useState(DEFAULT_ACCENT_HUE);
   const [captureExpanded, setCaptureExpanded] = useState(false);
   const [viewport, setViewport] = useState({ width: 1920, height: 1080, pixelRatio: 1 });
@@ -1236,6 +1266,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   });
   const boardPan = useBoardPan();
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const lastScaleWheelRef = useRef(0);
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
   const [listEditor, setListEditor] = useState<StickyList | "new" | null>(null);
   const [saveState, setSaveState] = useState<SaveState>({
@@ -1298,8 +1329,8 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           if (!onTaskBoard) {
             // Commit the same on-blur edits as normal navigation before hiding details.
             if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-            setViewMode("calendar");
-            setOverviewOpen(false);
+            setViewModeState("calendar");
+            setOverviewOpenState(false);
             setPulseOpen(false);
             setConnectionsOpen(false);
             setCommandOpen(false);
@@ -1309,8 +1340,8 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           const previous = portraitViewRef.current;
           portraitViewRef.current = null;
           setRotationDetailsHidden(false);
-          setViewMode(previous.viewMode);
-          setOverviewOpen(previous.overviewOpen);
+          setViewModeState(previous.viewMode);
+          setOverviewOpenState(previous.overviewOpen);
           setPulseOpen(previous.pulseOpen);
           setConnectionsOpen(previous.connectionsOpen);
           setCommandOpen(previous.commandOpen);
@@ -1353,12 +1384,14 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     if (mode !== "supabase" || !supabase) return;
     const platform = supabase;
     let disposed = false;
+    let refreshing = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let channel: ReturnType<typeof platform.realtime.channel> | null = null;
     persistence.setActive(true);
 
     async function reconcileWorkspace() {
-      if (disposed || persistence.busy) return false;
+      if (disposed || persistence.busy || refreshing) return false;
+      refreshing = true;
       try {
         const applied = await persistence.refresh(async () => {
           const ids = [...requestedHistoryRef.current];
@@ -1379,6 +1412,8 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
         if (!disposed) setHistoryError("Could not refresh tasks. Retry when your connection is back.");
         console.warn("Sticky workspace reconciliation failed", error);
         return false;
+      } finally {
+        refreshing = false;
       }
     }
     reconcileRef.current = reconcileWorkspace;
@@ -1709,6 +1744,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
     captureExpanded,
     listEditor,
     overviewOpen,
+    setOverviewOpen,
     pulseOpen,
     selectedTaskId,
   ]);
@@ -2420,7 +2456,10 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
   function pushToast(toast: Omit<Toast, "id">) {
     const id = createId();
-    setToasts((current) => [...current.slice(-2), { ...toast, id }]);
+    setToasts((current) => {
+      if (toast.title.endsWith("did not save") && current.some(item => item.title === toast.title && item.body === toast.body)) return current;
+      return [...current.slice(-2), { ...toast, id }];
+    });
     window.setTimeout(() => {
       setToasts((current) => current.filter((item) => item.id !== id));
     }, 5200);
@@ -2449,7 +2488,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
         const results = Array.isArray(result) ? result : [result];
         const failed = results.find(hasResultError);
         if (failed?.error?.message) throw new Error(failed.error.message);
-      });
+      }, label === "Preferences" ? { key: "preferences", delayMs: 300 } : undefined);
     } catch (error) {
       saveError = userFacingStickySaveMessage(errorMessageFromUnknown(error));
       pushToast({ title: `${label} did not save`, body: saveError });
@@ -2490,8 +2529,9 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   }
 
   function updatePreferences(patch: Partial<StickyWorkspaceData["preferences"]>) {
-    const before = workspace;
-    const preferences = { ...workspace.preferences, ...patch };
+    const before = workspaceRef.current;
+    if (Object.entries(patch).every(([key, value]) => Object.is(before.preferences[key as keyof typeof before.preferences], value))) return;
+    const preferences = { ...before.preferences, ...patch };
     setWorkspace((current) => ({
       ...current,
       preferences: { ...current.preferences, ...patch },
@@ -2530,7 +2570,6 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   // state without a ref dance.
   useEffect(() => {
     if (mobileZoom.enabled) return;
-    let lastWheel = 0;
     function onKeyDown(event: KeyboardEvent) {
       if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
       const key = event.key;
@@ -2546,8 +2585,8 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       if (!(event.ctrlKey || event.metaKey)) return;
       event.preventDefault();
       const now = performance.now();
-      if (now - lastWheel < 80) return;
-      lastWheel = now;
+      if (now - lastScaleWheelRef.current < 80) return;
+      lastScaleWheelRef.current = now;
       stepInterfaceScale(event.deltaY > 0 ? -WORKSPACE_SCALE_STEP : WORKSPACE_SCALE_STEP);
     }
     window.addEventListener("keydown", onKeyDown);
@@ -4952,7 +4991,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                     {mobileZoom.enabled ? (
                       <div className="interface-scale-control">
                         <div className="interface-scale-summary"><span>Pinch to resize</span><strong>{Math.round(mobileZoom.scale * 100)}%</strong></div>
-                        <input type="range" min="60" max="140" step="5" value={Math.round(mobileZoom.scale * 100)} aria-label="Mobile interface size" onChange={(event) => mobileZoom.resize(Number(event.target.value) / 100)} />
+                        <InterfaceSizeSlider className="" min={60} max={140} step={5} value={Math.round(mobileZoom.scale * 100)} label="Mobile interface size" onChange={(value) => mobileZoom.resize(value / 100)} />
                         <button type="button" className="secondary-action compact" onClick={mobileZoom.reset}>Reset size</button>
                       </div>
                     ) : <>
@@ -4983,15 +5022,13 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                       </div>
                       {workspace.preferences.interfaceSizeMode === "auto" ? (
                         <>
-                          <input
-                            type="range"
-                            className="interface-scale-slider"
+                          <InterfaceSizeSlider
                             min={WORKSPACE_AUTO_BIAS_MIN}
                             max={WORKSPACE_AUTO_BIAS_MAX}
                             step={5}
                             value={workspace.preferences.interfaceAutoBias}
-                            aria-label="Automatic interface size adjustment"
-                            onChange={(event) => updatePreferences({ interfaceAutoBias: Number(event.target.value) })}
+                            label="Automatic interface size adjustment"
+                            onChange={(value) => updatePreferences({ interfaceAutoBias: value })}
                           />
                           <div className="interface-scale-ends" aria-hidden="true">
                             <span>Tighter</span>
@@ -5020,15 +5057,13 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                             <button type="button" aria-label="Smaller interface" onClick={() => stepInterfaceScale(-WORKSPACE_SCALE_STEP)}>
                               <Minus size={14} aria-hidden="true" />
                             </button>
-                            <input
-                              type="range"
-                              className="interface-scale-slider"
+                            <InterfaceSizeSlider
                               min={WORKSPACE_SCALE_MIN}
                               max={WORKSPACE_SCALE_MAX}
                               step={WORKSPACE_SCALE_STEP}
                               value={workspace.preferences.interfaceScale}
-                              aria-label="Manual interface size"
-                              onChange={(event) => updatePreferences({ interfaceScale: Number(event.target.value) })}
+                              label="Manual interface size"
+                              onChange={(value) => updatePreferences({ interfaceScale: value })}
                             />
                             <button type="button" aria-label="Larger interface" onClick={() => stepInterfaceScale(WORKSPACE_SCALE_STEP)}>
                               <Plus size={14} aria-hidden="true" />
