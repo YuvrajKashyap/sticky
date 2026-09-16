@@ -201,7 +201,7 @@ function taskStateClass(task: StickyTask, todayKey: string) {
 }
 
 function eventClass(event: StickyCalendarEvent) {
-  return `color-${event.color ?? "sky"} is-${event.status}${event.transparency === "transparent" ? " is-free" : ""}`;
+  return `color-${event.color ?? "default"} is-${event.status}${event.transparency === "transparent" ? " is-free" : ""}`;
 }
 
 function occurrenceTime(occurrence: Occurrence) {
@@ -1495,7 +1495,7 @@ function EventEditor({ draft, onChange, onClose, onSave, onDelete, saving, delet
       }}
     >
       <motion.form
-        className={`cal-sheet color-${draft.color ?? "sky"}`}
+        className={`cal-sheet color-${draft.color ?? "default"}`}
         role="dialog"
         aria-modal="true"
         aria-label={draft.id ? "Edit calendar event" : "Create calendar event"}

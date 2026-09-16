@@ -6834,181 +6834,212 @@ button.cal-timegrid-day:hover {
 .cal-event.color-magenta, .cal-swatch.color-magenta, .cal-sheet.color-magenta { --ev: var(--magenta-edge); --ev-ink: var(--magenta-ink); --ev-tint: var(--magenta-tint); }
 
 /* ----------------------------------------------------------------------
-   13b · Calendar atelier — the planner leaves the blue console behind.
-   Warm near-black paper, an editorial serif, gold as the accent, and
-   events as solid jewel-toned blocks with dark ink. Everything below
-   re-maps the Sticky tokens inside .calendar-view and re-skins the
-   calendar objects; structure, behavior, and class names are unchanged.
+   13b · Calendar — minimal, organized, vibrant.
+   A neutral charcoal planner where the only color is the events. Clean
+   sans type, hairlines, generous space, a red "today" like a real
+   calendar, and twelve solid event hues. This block re-maps the console
+   tokens inside .calendar-view and re-skins every calendar object;
+   structure, behavior, and class names are unchanged.
    ---------------------------------------------------------------------- */
 
 .calendar-view {
-  /* Planner palette */
-  --cal-canvas: #110f0d;
-  --cal-paper: #1b1815;
-  --cal-paper-2: #24201b;
-  --cal-paper-3: #2d2822;
-  --cal-ink: #f6efe4;
-  --cal-ink-soft: #cdbfae;
-  --cal-ink-faint: #8d8071;
-  --cal-line: rgba(255, 236, 210, 0.09);
-  --cal-line-strong: rgba(255, 236, 210, 0.18);
-  --cal-gold: #f2c14e;
-  --cal-gold-rgb: 242, 193, 78;
-  --cal-gold-ink: #ffe3a1;
-  --cal-plum: #7b4dff;
+  --cal-bg: #131313;
+  --cal-surface: #191919;
+  --cal-surface-2: #1f1f1f;
+  --cal-surface-3: #262626;
+  --cal-line: rgba(255, 255, 255, 0.07);
+  --cal-line-strong: rgba(255, 255, 255, 0.13);
+  --cal-text: #f4f4f4;
+  --cal-text-2: #a8a8a8;
+  --cal-text-3: #6e6e6e;
+  --cal-red: #ff5a4f;
+  --cal-red-rgb: 255, 90, 79;
+  --font-sans: "Instrument Sans", "Inter", system-ui, sans-serif;
   --font-display: "Instrument Serif", "Iowan Old Style", Georgia, serif;
 
-  /* Re-map the console tokens so every calendar rule re-lights. */
-  --accent: var(--cal-gold);
-  --accent-rgb: var(--cal-gold-rgb);
-  --accent-ink: var(--cal-gold-ink);
-  --accent-bright: #ffd97a;
-  --accent-deep: #e0873a;
-  --accent-soft: rgba(242, 193, 78, 0.12);
-  --accent-soft-2: rgba(242, 193, 78, 0.24);
-  --on-accent: #1b1306;
-  --hud-line: rgba(242, 193, 78, 0.34);
-  --ink: var(--cal-ink);
-  --ink-soft: var(--cal-ink-soft);
-  --ink-faint: var(--cal-ink-faint);
+  /* Console tokens re-mapped: neutral chrome, red only for today/now. */
+  --font-ui: var(--font-sans);
+  --font-mono: var(--font-sans);
+  --font-hand: var(--font-sans);
+  --accent: var(--cal-red);
+  --accent-rgb: var(--cal-red-rgb);
+  --accent-ink: var(--cal-text);
+  --accent-bright: #ff7d74;
+  --accent-deep: #d94339;
+  --accent-soft: rgba(255, 255, 255, 0.06);
+  --accent-soft-2: rgba(255, 255, 255, 0.1);
+  --on-accent: #ffffff;
+  --hud-line: var(--cal-line-strong);
+  --ink: var(--cal-text);
+  --ink-soft: var(--cal-text-2);
+  --ink-faint: var(--cal-text-3);
   --line: var(--cal-line);
   --line-strong: var(--cal-line-strong);
-  --surface-raised: var(--cal-paper-3);
-  --surface-sunken: rgba(9, 8, 6, 0.6);
-  --danger-ink: #ffb3a7;
-  --success: #6fe3a5;
+  --surface-raised: var(--cal-surface-3);
+  --surface-sunken: var(--cal-surface);
+  --danger-ink: #ff8a80;
+  --success: #5ec98a;
 
-  /* Jewel event colors: richer and warmer than the console neons. */
-  --sun-edge: #f5b942;
-  --sun-ink: #ffe6b0;
-  --coral-edge: #ff6b6b;
-  --coral-ink: #ffc9c9;
-  --mint-edge: #3ddc97;
-  --mint-ink: #c6f7e2;
-  --sky-edge: #4cc9f0;
-  --sky-ink: #c9f0fb;
-  --violet-edge: #9b7bff;
-  --violet-ink: #dcd2ff;
-  --ink-edge: #a3adbd;
-  --ink-ink: #e2e7ee;
-  --ember-edge: #ff8f3f;
-  --ember-ink: #ffd9bd;
-  --rose-edge: #ff7ab8;
-  --rose-ink: #ffcfe4;
-  --lime-edge: #c5e850;
-  --lime-ink: #eaf7b8;
-  --teal-edge: #2ec4b6;
-  --teal-ink: #bff1eb;
-  --azure-edge: #5b8dff;
-  --azure-ink: #cad9ff;
-  --magenta-edge: #e05dff;
-  --magenta-ink: #f2c6ff;
+  /* Twelve event hues (solid fills) with their own text color. */
+  --sun-edge: #f2c14e;     --sun-ink: #1a1400;
+  --coral-edge: #e5473f;   --coral-ink: #ffffff;
+  --mint-edge: #6fbf73;    --mint-ink: #0d1f0f;
+  --sky-edge: #3f9fbf;     --sky-ink: #ffffff;
+  --violet-edge: #8a7ce6;  --violet-ink: #ffffff;
+  --ink-edge: #6f7580;     --ink-ink: #ffffff;
+  --ember-edge: #f28b30;   --ember-ink: #1f1100;
+  --rose-edge: #e86aa6;    --rose-ink: #ffffff;
+  --lime-edge: #b4c93a;    --lime-ink: #161a00;
+  --teal-edge: #2e8b57;    --teal-ink: #ffffff;
+  --azure-edge: #3f6fe6;   --azure-ink: #ffffff;
+  --magenta-edge: #a24fd1; --magenta-ink: #ffffff;
 
   position: relative;
-  isolation: isolate;
-  border-radius: 26px;
+  border-radius: 20px;
   padding: 14px 16px 18px;
-  background:
-    radial-gradient(70% 55% at 0% 0%, rgba(242, 193, 78, 0.13), transparent 62%),
-    radial-gradient(60% 50% at 100% 100%, rgba(123, 77, 255, 0.16), transparent 64%),
-    var(--cal-canvas);
-  box-shadow: inset 0 0 0 1px rgba(255, 236, 210, 0.07), 0 30px 80px -40px rgba(0, 0, 0, 0.9);
+  background: var(--cal-bg);
+  box-shadow: inset 0 0 0 1px var(--cal-line);
+  font-family: var(--font-sans);
+  letter-spacing: 0;
 }
 
-/* Paper grain */
-.calendar-view::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  pointer-events: none;
-  opacity: 0.35;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 0.93 0 0 0 0 0.82 0 0 0 0.06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+.calendar-view *,
+.calendar-view .calendar-summary,
+.calendar-view .cal-sheet-head p,
+.calendar-view .cal-field > span,
+.calendar-view .cal-row-time small,
+.calendar-view .cal-row-meta,
+.calendar-view .cal-event-flag,
+.calendar-view .calendar-status,
+.calendar-view .calendar-day-count,
+.calendar-view .calendar-agenda-copy small,
+.calendar-view .cal-timegrid-hours span {
+  letter-spacing: 0;
+  text-shadow: none;
 }
 
 /* Header ------------------------------------------------------------------ */
 
 .calendar-view .calendar-header {
-  border-color: var(--cal-line-strong);
-  background: linear-gradient(180deg, rgba(36, 32, 27, 0.9), rgba(27, 24, 21, 0.9));
-  box-shadow: inset 0 1px 0 rgba(255, 236, 210, 0.06), 0 12px 30px -20px rgba(0, 0, 0, 0.8);
+  padding: 10px 12px 10px 14px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  box-shadow: none;
+  animation: none;
 }
 
 .calendar-view .calendar-heading-icon {
-  border-color: rgba(242, 193, 78, 0.4);
-  background: rgba(242, 193, 78, 0.12);
-  color: var(--cal-gold);
-  box-shadow: 0 0 18px -6px rgba(242, 193, 78, 0.8);
+  display: none;
 }
 
 .calendar-view .calendar-heading p {
-  color: var(--cal-ink-faint);
+  margin-bottom: 2px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  text-transform: none;
+  color: var(--cal-text-3);
 }
 
 .calendar-view .calendar-month-title {
   font-family: var(--font-display);
-  font-size: 1.85rem;
+  font-size: 2rem;
   font-weight: 400;
-  letter-spacing: 0.005em;
   line-height: 1;
-  color: var(--cal-ink);
+  color: var(--cal-text);
 }
 
-.calendar-view .calendar-month-title em,
-.calendar-view .cal-display-italic {
+.calendar-view .calendar-month-title em {
   font-style: italic;
-  color: var(--cal-gold-ink);
+  color: var(--cal-text-2);
 }
 
+/* Segmented controls: quiet tabs with a soft filled segment. */
 .calendar-view .cal-segmented {
-  border-color: var(--cal-line-strong);
-  background: rgba(9, 8, 6, 0.55);
+  padding: 3px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--cal-surface-2);
 }
 
 .calendar-view .cal-segmented button {
-  color: var(--cal-ink-soft);
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 8px;
+  color: var(--cal-text-2);
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.calendar-view .cal-segmented button:hover {
+  color: var(--cal-text);
 }
 
 .calendar-view .cal-segmented button.active {
-  color: var(--on-accent);
+  color: var(--cal-text);
+  font-weight: 600;
 }
 
 .calendar-view .cal-segmented-pill {
-  background: linear-gradient(180deg, #ffd97a, #f2b93a);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 6px 18px -8px rgba(242, 193, 78, 0.9);
+  border-radius: 8px;
+  background: var(--cal-surface-3);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.calendar-view .cal-segmented-label em {
+  font-size: 0.72rem;
+  color: var(--cal-text-3);
 }
 
 .calendar-view .cal-segmented button.active .cal-segmented-label em {
-  color: rgba(27, 19, 6, 0.7);
-  text-shadow: none;
+  color: var(--cal-text-2);
 }
 
 .calendar-view .calendar-summary {
-  color: var(--cal-ink-faint);
+  font-size: 0.8rem;
+  text-transform: none;
+  color: var(--cal-text-3);
 }
 
 .calendar-view .calendar-summary strong {
-  color: var(--cal-gold-ink);
-  text-shadow: 0 0 12px rgba(242, 193, 78, 0.45);
+  font-weight: 600;
+  color: var(--cal-text-2);
+}
+
+.calendar-view .calendar-summary li + li::before {
+  margin: 0 8px;
 }
 
 .calendar-view .calendar-controls button {
+  min-height: 32px;
   border-color: var(--cal-line-strong);
-  background: var(--cal-paper-3);
-  color: var(--cal-ink);
+  background: transparent;
+  color: var(--cal-text-2);
+  font-size: 0.82rem;
+  font-weight: 500;
 }
 
 .calendar-view .calendar-controls button:hover {
-  border-color: var(--cal-gold);
-  box-shadow: 0 0 18px -6px rgba(242, 193, 78, 0.8);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: var(--cal-text);
+  box-shadow: none;
+  transform: none;
+}
+
+.calendar-view .calendar-nav-btn {
+  width: 32px;
 }
 
 .calendar-view .calendar-add-event {
-  border-color: rgba(242, 193, 78, 0.6) !important;
-  background: linear-gradient(180deg, #ffd97a, #f2b93a) !important;
-  color: var(--on-accent) !important;
-  box-shadow: 0 8px 22px -10px rgba(242, 193, 78, 0.9);
+  border-color: transparent !important;
+  background: var(--cal-text) !important;
+  color: #111 !important;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.calendar-view .calendar-add-event:hover {
+  background: #fff !important;
 }
 
 /* Month ------------------------------------------------------------------- */
@@ -7016,227 +7047,438 @@ button.cal-timegrid-day:hover {
 .calendar-view .calendar-month,
 .calendar-view .calendar-agenda,
 .calendar-view .cal-timegrid {
-  border-color: var(--cal-line-strong);
-  background: linear-gradient(180deg, var(--cal-paper-2), var(--cal-paper));
-  box-shadow: inset 0 1px 0 rgba(255, 236, 210, 0.05), 0 20px 50px -30px rgba(0, 0, 0, 0.85);
+  border-color: var(--cal-line);
+  border-radius: 14px;
+  background: var(--cal-surface);
+  box-shadow: none;
+  animation: none;
 }
 
 .calendar-view .calendar-grid-header {
-  background: var(--cal-paper-2);
-  border-bottom-color: var(--cal-line-strong);
+  background: var(--cal-surface);
+  border-bottom-color: var(--cal-line);
 }
 
 .calendar-view .calendar-day-name {
-  font-family: var(--font-ui);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  color: var(--cal-ink-faint);
+  padding: 10px 10px 8px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cal-text-3);
+}
+
+.calendar-view .calendar-grid {
+  min-height: calc(100% - 36px);
 }
 
 .calendar-view .calendar-cell {
+  padding: 6px;
   border-color: var(--cal-line);
+  animation: none;
 }
 
 .calendar-view .calendar-cell:hover {
-  background: rgba(255, 236, 210, 0.03);
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .calendar-view .calendar-cell.weekend {
-  background: rgba(242, 193, 78, 0.035);
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.calendar-view .calendar-cell.out-of-month {
+  opacity: 0.35;
 }
 
 .calendar-view .calendar-cell.selected {
-  background: rgba(242, 193, 78, 0.07);
-  box-shadow: inset 0 0 0 1px rgba(242, 193, 78, 0.5);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
 }
 
 .calendar-view .calendar-cell[data-spot]::after {
-  background: radial-gradient(180px circle at var(--mx, 50%) var(--my, 50%), rgba(242, 193, 78, 0.08), transparent 70%);
+  display: none;
+}
+
+.calendar-view .calendar-cell-header {
+  padding: 0 2px 6px;
 }
 
 .calendar-view .calendar-day-number {
-  font-family: var(--font-display);
-  font-size: 1.05rem;
-  color: var(--cal-ink-soft);
+  width: 26px;
+  height: 26px;
+  font-family: var(--font-sans);
+  font-size: 0.86rem;
+  font-weight: 500;
+  color: var(--cal-text-2);
 }
 
 .calendar-view .calendar-cell.today .calendar-day-number {
-  color: var(--on-accent);
-  background: linear-gradient(180deg, #ffd97a, #f2b93a);
-  box-shadow: 0 0 16px -2px rgba(242, 193, 78, 0.9);
+  color: #fff;
+  background: var(--cal-red);
+  box-shadow: none;
+  font-weight: 600;
 }
 
 .calendar-view .calendar-day-count {
-  border-color: var(--cal-line-strong);
-  color: var(--cal-ink-faint);
+  border: 0;
+  padding: 0;
+  font-size: 0.72rem;
+  color: var(--cal-text-3);
+}
+
+.calendar-view .calendar-cell-tasks {
+  gap: 3px;
 }
 
 .calendar-view .calendar-more {
-  color: var(--cal-gold-ink);
+  padding: 2px 4px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--cal-text-3);
 }
 
-/* Events: solid jewel blocks with dark ink -------------------------------- */
+.calendar-view .calendar-more:hover {
+  color: var(--cal-text);
+}
+
+/* Events: clean solid blocks -------------------------------------------- */
+
+.calendar-view .cal-event {
+  --ev: var(--cal-surface-3);
+  --ev-ink: var(--cal-text);
+  color: var(--ev-ink);
+}
 
 .calendar-view .cal-event-bar {
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
   background: var(--ev);
-  color: #14100b;
-  box-shadow: 0 6px 16px -10px var(--ev);
-  font-weight: 700;
+  box-shadow: none;
+  font-size: 0.74rem;
+  font-weight: 500;
+}
+
+.calendar-view .cal-event-bar strong {
+  font-weight: 500;
 }
 
 .calendar-view .cal-event-bar .cal-event-time {
-  color: rgba(20, 16, 11, 0.62);
+  font-size: 0.7rem;
+  color: var(--ev-ink);
+  opacity: 0.72;
 }
 
 .calendar-view .cal-event-bar:hover,
 .calendar-view .cal-event-bar:focus-visible {
-  box-shadow: 0 8px 22px -8px var(--ev);
-  filter: brightness(1.06) saturate(1.05);
+  transform: none;
+  box-shadow: 0 0 0 2px var(--cal-surface), 0 0 0 3.5px var(--ev);
+  filter: brightness(1.06);
 }
 
 .calendar-view .cal-event-bar.continues-before {
-  box-shadow: 0 6px 16px -10px var(--ev);
+  box-shadow: none;
 }
 
 .calendar-view .cal-event-block {
+  padding: 6px 8px;
+  border-radius: 7px;
   background: var(--ev);
-  color: #14100b;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12), 0 8px 20px -12px var(--ev);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+.calendar-view .cal-event-block-copy strong {
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 
 .calendar-view .cal-event-block .cal-event-time,
-.calendar-view .cal-event-block .cal-event-place {
-  color: rgba(20, 16, 11, 0.66);
-}
-
+.calendar-view .cal-event-block .cal-event-place,
 .calendar-view .cal-event-block .cal-event-flag {
-  color: rgba(20, 16, 11, 0.7);
+  color: var(--ev-ink);
+  opacity: 0.78;
+  font-size: 0.7rem;
 }
 
 .calendar-view .cal-event-block:hover,
 .calendar-view .cal-event-block:focus-visible {
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.16), 0 12px 28px -10px var(--ev);
-  filter: brightness(1.06) saturate(1.05);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15), 0 0 0 2px var(--cal-surface), 0 0 0 3.5px var(--ev);
+  filter: brightness(1.06);
 }
 
 .calendar-view .cal-event.is-tentative {
-  background-image: repeating-linear-gradient(135deg, transparent 0 6px, rgba(0, 0, 0, 0.14) 6px 9px);
+  background-image: repeating-linear-gradient(135deg, transparent 0 6px, rgba(0, 0, 0, 0.18) 6px 9px);
 }
 
 .calendar-view .cal-event.is-free {
   background: transparent !important;
-  color: var(--ev-ink);
+  color: var(--cal-text);
   box-shadow: inset 0 0 0 1.5px var(--ev) !important;
 }
 
 .calendar-view .cal-event.is-free .cal-event-time,
 .calendar-view .cal-event.is-free .cal-event-place,
 .calendar-view .cal-event.is-free .cal-event-flag {
-  color: var(--ev-ink);
-  opacity: 0.85;
+  color: var(--cal-text-2);
+  opacity: 1;
 }
 
 .calendar-view .cal-event.is-linked {
-  box-shadow: 0 0 0 2px var(--cal-ink), 0 10px 26px -8px var(--ev) !important;
-  filter: brightness(1.08);
+  box-shadow: 0 0 0 2px var(--cal-surface), 0 0 0 3.5px var(--ev) !important;
+  filter: brightness(1.06);
 }
 
 .calendar-view .cal-event-block.is-linked {
-  box-shadow: 0 0 0 2px var(--cal-ink), 0 12px 30px -8px var(--ev) !important;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15), 0 0 0 2px var(--cal-surface), 0 0 0 3.5px var(--ev) !important;
 }
 
-/* Tasks stay quiet: warm ink, ring in the list color ---------------------- */
+/* Event colors: fill + text pairs */
+.calendar-view .cal-event.color-sun,     .calendar-view .cal-sheet.color-sun     { --ev: var(--sun-edge);     --ev-ink: var(--sun-ink); }
+.calendar-view .cal-event.color-coral,   .calendar-view .cal-sheet.color-coral   { --ev: var(--coral-edge);   --ev-ink: var(--coral-ink); }
+.calendar-view .cal-event.color-mint,    .calendar-view .cal-sheet.color-mint    { --ev: var(--mint-edge);    --ev-ink: var(--mint-ink); }
+.calendar-view .cal-event.color-sky,     .calendar-view .cal-sheet.color-sky     { --ev: var(--sky-edge);     --ev-ink: var(--sky-ink); }
+.calendar-view .cal-event.color-violet,  .calendar-view .cal-sheet.color-violet  { --ev: var(--violet-edge);  --ev-ink: var(--violet-ink); }
+.calendar-view .cal-event.color-ink,     .calendar-view .cal-sheet.color-ink     { --ev: var(--ink-edge);     --ev-ink: var(--ink-ink); }
+.calendar-view .cal-event.color-ember,   .calendar-view .cal-sheet.color-ember   { --ev: var(--ember-edge);   --ev-ink: var(--ember-ink); }
+.calendar-view .cal-event.color-rose,    .calendar-view .cal-sheet.color-rose    { --ev: var(--rose-edge);    --ev-ink: var(--rose-ink); }
+.calendar-view .cal-event.color-lime,    .calendar-view .cal-sheet.color-lime    { --ev: var(--lime-edge);    --ev-ink: var(--lime-ink); }
+.calendar-view .cal-event.color-teal,    .calendar-view .cal-sheet.color-teal    { --ev: var(--teal-edge);    --ev-ink: var(--teal-ink); }
+.calendar-view .cal-event.color-azure,   .calendar-view .cal-sheet.color-azure   { --ev: var(--azure-edge);   --ev-ink: var(--azure-ink); }
+.calendar-view .cal-event.color-magenta, .calendar-view .cal-sheet.color-magenta { --ev: var(--magenta-edge); --ev-ink: var(--magenta-ink); }
+.calendar-view .cal-event.color-default, .calendar-view .cal-sheet.color-default { --ev: var(--azure-edge);   --ev-ink: var(--azure-ink); }
+
+/* Tasks: quiet rows with a circle and the list color as a dot ------------- */
 
 .calendar-view .calendar-task {
-  color: var(--cal-ink-soft);
+  padding: 2px 6px 2px 4px;
+  border-radius: 6px;
+  color: var(--cal-text-2);
+  font-size: 0.74rem;
+  font-weight: 500;
+}
+
+.calendar-view .calendar-task > i {
+  width: 11px;
+  height: 11px;
+  border-width: 1.5px;
+  opacity: 1;
+}
+
+.calendar-view .calendar-task .calendar-task-time {
+  font-size: 0.7rem;
+  color: var(--cal-text-3);
 }
 
 .calendar-view .calendar-task:hover,
 .calendar-view .calendar-task:focus-visible,
 .calendar-view .calendar-task.is-linked {
-  background: rgba(255, 236, 210, 0.07);
-  color: var(--cal-ink);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--cal-text);
+  transform: none;
+}
+
+.calendar-view .calendar-task.overdue .calendar-task-time,
+.calendar-view .calendar-task.overdue > i {
+  color: var(--cal-red);
 }
 
 .calendar-view .cal-task-pin {
-  background: rgba(17, 15, 13, 0.92);
-  box-shadow: inset 0 0 0 1px var(--cal-line-strong);
-  color: var(--cal-ink);
+  background: var(--cal-surface-3);
+  box-shadow: none;
+  color: var(--cal-text);
+}
+
+.calendar-view [data-spot]::after {
+  display: none;
 }
 
 /* Agenda ------------------------------------------------------------------- */
 
 .calendar-view .calendar-agenda-header {
-  border-bottom-color: var(--cal-line-strong);
+  padding: 14px 14px 12px;
+  border-bottom-color: var(--cal-line);
 }
 
 .calendar-view .calendar-agenda-date {
-  border-color: rgba(242, 193, 78, 0.4);
-  background: rgba(242, 193, 78, 0.1);
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--cal-surface-3);
+}
+
+.calendar-view .calendar-agenda-date small {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--cal-text-3);
 }
 
 .calendar-view .calendar-agenda-date strong {
-  font-family: var(--font-display);
-  font-size: 1.5rem;
-  color: var(--cal-gold-ink);
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--cal-text);
 }
 
 .calendar-view .calendar-agenda-copy strong {
   font-family: var(--font-display);
-  font-size: 1.3rem;
+  font-size: 1.35rem;
   font-weight: 400;
-  color: var(--cal-ink);
+  color: var(--cal-text);
+}
+
+.calendar-view .calendar-agenda-copy small {
+  font-size: 0.74rem;
+  text-transform: none;
+  color: var(--cal-text-3);
+}
+
+.calendar-view .calendar-agenda-add,
+.calendar-view .calendar-agenda-open {
+  height: 30px;
+  border-color: var(--cal-line-strong);
+  color: var(--cal-text-2);
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.calendar-view .calendar-agenda-add:hover,
+.calendar-view .calendar-agenda-open:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+  color: var(--cal-text);
+  box-shadow: none;
+}
+
+.calendar-view .cal-timeline {
+  gap: 4px;
+}
+
+.calendar-view .cal-event-row,
+.calendar-view .cal-task-row {
+  grid-template-columns: 58px 3px minmax(0, 1fr) auto;
+  padding: 8px 10px 8px 8px;
+  border-radius: 10px;
 }
 
 .calendar-view .cal-event-row {
-  background: color-mix(in srgb, var(--ev) 18%, var(--cal-paper));
-  border-color: color-mix(in srgb, var(--ev) 40%, transparent);
+  background: transparent;
+  border-color: transparent;
 }
 
 .calendar-view .cal-event-row:hover,
 .calendar-view .cal-event-row:focus-visible,
 .calendar-view .cal-event-row.is-linked {
-  background: color-mix(in srgb, var(--ev) 30%, var(--cal-paper));
-  border-color: color-mix(in srgb, var(--ev) 85%, transparent);
-  box-shadow: 0 10px 26px -14px var(--ev);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.calendar-view .cal-event-row .cal-row-rail {
+  width: 3px;
+  border-radius: 3px;
+  background: var(--ev);
+  box-shadow: none;
+}
+
+.calendar-view .cal-row-time strong {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--cal-text);
 }
 
 .calendar-view .cal-event-row .cal-row-time strong {
-  color: var(--ev-ink);
+  color: var(--cal-text);
+}
+
+.calendar-view .cal-row-time small {
+  font-size: 0.68rem;
+  text-transform: none;
+  color: var(--cal-text-3);
 }
 
 .calendar-view .cal-row-copy > strong {
-  color: var(--cal-ink);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--cal-text);
+}
+
+.calendar-view .cal-row-meta {
+  font-size: 0.72rem;
+  text-transform: none;
+  color: var(--cal-text-3);
+}
+
+.calendar-view .cal-row-meta em {
+  color: var(--cal-text-2);
+}
+
+.calendar-view .cal-event-flag {
+  font-size: 0.68rem;
+  text-transform: none;
+  opacity: 1;
+}
+
+.calendar-view .cal-event-row .cal-event-flag {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ev) 22%, transparent);
+  color: var(--cal-text);
 }
 
 .calendar-view .cal-task-row:hover,
 .calendar-view .cal-task-row:focus-visible,
 .calendar-view .cal-task-row.is-linked {
-  background: rgba(255, 236, 210, 0.05);
-  border-color: var(--cal-line-strong);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: transparent;
+  transform: none;
+}
+
+.calendar-view .cal-task-check {
+  width: 18px;
+  height: 18px;
+  opacity: 0.8;
 }
 
 .calendar-view .cal-task-check.done {
-  background: var(--cal-gold);
-  border-color: var(--cal-gold);
-  color: var(--on-accent);
+  background: var(--success);
+  border-color: var(--success);
+  color: #0c1a10;
 }
 
 .calendar-view .cal-timeline-now {
-  color: var(--cal-gold);
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--cal-red);
 }
 
 .calendar-view .cal-timeline-now i {
-  background: linear-gradient(90deg, var(--cal-gold), transparent);
-  box-shadow: 0 0 8px var(--cal-gold);
+  background: var(--cal-red);
+  box-shadow: none;
+}
+
+.calendar-view .calendar-agenda-empty {
+  font-size: 0.84rem;
+  color: var(--cal-text-3);
+}
+
+.calendar-view .calendar-agenda-empty svg {
+  color: var(--cal-text-3);
+}
+
+.calendar-view .calendar-agenda-empty button {
+  border-color: var(--cal-line-strong);
+  color: var(--cal-text-2);
+  font-weight: 500;
 }
 
 /* Time grid ---------------------------------------------------------------- */
 
 .calendar-view .cal-timegrid-head,
 .calendar-view .cal-timegrid-allday {
-  border-bottom-color: var(--cal-line-strong);
+  border-bottom-color: var(--cal-line);
 }
 
 .calendar-view .cal-timegrid-day,
@@ -7245,20 +7487,66 @@ button.cal-timegrid-day:hover {
   border-left-color: var(--cal-line);
 }
 
+.calendar-view .cal-timegrid-corner {
+  color: var(--cal-text-3);
+}
+
+.calendar-view .cal-timegrid-day {
+  padding: 10px 6px;
+  color: var(--cal-text-3);
+}
+
+.calendar-view .cal-timegrid-day span {
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
 .calendar-view .cal-timegrid-day strong {
-  font-family: var(--font-display);
-  font-size: 1.15rem;
+  width: 28px;
+  height: 28px;
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--cal-text);
 }
 
 .calendar-view .cal-timegrid-day.today strong {
-  color: var(--on-accent);
-  background: linear-gradient(180deg, #ffd97a, #f2b93a);
-  box-shadow: 0 0 16px -2px rgba(242, 193, 78, 0.9);
+  color: #fff;
+  background: var(--cal-red);
+  box-shadow: none;
+  font-weight: 600;
+}
+
+.calendar-view .cal-timegrid-day.today span {
+  color: var(--cal-red);
+}
+
+.calendar-view .cal-timegrid-day.is-linked strong {
+  box-shadow: 0 0 0 2px var(--cal-line-strong);
+}
+
+.calendar-view .cal-timegrid-day.is-linked span {
+  color: var(--cal-text);
 }
 
 .calendar-view .cal-timegrid-allday {
-  background: linear-gradient(90deg, rgba(242, 193, 78, 0.08), transparent 30%);
-  box-shadow: inset 2px 0 0 rgba(242, 193, 78, 0.6);
+  background: transparent;
+  box-shadow: none;
+}
+
+.calendar-view .cal-timegrid-allday-label {
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.calendar-view .cal-timegrid-hours span {
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--cal-text-3);
 }
 
 .calendar-view .cal-timegrid-rule {
@@ -7266,44 +7554,65 @@ button.cal-timegrid-day:hover {
 }
 
 .calendar-view .cal-timegrid-lane.today {
-  background: rgba(242, 193, 78, 0.05);
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .calendar-view .cal-timegrid-lane.weekend {
-  background: rgba(123, 77, 255, 0.05);
+  background: rgba(255, 255, 255, 0.015);
 }
 
 .calendar-view .cal-timegrid-lane.is-linked,
 .calendar-view .cal-timegrid-allday-cell.is-linked {
-  background: rgba(242, 193, 78, 0.07);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .calendar-view .cal-now {
-  background: var(--cal-gold);
-  box-shadow: 0 0 10px var(--cal-gold);
+  height: 2px;
+  background: var(--cal-red);
+  box-shadow: none;
 }
 
 .calendar-view .cal-now i {
-  background: var(--cal-gold);
-  box-shadow: 0 0 12px var(--cal-gold);
+  background: var(--cal-red);
+  box-shadow: none;
+  animation: none;
 }
 
 /* Status + editor sheet ----------------------------------------------------- */
 
 .calendar-view .calendar-status {
-  border-color: var(--cal-line-strong);
-  background: rgba(9, 8, 6, 0.6);
-  color: var(--cal-gold-ink);
+  border-color: var(--cal-line);
+  background: var(--cal-surface-2);
+  font-size: 0.8rem;
+  text-transform: none;
+  color: var(--cal-text-2);
 }
 
 .calendar-view .cal-sheet-backdrop {
-  background: rgba(8, 7, 5, 0.66);
+  background: rgba(0, 0, 0, 0.6);
 }
 
 .calendar-view .cal-sheet {
+  gap: 14px;
   border-color: var(--cal-line-strong);
-  background: linear-gradient(160deg, #27221c, #17140f);
-  box-shadow: inset 0 1px 0 rgba(255, 236, 210, 0.06), 0 40px 100px -30px rgba(0, 0, 0, 0.9);
+  border-radius: 18px;
+  background: var(--cal-surface-2);
+  box-shadow: 0 40px 100px -30px rgba(0, 0, 0, 0.9);
+}
+
+.calendar-view .cal-sheet-seam {
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--ev);
+  box-shadow: none;
+  border-radius: 18px 18px 0 0;
+}
+
+.calendar-view .cal-sheet-head p {
+  font-size: 0.74rem;
+  text-transform: none;
+  color: var(--cal-text-3);
 }
 
 .calendar-view .cal-sheet-head h3 {
@@ -7312,35 +7621,91 @@ button.cal-timegrid-day:hover {
   font-weight: 400;
 }
 
+.calendar-view .cal-sheet-close {
+  border-color: var(--cal-line-strong);
+}
+
+.calendar-view .cal-field > span {
+  font-size: 0.74rem;
+  font-weight: 500;
+  text-transform: none;
+  color: var(--cal-text-3);
+}
+
 .calendar-view .cal-field input,
 .calendar-view .cal-field textarea,
 .calendar-view .cal-field select {
   border-color: var(--cal-line-strong);
-  background: rgba(9, 8, 6, 0.7);
+  border-radius: 10px;
+  background: var(--cal-surface);
+  font-weight: 500;
+  caret-color: var(--cal-text);
+}
+
+.calendar-view .cal-field input:focus,
+.calendar-view .cal-field textarea:focus,
+.calendar-view .cal-field select:focus {
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: none;
 }
 
 .calendar-view .cal-swatch {
-  box-shadow: 0 0 0 1px rgba(9, 8, 6, 0.9), 0 0 10px -3px var(--ev);
+  width: 22px;
+  height: 22px;
+  box-shadow: none;
 }
 
 .calendar-view .cal-swatch.active {
-  border-color: var(--cal-ink);
+  border-color: var(--cal-text);
+  box-shadow: 0 0 0 2px var(--cal-surface-2), 0 0 0 3.5px var(--ev);
+}
+
+.calendar-view .cal-swatch.color-sun { --ev: var(--sun-edge); }
+.calendar-view .cal-swatch.color-coral { --ev: var(--coral-edge); }
+.calendar-view .cal-swatch.color-mint { --ev: var(--mint-edge); }
+.calendar-view .cal-swatch.color-sky { --ev: var(--sky-edge); }
+.calendar-view .cal-swatch.color-violet { --ev: var(--violet-edge); }
+.calendar-view .cal-swatch.color-ink { --ev: var(--ink-edge); }
+.calendar-view .cal-swatch.color-ember { --ev: var(--ember-edge); }
+.calendar-view .cal-swatch.color-rose { --ev: var(--rose-edge); }
+.calendar-view .cal-swatch.color-lime { --ev: var(--lime-edge); }
+.calendar-view .cal-swatch.color-teal { --ev: var(--teal-edge); }
+.calendar-view .cal-swatch.color-azure { --ev: var(--azure-edge); }
+.calendar-view .cal-swatch.color-magenta { --ev: var(--magenta-edge); }
+
+.calendar-view .cal-sheet-foot {
+  border-top-color: var(--cal-line);
+}
+
+.calendar-view .cal-sheet-foot button {
+  border-color: var(--cal-line-strong);
+  font-weight: 500;
 }
 
 .calendar-view .cal-sheet-save {
-  border-color: rgba(242, 193, 78, 0.7) !important;
-  background: linear-gradient(180deg, #ffd97a, #f2b93a) !important;
-  color: var(--on-accent) !important;
+  border-color: transparent !important;
+  background: var(--cal-text) !important;
+  color: #111 !important;
+  font-weight: 600;
 }
 
-.calendar-view .calendar-agenda-empty svg {
-  color: var(--cal-gold);
+.calendar-view .cal-sheet-save:hover:not(:disabled) {
+  box-shadow: none;
+  background: #fff !important;
+}
+
+.calendar-view .cal-sheet-delete {
+  color: var(--danger-ink) !important;
 }
 
 @media (max-width: 860px) {
   .calendar-view {
-    border-radius: 18px;
-    padding: 10px 10px 16px;
+    border-radius: 16px;
+    padding: 8px 8px 16px;
+  }
+
+  .calendar-view .calendar-month-title {
+    font-size: 1.6rem;
   }
 }
 

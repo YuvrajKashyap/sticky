@@ -84,18 +84,18 @@ function seedDemoEvents(): StickyCalendarEvent[] {
     status: "confirmed" as const,
   };
   return [
-    { ...base, id: "demo-ev-standup", title: "Team standup", color: "sky", ...timed(today, 9, 30, 30) },
+    { ...base, id: "demo-ev-standup", title: "Team standup", color: "sun", ...timed(today, 9, 30, 30) },
     { ...base, id: "demo-ev-review", title: "Design review", color: "violet", location: "Studio B", details: "Walk through the calendar rebuild.", ...timed(today, 13, 0, 90) },
-    { ...base, id: "demo-ev-focus", title: "Deep work block", color: "teal", transparency: "transparent", ...timed(today, 15, 0, 120) },
-    { ...base, id: "demo-ev-yesterday", title: "1:1 with Sam", color: "azure", ...timed(addDays(today, -1), 15, 0, 45) },
+    { ...base, id: "demo-ev-focus", title: "Deep work block", color: "mint", transparency: "transparent", ...timed(today, 15, 0, 120) },
+    { ...base, id: "demo-ev-yesterday", title: "1:1 with Sam", color: "rose", ...timed(addDays(today, -1), 15, 0, 45) },
     { ...base, id: "demo-ev-offsite", title: "Product offsite", color: "mint", location: "Lake house", ...allDay(addDays(today, 1), 2) },
     { ...base, id: "demo-ev-gym", title: "Gym", color: "ember", status: "tentative", ...timed(addDays(today, 3), 18, 0, 60) },
     { ...base, id: "demo-ev-dentist", title: "Dentist", color: "coral", location: "Maple St clinic", ...timed(addDays(today, 5), 11, 0, 60) },
-    { ...base, id: "demo-ev-sprint", title: "Sprint planning", color: "sun", ...timed(addDays(today, 7), 10, 0, 60) },
+    { ...base, id: "demo-ev-sprint", title: "Sprint planning", color: "azure", ...timed(addDays(today, 7), 10, 0, 60) },
     { ...base, id: "demo-ev-dinner", title: "Dinner with Priya", color: "rose", location: "Nori", ...timed(addDays(today, 2), 19, 30, 120) },
     { ...base, id: "demo-ev-launch", title: "Sticky 1.0 launch", color: "magenta", ...allDay(addDays(today, 12)) },
     { ...base, id: "demo-ev-call", title: "Investor call", color: "lime", ...timed(addDays(today, 8), 14, 0, 30) },
-    { ...base, id: "demo-ev-early", title: "Morning run", color: "teal", ...timed(addDays(today, 4), 6, 30, 45) },
+    { ...base, id: "demo-ev-early", title: "Morning run", color: "ember", ...timed(addDays(today, 4), 6, 30, 45) },
   ];
 }
 
