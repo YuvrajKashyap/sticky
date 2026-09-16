@@ -8,8 +8,8 @@ export const workspacePreferencesDtoSchema = z.object({
   taskViewFilter: z.enum(["all", "today", "all_today", "daily", "due", "undated", "overdue", "recurring", "subtasks"]),
   taskSortMode: z.enum(["custom", "due"]),
   interfaceSizeMode: z.enum(["auto", "manual"]),
-  interfaceScale: z.number().int().min(50).max(250),
-  interfaceAutoBias: z.number().int().min(-10).max(10),
+  interfaceScale: z.number().int().min(25).max(400),
+  interfaceAutoBias: z.number().int().min(-30).max(30),
 });
 
 export const updateWorkspacePreferencesSchema = workspacePreferencesDtoSchema.partial().refine(

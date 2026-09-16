@@ -43,6 +43,7 @@ import {
   Monitor,
   Rows3,
   Pencil,
+  Minus,
   Plus,
   PlugZap,
   Repeat2,
@@ -66,7 +67,18 @@ import { mapWorkspaceRecords } from "@/lib/sticky/mappers";
 import type { WorkspaceRecords } from "@sticky/data";
 import { userFacingStickySaveMessage } from "@/lib/sticky/messages";
 import { WorkspacePersistence, settleWorkspaceOperations } from "@/lib/sticky/workspace-persistence";
-import { resolveWorkspaceScale } from "@/lib/sticky/workspace-scale";
+import {
+  WORKSPACE_AUTO_BIAS_MAX,
+  WORKSPACE_AUTO_BIAS_MIN,
+  WORKSPACE_SCALE_MAX,
+  WORKSPACE_SCALE_MIN,
+  WORKSPACE_SCALE_PRESETS,
+  WORKSPACE_SCALE_STEP,
+  clampWorkspaceScale,
+  describeDisplay,
+  detectWorkspaceBaseline,
+  resolveWorkspaceScale,
+} from "@/lib/sticky/workspace-scale";
 import { useMobileWorkspaceZoom } from "./useMobileWorkspaceZoom";
 import {
   compareDueSchedules,
@@ -1254,7 +1266,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   const [overviewOpen, setOverviewOpen] = useState(false);
   const [accentHue, setAccentHue] = useState(DEFAULT_ACCENT_HUE);
   const [captureExpanded, setCaptureExpanded] = useState(false);
-  const [viewport, setViewport] = useState({ width: 1920, height: 1080 });
+  const [viewport, setViewport] = useState({ width: 1920, height: 1080, pixelRatio: 1 });
   const [phoneLandscape, setPhoneLandscape] = useState(false);
   const mobileZoom = useMobileWorkspaceZoom(phoneLandscape);
   const [rotationDetailsHidden, setRotationDetailsHidden] = useState(false);
@@ -1315,6 +1327,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       autoBias: workspace.preferences.interfaceAutoBias,
       width: viewport.width,
       height: viewport.height,
+      pixelRatio: viewport.pixelRatio,
     }),
     [viewport, workspace.preferences.interfaceAutoBias, workspace.preferences.interfaceScale, workspace.preferences.interfaceSizeMode],
   );
@@ -1373,6 +1386,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
         setViewport({
           width: Math.round(visual?.width ?? window.innerWidth),
           height: Math.round(visual?.height ?? window.innerHeight),
+          pixelRatio: Math.round((window.devicePixelRatio || 1) * 100) / 100,
         });
       });
     };
@@ -2603,6 +2617,47 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       before,
     );
   }
+
+  /** Nudge the interface size; any nudge switches to manual so it sticks. */
+  function stepInterfaceScale(delta: number) {
+    updatePreferences({
+      interfaceSizeMode: "manual",
+      interfaceScale: clampWorkspaceScale(resolvedInterfaceScale + delta),
+    });
+  }
+
+  // Zoom like a browser: Ctrl/Cmd with + - 0 and Ctrl/Cmd + wheel resize the
+  // console instead of the page. Re-bound every render so handlers see fresh
+  // state without a ref dance.
+  useEffect(() => {
+    if (mobileZoom.enabled) return;
+    let lastWheel = 0;
+    function onKeyDown(event: KeyboardEvent) {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      const key = event.key;
+      if (key !== "=" && key !== "+" && key !== "-" && key !== "_" && key !== "0") return;
+      event.preventDefault();
+      if (key === "0") {
+        updatePreferences({ interfaceSizeMode: "auto" });
+        return;
+      }
+      stepInterfaceScale(key === "-" || key === "_" ? -10 : 10);
+    }
+    function onWheel(event: WheelEvent) {
+      if (!(event.ctrlKey || event.metaKey)) return;
+      event.preventDefault();
+      const now = performance.now();
+      if (now - lastWheel < 80) return;
+      lastWheel = now;
+      stepInterfaceScale(event.deltaY > 0 ? -WORKSPACE_SCALE_STEP : WORKSPACE_SCALE_STEP);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("wheel", onWheel);
+    };
+  });
 
   function setTaskViewFilter(nextFilter: StickyTaskViewFilter) {
     if (nextFilter === taskViewFilter) {
@@ -5000,70 +5055,91 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                       </div>
                     ) : <>
                     <div className="segmented-control interface-size-mode" aria-label="Interface sizing mode">
-                      <button
-                        type="button"
-                        className={workspace.preferences.interfaceSizeMode === "auto" ? "active" : ""}
-                        aria-pressed={workspace.preferences.interfaceSizeMode === "auto"}
-                        onClick={() => updatePreferences({ interfaceSizeMode: "auto" })}
-                      >
-                        Auto
-                      </button>
-                      <button
-                        type="button"
-                        className={workspace.preferences.interfaceSizeMode === "manual" ? "active" : ""}
-                        aria-pressed={workspace.preferences.interfaceSizeMode === "manual"}
-                        onClick={() => updatePreferences({ interfaceSizeMode: "manual" })}
-                      >
-                        Manual
-                      </button>
+                      {(["auto", "manual"] as const).map((sizeMode) => (
+                        <button
+                          key={sizeMode}
+                          type="button"
+                          className={workspace.preferences.interfaceSizeMode === sizeMode ? "active" : ""}
+                          aria-pressed={workspace.preferences.interfaceSizeMode === sizeMode}
+                          onClick={() => updatePreferences({ interfaceSizeMode: sizeMode })}
+                        >
+                          {sizeMode === "auto" ? "Auto" : "Manual"}
+                        </button>
+                      ))}
                     </div>
-                    {workspace.preferences.interfaceSizeMode === "auto" ? (
-                      <div className="interface-scale-control">
-                        <div className="interface-scale-summary">
-                          <span>Auto adjustment</span>
-                          <strong>{resolvedInterfaceScale}%</strong>
-                        </div>
-                        <input
-                          type="range"
-                          min="-10"
-                          max="10"
-                          step="5"
-                          value={workspace.preferences.interfaceAutoBias}
-                          aria-label="Automatic interface size adjustment"
-                          onChange={(event) => updatePreferences({ interfaceAutoBias: Number(event.target.value) })}
-                        />
-                        <div className="interface-scale-ends" aria-hidden="true"><span>Smaller</span><span>Larger</span></div>
+                    <div className="interface-scale-control">
+                      <div className="interface-scale-readout">
+                        <span className="interface-scale-live">
+                          <AnimatedNumber value={resolvedInterfaceScale} />
+                          <i>%</i>
+                        </span>
+                        <span className="interface-scale-caption">
+                          {workspace.preferences.interfaceSizeMode === "auto"
+                            ? `${describeDisplay(viewport.width, viewport.height, viewport.pixelRatio)} · ${viewport.width}×${viewport.height}${viewport.pixelRatio > 1 ? ` @${viewport.pixelRatio}x` : ""}`
+                            : "Manual · Ctrl ± · Ctrl wheel"}
+                        </span>
                       </div>
-                    ) : (
-                      <div className="interface-scale-control">
-                        <div className="interface-size-presets" aria-label="Interface size presets">
-                          {[{ label: "Small", value: 85 }, { label: "Standard", value: 100 }, { label: "Large", value: 115 }].map((option) => (
-                            <button
-                              key={option.value}
-                              type="button"
-                              className={workspace.preferences.interfaceScale === option.value ? "active" : ""}
-                              aria-pressed={workspace.preferences.interfaceScale === option.value}
-                              onClick={() => updatePreferences({ interfaceScale: option.value })}
-                            >
-                              {option.label}
+                      {workspace.preferences.interfaceSizeMode === "auto" ? (
+                        <>
+                          <input
+                            type="range"
+                            className="interface-scale-slider"
+                            min={WORKSPACE_AUTO_BIAS_MIN}
+                            max={WORKSPACE_AUTO_BIAS_MAX}
+                            step={5}
+                            value={workspace.preferences.interfaceAutoBias}
+                            aria-label="Automatic interface size adjustment"
+                            onChange={(event) => updatePreferences({ interfaceAutoBias: Number(event.target.value) })}
+                          />
+                          <div className="interface-scale-ends" aria-hidden="true">
+                            <span>Tighter</span>
+                            <span>Detected {detectWorkspaceBaseline(viewport.width, viewport.height, viewport.pixelRatio)}%</span>
+                            <span>Roomier</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="interface-scale-presets" aria-label="Interface size presets">
+                            {WORKSPACE_SCALE_PRESETS.map((value, index) => (
+                              <span key={value} style={{ display: "contents" }}>
+                                {index ? <i aria-hidden="true">·</i> : null}
+                                <button
+                                  type="button"
+                                  className={workspace.preferences.interfaceScale === value ? "active" : ""}
+                                  aria-pressed={workspace.preferences.interfaceScale === value}
+                                  onClick={() => updatePreferences({ interfaceScale: value })}
+                                >
+                                  {value}%
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                          <div className="interface-scale-stepper">
+                            <button type="button" aria-label="Smaller interface" onClick={() => stepInterfaceScale(-WORKSPACE_SCALE_STEP)}>
+                              <Minus size={14} aria-hidden="true" />
                             </button>
-                          ))}
-                        </div>
-                        <div className="interface-scale-summary">
-                          <span>Fine tune</span>
-                          <strong>{workspace.preferences.interfaceScale}%</strong>
-                        </div>
-                        <input
-                          type="range"
-                          min="50"
-                          max="250"
-                          step="5"
-                          value={workspace.preferences.interfaceScale}
-                          aria-label="Manual interface size"
-                          onChange={(event) => updatePreferences({ interfaceScale: Number(event.target.value) })}
-                        />
-                      </div>
-                    )}
+                            <input
+                              type="range"
+                              className="interface-scale-slider"
+                              min={WORKSPACE_SCALE_MIN}
+                              max={WORKSPACE_SCALE_MAX}
+                              step={WORKSPACE_SCALE_STEP}
+                              value={workspace.preferences.interfaceScale}
+                              aria-label="Manual interface size"
+                              onChange={(event) => updatePreferences({ interfaceScale: Number(event.target.value) })}
+                            />
+                            <button type="button" aria-label="Larger interface" onClick={() => stepInterfaceScale(WORKSPACE_SCALE_STEP)}>
+                              <Plus size={14} aria-hidden="true" />
+                            </button>
+                          </div>
+                          <div className="interface-scale-ends" aria-hidden="true">
+                            <span>{WORKSPACE_SCALE_MIN}%</span>
+                            <span>100%</span>
+                            <span>{WORKSPACE_SCALE_MAX}%</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
                     </>}
                   </div>
                   <div className="appearance-group">

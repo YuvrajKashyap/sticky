@@ -839,21 +839,23 @@ test.describe("Sticky workspace", () => {
 
     const app = page.locator(".sticky-app");
     await expect(app).toHaveAttribute("data-interface-size-mode", "auto");
-    await expect(app).toHaveAttribute("data-interface-scale", "90");
+    await expect(app).toHaveAttribute("data-interface-scale", "85");
 
     await page.setViewportSize({ width: 2560, height: 1440 });
-    await expect(app).toHaveAttribute("data-interface-scale", "110");
+    await expect(app).toHaveAttribute("data-interface-scale", "115");
 
     await page.getByLabel("Open appearance settings").click();
     const settings = page.getByLabel("Workspace appearance");
     await expect(settings.getByRole("button", { name: "Auto" })).toHaveAttribute("aria-pressed", "true");
     await settings.getByRole("button", { name: "Manual" }).click();
-    await settings.getByRole("button", { name: "Large" }).click();
+    await settings.getByRole("button", { name: "125%" }).click();
     await expect(app).toHaveAttribute("data-interface-size-mode", "manual");
-    await expect(app).toHaveAttribute("data-interface-scale", "115");
+    await expect(app).toHaveAttribute("data-interface-scale", "125");
 
-    await settings.getByLabel("Manual interface size", { exact: true }).fill("50");
-    await expect(app).toHaveAttribute("data-interface-scale", "50");
+    await settings.getByLabel("Manual interface size", { exact: true }).fill("25");
+    await expect(app).toHaveAttribute("data-interface-scale", "25");
+    await settings.getByLabel("Manual interface size", { exact: true }).fill("400");
+    await expect(app).toHaveAttribute("data-interface-scale", "400");
     await settings.getByLabel("Manual interface size", { exact: true }).fill("250");
     await expect(app).toHaveAttribute("data-interface-scale", "250");
 
@@ -957,7 +959,7 @@ test.describe("Sticky workspace", () => {
 
     await expectNoConsoleErrors(page, async () => {
       const booksColumn = page.locator('.board-column[data-list-slug="books"]');
-      // At Auto 90%, Books is already inside the 420px prefetch margin.
+      // At Auto 85%, Books is already inside the 420px prefetch margin.
       // Use a real larger interface size to exercise a genuinely distant list.
       await page.getByLabel("Open appearance settings").click();
       const settings = page.getByLabel("Workspace appearance");
