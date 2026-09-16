@@ -111,9 +111,11 @@ test("completed section cannot collapse underneath its own control", async ({ pa
   await page.goto("/");
   await expect(page.locator(".completed-toggle").first()).toBeVisible();
   const geometry = await page.locator(".completed-toggle").first().evaluate(button => ({
+    // Workspace zoom changes rendered pixels, not the control's layout size.
+    layoutControl: (button as HTMLElement).offsetHeight,
     control: button.getBoundingClientRect().height,
     section: button.parentElement!.getBoundingClientRect().height,
   }));
-  expect(geometry.control).toBeGreaterThanOrEqual(44);
+  expect(geometry.layoutControl).toBeGreaterThanOrEqual(44);
   expect(geometry.section).toBeGreaterThanOrEqual(geometry.control);
 });
