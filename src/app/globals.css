@@ -1258,6 +1258,9 @@ mark.find-highlight {
   align-items: center;
   gap: 8px;
   padding: 6px;
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 100%;
   border-radius: 999px;
   background: color-mix(in srgb, var(--surface) 86%, transparent);
   box-shadow: var(--paper-ring), var(--shadow-paper);
@@ -3849,6 +3852,9 @@ mark.find-highlight {
    ---------------------------------------------------------------------- */
 
 .details-panel {
+  position: relative;
+  /* Always above the topbar/toolbar so nothing can paint over it. */
+  z-index: 56;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -5709,6 +5715,20 @@ mark.find-highlight {
   border-radius: 50%;
   background: var(--cx-text-3);
 }
+
+/* Task dots and agenda rails carry the list color in all twelve hues. */
+.calendar-task.color-sun > i, .cal-task-row.color-sun .cal-row-rail { background: var(--sun-edge); opacity: 1; }
+.calendar-task.color-coral > i, .cal-task-row.color-coral .cal-row-rail { background: var(--coral-edge); opacity: 1; }
+.calendar-task.color-mint > i, .cal-task-row.color-mint .cal-row-rail { background: var(--mint-edge); opacity: 1; }
+.calendar-task.color-sky > i, .cal-task-row.color-sky .cal-row-rail { background: var(--sky-edge); opacity: 1; }
+.calendar-task.color-violet > i, .cal-task-row.color-violet .cal-row-rail { background: var(--violet-edge); opacity: 1; }
+.calendar-task.color-ink > i, .cal-task-row.color-ink .cal-row-rail { background: var(--ink-edge); opacity: 1; }
+.calendar-task.color-ember > i, .cal-task-row.color-ember .cal-row-rail { background: var(--ember-edge); opacity: 1; }
+.calendar-task.color-rose > i, .cal-task-row.color-rose .cal-row-rail { background: var(--rose-edge); opacity: 1; }
+.calendar-task.color-lime > i, .cal-task-row.color-lime .cal-row-rail { background: var(--lime-edge); opacity: 1; }
+.calendar-task.color-teal > i, .cal-task-row.color-teal .cal-row-rail { background: var(--teal-edge); opacity: 1; }
+.calendar-task.color-azure > i, .cal-task-row.color-azure .cal-row-rail { background: var(--azure-edge); opacity: 1; }
+.calendar-task.color-magenta > i, .cal-task-row.color-magenta .cal-row-rail { background: var(--magenta-edge); opacity: 1; }
 
 .calendar-task .calendar-task-time {
   font-size: 0.7rem;
@@ -8412,7 +8432,7 @@ button.cal-timegrid-day:hover {
     top: 0;
     right: 0;
     bottom: 0;
-    z-index: 55;
+    z-index: 58;
     width: min(400px, calc(92 * var(--vw)));
     box-shadow: var(--shadow-float);
     transform: translateX(calc(100% + 30px));
@@ -10588,4 +10608,242 @@ button.cal-timegrid-day:hover {
   bottom: auto;
   left: auto;
   transform: none;
+}
+
+/* ----------------------------------------------------------------------
+   19b · Boot screen — the workspace powering on
+   Pure CSS: tiles deal into a stack, rings sweep, status cycles, a
+   progress hairline fills to "almost" and holds. No client bundle.
+   ---------------------------------------------------------------------- */
+
+.boot {
+  --boot-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --boot-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: calc(100 * var(--vh));
+  overflow: hidden;
+  background: var(--canvas);
+  color: var(--ink);
+}
+
+.boot-field {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.boot-aurora {
+  position: absolute;
+  width: 60vw;
+  height: 60vw;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.7;
+  will-change: transform;
+}
+
+.boot-aurora-a {
+  top: -28vw;
+  left: -18vw;
+  background: radial-gradient(circle, rgba(var(--accent-rgb), 0.2), transparent 64%);
+  animation: boot-aurora-a 40s ease-in-out infinite alternate;
+}
+
+.boot-aurora-b {
+  bottom: -30vw;
+  right: -20vw;
+  background: radial-gradient(circle, rgba(106, 92, 255, 0.22), transparent 64%);
+  animation: boot-aurora-b 52s ease-in-out infinite alternate;
+}
+
+@keyframes boot-aurora-a { to { transform: translate(10vw, 8vh) scale(1.14); } }
+@keyframes boot-aurora-b { to { transform: translate(-9vw, -8vh) scale(1.1); } }
+
+.boot-grid {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(214, 233, 255, 0.28) 0.7px, transparent 1.4px);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(60% 60% at 50% 50%, #000 20%, transparent 100%);
+  opacity: 0.5;
+}
+
+.boot-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  padding: 24px;
+}
+
+/* The mark: three glass tiles deal into a stack, two rings orbit. */
+.boot-mark {
+  position: relative;
+  width: 132px;
+  height: 132px;
+  display: grid;
+  place-items: center;
+}
+
+.boot-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid transparent;
+  border-top-color: rgba(var(--accent-rgb), 0.9);
+  border-right-color: rgba(var(--accent-rgb), 0.25);
+  animation: boot-spin 1.6s cubic-bezier(0.4, 0.1, 0.3, 0.9) infinite;
+  filter: drop-shadow(0 0 8px rgba(var(--accent-rgb), 0.55));
+}
+
+.boot-ring-2 {
+  inset: 12px;
+  border-top-color: rgba(106, 92, 255, 0.85);
+  border-right-color: rgba(106, 92, 255, 0.2);
+  animation-duration: 2.4s;
+  animation-direction: reverse;
+  filter: drop-shadow(0 0 8px rgba(106, 92, 255, 0.5));
+}
+
+@keyframes boot-spin { to { transform: rotate(360deg); } }
+
+.boot-tile {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(160deg, rgba(40, 52, 96, 0.95), rgba(18, 24, 50, 0.95));
+  box-shadow: var(--paper-ring), 0 10px 24px -10px rgba(1, 3, 10, 0.9);
+  opacity: 0;
+  animation: boot-deal 0.9s var(--boot-pop) both, boot-float 3.2s ease-in-out 1.2s infinite;
+}
+
+.boot-tile-1 { --dx: -70px; --dy: 30px; --rot: -14deg; --rest: rotate(-9deg) translate(-6px, 2px); animation-delay: 0.05s, 1.2s; }
+.boot-tile-2 { --dx: 70px; --dy: 30px; --rot: 14deg; --rest: rotate(6deg) translate(5px, 0); animation-delay: 0.2s, 1.35s; }
+.boot-tile-3 {
+  --dx: 0px; --dy: -70px; --rot: 0deg; --rest: rotate(-2deg) translate(0, -2px);
+  background: linear-gradient(140deg, var(--accent-bright), var(--accent-deep));
+  box-shadow: 0 0 28px -6px rgba(var(--accent-rgb), 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  animation-delay: 0.38s, 1.5s;
+}
+
+@keyframes boot-deal {
+  from { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(0.7); }
+  to { opacity: 1; transform: var(--rest) scale(1); }
+}
+
+@keyframes boot-float {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -3px; }
+}
+
+.boot-core {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 18px 4px rgba(var(--accent-rgb), 0.8);
+  animation: boot-core 1.6s ease-in-out 0.6s infinite;
+}
+
+@keyframes boot-core {
+  0%, 100% { transform: scale(0.8); opacity: 0.7; }
+  50% { transform: scale(1.2); opacity: 1; }
+}
+
+/* Wordmark: letters rise in, then a light sweeps across. */
+.boot-wordmark {
+  display: flex;
+  gap: 0.28em;
+  margin: 6px 0 0;
+  font-family: var(--font-hand);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--ink);
+  text-shadow: 0 0 18px rgba(var(--accent-rgb), 0.45);
+}
+
+.boot-wordmark span {
+  display: inline-block;
+  animation: boot-letter 0.7s var(--boot-ease) calc(0.5s + var(--i) * 55ms) both, boot-sheen 2.8s ease-in-out calc(1.6s + var(--i) * 70ms) infinite;
+}
+
+@keyframes boot-letter {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes boot-sheen {
+  0%, 20%, 100% { color: var(--ink); }
+  10% { color: var(--accent-bright); }
+}
+
+/* Status: three lines crossfade in sequence, one always visible. */
+.boot-status {
+  position: relative;
+  height: 1.4em;
+  width: 220px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.boot-status > span:not(.boot-status-sr) {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation: boot-status 5.4s ease-in-out calc(0.9s + var(--i) * 1.8s) infinite;
+}
+
+.boot-status-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@keyframes boot-status {
+  0%, 33.4%, 100% { opacity: 0; transform: translateY(6px); }
+  5%, 28% { opacity: 1; transform: translateY(0); }
+}
+
+/* Progress hairline: fills quickly to most of the way, then creeps. */
+.boot-progress {
+  width: 220px;
+  height: 2px;
+  border-radius: 2px;
+  background: rgba(150, 180, 255, 0.12);
+  overflow: hidden;
+}
+
+.boot-progress i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent-deep), var(--accent));
+  box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.7);
+  transform-origin: left center;
+  animation: boot-progress 9s cubic-bezier(0.1, 0.8, 0.2, 1) 0.3s both;
+}
+
+@keyframes boot-progress {
+  from { transform: scaleX(0); }
+  60% { transform: scaleX(0.72); }
+  to { transform: scaleX(0.94); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot-aurora, .boot-ring, .boot-core, .boot-wordmark span, .boot-progress i { animation: none; }
+  .boot-tile { animation: boot-deal 0.01s both; }
+  .boot-status > span:not(.boot-status-sr) { animation: none; }
+  .boot-status > span:nth-child(3) { opacity: 1; }
+  .boot-progress i { transform: scaleX(0.9); }
 }

@@ -55,6 +55,9 @@ type StickyCalendarProps = {
   recurringTaskIds: ReadonlySet<string>;
   onTaskSelect: (taskId: string) => void;
   mode: AppMode;
+  /** Remembered view and filter (from cookies) for a flash-free first paint. */
+  initialViewMode?: CalendarViewMode;
+  initialContent?: CalendarContent;
 };
 
 type CalendarViewMode = "month" | "week" | "day";
@@ -183,9 +186,19 @@ function bySchedule(a: StickyTask, b: StickyTask) {
   return (a.dueTime ?? "23:59").localeCompare(b.dueTime ?? "23:59") || a.title.localeCompare(b.title);
 }
 
-function byCalendarPriority(recurringTaskIds: ReadonlySet<string>, a: StickyTask, b: StickyTask) {
-  const recurrencePriority = Number(recurringTaskIds.has(a.id)) - Number(recurringTaskIds.has(b.id));
-  return recurrencePriority || bySchedule(a, b);
+/**
+ * Calendar task order: one-off tasks first by schedule; repeating tasks trail
+ * and rank by their list's position on the dashboard, then by schedule.
+ */
+function byCalendarPriority(recurringTaskIds: ReadonlySet<string>, listRank: Map<string, number>, a: StickyTask, b: StickyTask) {
+  const aRepeats = recurringTaskIds.has(a.id);
+  const bRepeats = recurringTaskIds.has(b.id);
+  if (aRepeats !== bRepeats) return Number(aRepeats) - Number(bRepeats);
+  if (aRepeats) {
+    const rank = (listRank.get(a.listId) ?? Number.MAX_SAFE_INTEGER) - (listRank.get(b.listId) ?? Number.MAX_SAFE_INTEGER);
+    if (rank) return rank;
+  }
+  return bySchedule(a, b);
 }
 
 function weekTitle(start: Date, end: Date) {
@@ -366,7 +379,7 @@ function EventStatusGlyph({ event }: { event: StickyCalendarEvent }) {
    Calendar
    ------------------------------------------------------------------------ */
 
-export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, mode }: StickyCalendarProps) {
+export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, mode, initialViewMode, initialContent }: StickyCalendarProps) {
   const reduceMotion = useReducedMotion();
   const calendarRef = useRef<HTMLElement>(null);
   const timeGridRef = useRef<HTMLDivElement>(null);
@@ -374,12 +387,21 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
   const today = useMemo(() => new Date(), []);
   const todayKey = dayKey(today);
 
-  const savedViewMode = useSyncExternalStore(subscribeCalendarContent, readCalendarViewMode, () => "month" as const);
+  const savedViewMode = useSyncExternalStore(subscribeCalendarContent, readCalendarViewMode, () => initialViewMode ?? ("month" as const));
   const [viewChoice, setViewMode] = useState<CalendarViewMode | null>(null);
   const viewMode = viewChoice ?? savedViewMode;
-  const savedContent = useSyncExternalStore(subscribeCalendarContent, readCalendarContent, () => "both" as const);
+  const savedContent = useSyncExternalStore(subscribeCalendarContent, readCalendarContent, () => initialContent ?? ("both" as const));
   const [contentChoice, setContentChoice] = useState<CalendarContent | null>(null);
   const content = contentChoice ?? savedContent;
+
+  useEffect(() => {
+    try {
+      document.cookie = `sticky.calview=${viewMode}; path=/; max-age=31536000; samesite=lax`;
+      document.cookie = `sticky.calcontent=${content}; path=/; max-age=31536000; samesite=lax`;
+    } catch {
+      /* Cookies disabled: localStorage still restores the view after mount. */
+    }
+  }, [viewMode, content]);
   const showTasks = content !== "events";
   const showEvents = content !== "tasks";
 
@@ -399,6 +421,7 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
   const weekDays = eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) });
   const weekEnd = weekDays[6];
   const listById = useMemo(() => new Map(lists.map((list) => [list.id, list])), [lists]);
+  const listRank = useMemo(() => new Map(lists.map((list, index) => [list.id, index])), [lists]);
 
   const visibleStart = viewMode === "month" ? calendarStart : viewMode === "week" ? weekStart : startOfDay(selectedDate);
   const visibleEnd =
@@ -512,9 +535,9 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
       const key = task.dueDate.slice(0, 10);
       grouped.set(key, [...(grouped.get(key) ?? []), task]);
     }
-    grouped.forEach((list) => list.sort((a, b) => byCalendarPriority(recurringTaskIds, a, b)));
+    grouped.forEach((list) => list.sort((a, b) => byCalendarPriority(recurringTaskIds, listRank, a, b)));
     return grouped;
-  }, [recurringTaskIds, visibleTasks]);
+  }, [listRank, recurringTaskIds, visibleTasks]);
 
   const occurrencesByDate = useMemo(() => buildOccurrences(events), [events]);
 
@@ -965,7 +988,7 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
                               <motion.button
                                 key={`tk-${task.id}`}
                                 type="button"
-                                className={`calendar-task color-${task.color}${taskStateClass(task, todayKey)}`}
+                                className={`calendar-task color-${listById.get(task.listId)?.color ?? task.color}${taskStateClass(task, todayKey)}`}
                                 data-key={`tk-${task.id}`}
                                 data-spot=""
                                 onClick={() => onTaskSelect(task.id)}
@@ -1198,7 +1221,7 @@ function TimeGrid({
                   <motion.button
                     key={`tk-${task.id}`}
                     type="button"
-                    className={`calendar-task cal-task-pin color-${task.color}${taskStateClass(task, todayKey)}`}
+                    className={`calendar-task cal-task-pin color-${listById.get(task.listId)?.color ?? task.color}${taskStateClass(task, todayKey)}`}
                     data-key={`tk-${task.id}`}
                     data-spot=""
                     onClick={() => onTaskSelect(task.id)}
@@ -1289,7 +1312,7 @@ function TimeGrid({
                     <motion.button
                       key={`tk-${task.id}`}
                       type="button"
-                      className={`calendar-task cal-task-pin cal-task-timed color-${task.color}${taskStateClass(task, todayKey)}`}
+                      className={`calendar-task cal-task-pin cal-task-timed color-${listById.get(task.listId)?.color ?? task.color}${taskStateClass(task, todayKey)}`}
                       data-key={`tk-${task.id}`}
                       data-spot=""
                       style={{ top: (minutes / 60) * HOUR_PX - 11 }}
@@ -1423,6 +1446,7 @@ function CalendarAgenda({
 }: CalendarAgendaProps) {
   const reduceMotion = useReducedMotion();
   const todayKey = dayKey(new Date());
+  const listRank = useMemo(() => new Map(Array.from(listById.keys()).map((id, index) => [id, index])), [listById]);
   const busy = occurrences.reduce(
     (sum, item) => (item.event.allDay || item.event.transparency === "transparent" ? sum : sum + (item.endMin - item.startMin)),
     0,
@@ -1437,10 +1461,25 @@ function CalendarAgenda({
       kind: "event" as const,
       occurrence,
     })),
-    ...tasks.map((task) => ({ key: `tk-${task.id}`, minutes: taskMinutes(task) ?? -0.5, kind: "task" as const, task })),
-  ].sort((a, b) => a.minutes - b.minutes);
+    // Untimed tasks sort after every timed item in their group ("any time").
+    ...tasks.map((task) => ({ key: `tk-${task.id}`, minutes: taskMinutes(task) ?? 24 * 60 + 1, kind: "task" as const, task })),
+  ].sort((a, b) => {
+    // One-off items run chronologically; repeating tasks trail, ranked by
+    // their list's position on the dashboard, then by time.
+    const aRepeats = a.kind === "task" && recurringTaskIds.has(a.task.id) ? 1 : 0;
+    const bRepeats = b.kind === "task" && recurringTaskIds.has(b.task.id) ? 1 : 0;
+    if (aRepeats !== bRepeats) return aRepeats - bRepeats;
+    if (aRepeats && a.kind === "task" && b.kind === "task") {
+      const rank = (listRank.get(a.task.listId) ?? Number.MAX_SAFE_INTEGER) - (listRank.get(b.task.listId) ?? Number.MAX_SAFE_INTEGER);
+      if (rank) return rank;
+    }
+    return a.minutes - b.minutes;
+  });
 
-  const nowIndex = nowMinutes === null ? -1 : rows.findIndex((row) => row.minutes > nowMinutes);
+  const nowIndex =
+    nowMinutes === null
+      ? -1
+      : rows.findIndex((row) => !(row.kind === "task" && recurringTaskIds.has(row.task.id)) && row.minutes > nowMinutes);
 
   return (
     <aside className={`calendar-agenda${rich ? " rich" : ""}`} aria-label={`Schedule for ${format(date, "MMMM d")}`}>
@@ -1527,7 +1566,7 @@ function CalendarAgenda({
                     {nowMarker}
                     <button
                       type="button"
-                      className={`calendar-agenda-task cal-task-row color-${task.color}${taskStateClass(task, todayKey)}`}
+                      className={`calendar-agenda-task cal-task-row color-${listById.get(task.listId)?.color ?? task.color}${taskStateClass(task, todayKey)}`}
                       data-key={`tk-${task.id}`}
                       data-spot=""
                       onClick={() => onTaskSelect(task.id)}

@@ -6,7 +6,7 @@ export const workspacePreferencesDtoSchema = z.object({
   colorMode: z.enum(["light", "dark"]),
   boardStyle: z.enum(["pad", "wood"]),
   taskViewFilter: z.enum(["all", "today", "all_today", "daily", "due", "undated", "overdue", "recurring", "subtasks"]),
-  taskSortMode: z.enum(["custom", "due"]),
+  taskSortMode: z.enum(["custom", "due", "added"]),
   interfaceSizeMode: z.enum(["auto", "manual"]),
   interfaceScale: z.number().int().min(25).max(400),
   interfaceAutoBias: z.number().int().min(-30).max(30),

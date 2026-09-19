@@ -39,6 +39,7 @@ import {
   Layers3,
   ListChecks,
   LogOut,
+  History,
   Menu,
   Monitor,
   Rows3,
@@ -127,6 +128,11 @@ type StickyWorkspaceProps = {
   mode: AppMode;
   systemMessage?: string;
   initialLaunchIntent?: StickyLaunchIntent;
+  /** Remembered surfaces from the server (cookies), rendered on first paint. */
+  initialViewMode?: "board" | "calendar";
+  initialOverviewOpen?: boolean;
+  initialCalendarView?: "month" | "week" | "day";
+  initialCalendarContent?: "both" | "events" | "tasks";
 };
 
 type Toast = {
@@ -268,6 +274,9 @@ const WORKSPACE_VIEW_KEY = "sticky.workspace.view";
 
 function saveWorkspaceView(viewMode: "board" | "calendar", overviewOpen: boolean) {
   try {
+    // The cookie lets the server render the remembered view directly, so a
+    // reload opens on the calendar without flashing the board first.
+    document.cookie = `sticky.view=${viewMode}; path=/; max-age=31536000; samesite=lax`;
     window.localStorage.setItem(WORKSPACE_VIEW_KEY, JSON.stringify({ viewMode, overviewOpen }));
   } catch {
     // Navigation remains available when browser storage is disabled.
@@ -312,6 +321,7 @@ const TASK_VIEW_ORDER: StickyTaskViewFilter[] = [
 const TASK_SORT_LABELS: Record<StickyTaskSortMode, string> = {
   custom: "Custom",
   due: "Due date",
+  added: "Date added",
 };
 
 const DEFAULT_PLATE_GROUP_ORDER = ["UTD", "Career", "Skills", "$$$", "OS"];
@@ -325,6 +335,7 @@ const PLATE_VISIBLE_LIMITS: Record<string, number> = {
 const TASK_SORT_ACCESSIBLE_LABELS: Record<StickyTaskSortMode, string> = {
   custom: "Custom order",
   due: "Due date",
+  added: "Date added",
 };
 
 function normalizeWorkspacePreferences(data: StickyWorkspaceData): StickyWorkspaceData {
@@ -417,6 +428,11 @@ function nextCompletedSortOrder(values: Array<{ completedSortOrder: number | nul
 
 function bySortOrder<T extends { sortOrder: number; createdAt: string }>(a: T, b: T) {
   return a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt);
+}
+
+/** Date added order: the most recently captured item first, ties by saved order. */
+function byAddedDesc<T extends { sortOrder: number; createdAt: string }>(a: T, b: T) {
+  return b.createdAt.localeCompare(a.createdAt) || bySortOrder(a, b);
 }
 
 function trapDialogFocus(event: React.KeyboardEvent<HTMLElement>) {
@@ -1200,7 +1216,16 @@ function saveStatus(saveState: SaveState, mode: AppMode, demoReady: boolean) {
   return { tone: "clean", label: "Connected", shortLabel: "Live" };
 }
 
-export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunchIntent }: StickyWorkspaceProps) {
+export function StickyWorkspace({
+  initialData,
+  mode,
+  systemMessage,
+  initialLaunchIntent,
+  initialViewMode,
+  initialOverviewOpen,
+  initialCalendarView,
+  initialCalendarContent,
+}: StickyWorkspaceProps) {
   const [workspace, setWorkspaceState] = useState(() =>
     normalizeWorkspaceForInitialLoad(initialData, initialLaunchIntent),
   );
@@ -1218,16 +1243,20 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   const [commandIndex, setCommandIndex] = useState(0);
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchResultIndex, setSearchResultIndex] = useState(-1);
-  const [viewMode, setViewModeState] = useState<"board" | "calendar">("board");
+  const [viewMode, setViewModeState] = useState<"board" | "calendar">(initialViewMode ?? "board");
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [pulseOpen, setPulseOpen] = useState(false);
-  const [overviewOpen, setOverviewOpenState] = useState(false);
+  const [overviewOpen, setOverviewOpenState] = useState(initialOverviewOpen ?? false);
+  // True only for a deck restored by the server on reload; cleared once it closes
+  // so later openings get their normal entrance.
+  const deckRestoredRef = useRef(Boolean(initialOverviewOpen));
   const setViewMode = useCallback((next: "board" | "calendar") => {
     setViewModeState(next);
     saveWorkspaceView(next, false);
   }, []);
   const setOverviewOpen = useCallback((next: boolean) => {
+    if (!next) deckRestoredRef.current = false;
     setOverviewOpenState(next);
     saveWorkspaceView(viewMode, next);
   }, [viewMode]);
@@ -1243,6 +1272,17 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       // Missing or invalid preferences fall back to the task board.
     }
   }, []);
+
+  // Keep the server-readable cookie in step with whatever view is showing, so
+  // the very next reload renders that view on first paint (no board flash).
+  useEffect(() => {
+    try {
+      document.cookie = `sticky.view=${viewMode}; path=/; max-age=31536000; samesite=lax`;
+      document.cookie = `sticky.deck=${overviewOpen ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
+    } catch {
+      // Cookies disabled: the localStorage fallback still restores the view after mount.
+    }
+  }, [viewMode, overviewOpen]);
   const [accentHue, setAccentHue] = useState(DEFAULT_ACCENT_HUE);
   const [captureExpanded, setCaptureExpanded] = useState(false);
   const [viewport, setViewport] = useState({ width: 1920, height: 1080, pixelRatio: 1 });
@@ -1939,6 +1979,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   const activeTasks = useMemo(() => {
     const todayKey = localDateKey();
     const filtered = activeListTasks.filter(task => taskMatchesView(task, subtasksByTask.get(task.id) ?? [], recurrenceByTask.get(task.id)?.frequency ?? null, taskViewFilter, todayKey));
+    if (taskSortMode === "added") return filtered.slice().sort(byAddedDesc);
     return taskSortMode === "due" ? filtered.slice().sort((a, b) => compareTasksForView(a, b, subtasksByTask, taskViewFilter, todayKey)) : filtered;
   }, [activeListTasks, recurrenceByTask, subtasksByTask, taskSortMode, taskViewFilter]);
 
@@ -2048,6 +2089,10 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
     function visibleTasksForList(tasks: StickyTask[]) {
       const filteredTasks = tasks.filter(task => matchingTaskItems(task, subtasksByTask.get(task.id) ?? [], recurrenceByTask.get(task.id)?.frequency ?? null, taskViewFilter, todayKey, searchQuery).length > 0);
+
+      if (taskSortMode === "added") {
+        return filteredTasks.slice().sort(byAddedDesc);
+      }
 
       if (taskSortMode === "due") {
         return filteredTasks
@@ -2400,6 +2445,14 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       detail: taskSortMode === "due" ? "Already active" : "Earliest scheduled tasks first",
       keywords: "sort order due date schedule time",
       run: () => setTaskSortMode("due"),
+    },
+    {
+      id: "sort-added",
+      kind: "action",
+      title: `Sort by ${TASK_SORT_LABELS.added.toLowerCase()}`,
+      detail: taskSortMode === "added" ? "Already active" : "Newest captured tasks first",
+      keywords: "sort order date added created newest recent",
+      run: () => setTaskSortMode("added"),
     },
     ...unarchivedLists.map((list) => {
       const stats = listStats.get(list.id) ?? { active: 0, completed: 0 };
@@ -3535,9 +3588,13 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
       .sort((first, second) =>
         taskSortMode === "due"
           ? compareTasksForView(first, second, subtasksByTask, taskViewFilter, todayKey)
-          : bySortOrder(first, second),
+          : taskSortMode === "added"
+            ? byAddedDesc(first, second)
+            : bySortOrder(first, second),
       );
-    const movableTasks = taskSortMode === "due"
+    const movableTasks = taskSortMode === "added"
+      ? visibleTasks.filter((item) => item.id === task.id)
+      : taskSortMode === "due"
       ? visibleTasks.filter((item) =>
           tasksShareDueGroupForView(
             item,
@@ -4191,8 +4248,10 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
 
     const visibleSubtasks = (viewMode === "calendar" || taskViewFilter === "all" ? ordered : ordered.filter(
       subtask => itemMatchesView(subtask, null, taskViewFilter, localDateKey(), true),
-    )    ).sort(taskSortMode === "due" ? compareSubtasksByDueSchedule : bySortOrder);
-    const movableSubtasks = taskSortMode === "due"
+    )    ).sort(taskSortMode === "due" ? compareSubtasksByDueSchedule : taskSortMode === "added" ? byAddedDesc : bySortOrder);
+    const movableSubtasks = taskSortMode === "added"
+      ? visibleSubtasks.filter((subtask) => subtask.id === subtaskId)
+      : taskSortMode === "due"
       ? visibleSubtasks.filter(
           (subtask) => subtaskDueGroupKey(subtask) === subtaskDueGroupKey(movingSubtask),
         )
@@ -4448,6 +4507,16 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     const type = active.data.current?.type as "list" | "board-list" | "task" | "subtask" | undefined;
+
+    if ((type === "task" || type === "subtask") && taskSortMode === "added") {
+      if (Math.hypot(event.delta.x, event.delta.y) >= 8) {
+        pushToast({
+          title: "Date added order is fixed",
+          body: "Newest items stay on top. Switch to Custom to arrange them yourself.",
+        });
+      }
+      return;
+    }
 
     if (!over) {
       if (
@@ -5159,8 +5228,24 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
                 <CalendarDays size={15} />
                 {TASK_SORT_LABELS.due}
               </button>
+              <button
+                type="button"
+                className={taskSortMode === "added" ? "active" : ""}
+                onClick={() => setTaskSortMode("added")}
+                aria-pressed={taskSortMode === "added"}
+                aria-label={taskSortButtonLabel("added", taskSortMode === "added")}
+              >
+                <History size={15} />
+                {TASK_SORT_LABELS.added}
+              </button>
             </div>
-            <span>{taskSortMode === "due" ? "Earliest first; drag matching times" : "Drag into any order"}</span>
+            <span>
+              {taskSortMode === "due"
+                ? "Earliest first; drag matching times"
+                : taskSortMode === "added"
+                  ? "Newest first, by the moment you added them"
+                  : "Drag into any order"}
+            </span>
           </div>
 
           {reorderLocked ? (
@@ -5172,6 +5257,11 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
             <div className="filter-banner">
               <CalendarDays size={15} />
               Due dates stay chronological. Drag tasks with the same due date and time to order that group.
+            </div>
+          ) : taskSortMode === "added" ? (
+            <div className="filter-banner">
+              <History size={15} />
+              Sorted by the moment each task was added, newest first. Switch to Custom to reorder.
             </div>
           ) : null}
 
@@ -5201,6 +5291,8 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
           {viewMode === "calendar" ? (
             <StickyCalendar
               mode={mode}
+              initialViewMode={initialCalendarView}
+              initialContent={initialCalendarContent}
               tasks={calendarTasks}
               lists={unarchivedLists}
               recurringTaskIds={recurringTaskIds}
@@ -5390,6 +5482,7 @@ export function StickyWorkspace({ initialData, mode, systemMessage, initialLaunc
         <AnimatePresence>
           {overviewOpen ? (
             <StickyOverview
+              instant={deckRestoredRef.current}
               lists={unarchivedLists}
               tasks={workspace.tasks}
               subtasks={workspace.subtasks}
@@ -6536,7 +6629,9 @@ function TaskDetailsPanel({
   );
   const visibleSubtasks = taskSortMode === "due"
     ? filteredSubtasks.slice().sort(compareSubtasksByDueSchedule)
-    : filteredSubtasks;
+    : taskSortMode === "added"
+      ? filteredSubtasks.slice().sort(byAddedDesc)
+      : filteredSubtasks;
   const sortableSubtaskGroups = taskSortMode === "due"
     ? visibleSubtasks.reduce<StickySubtask[][]>((groups, subtask) => {
         const currentGroup = groups.at(-1);

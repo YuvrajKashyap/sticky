@@ -33,6 +33,8 @@ type StickyOverviewProps = {
   onSelectList: (listId: string) => void;
   onShowFilter: (filter: StickyTaskViewFilter) => void;
   onOpenCalendar: () => void;
+  /** Restored on reload: mount opaque with no fade so the board never shows through. */
+  instant?: boolean;
 };
 
 type ReactorSegment = {
@@ -171,6 +173,7 @@ export function StickyOverview({
   onSelectList,
   onShowFilter,
   onOpenCalendar,
+  instant = false,
 }: StickyOverviewProps) {
   const reduceMotion = useReducedMotion();
   const overlayRef = useRef<HTMLDivElement | null>(null);
@@ -402,7 +405,7 @@ export function StickyOverview({
       role="dialog"
       aria-modal="true"
       aria-label="Command deck overview"
-      initial={{ opacity: 0 }}
+      initial={instant ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, transition: { duration: 0.18 } }}
       transition={{ duration: 0.24 }}

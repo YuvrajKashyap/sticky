@@ -29,7 +29,7 @@ export type StickyTaskViewFilter =
   | "recurring"
   | "subtasks";
 
-export type StickyTaskSortMode = "custom" | "due";
+export type StickyTaskSortMode = "custom" | "due" | "added";
 
 export type StickyThemeMode = "light" | "dark";
 
