@@ -730,6 +730,28 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
         transition: { duration: 0.55, ease: EASE },
       };
 
+  // Keyboard: t today · arrows move · m/w/d views · n new event.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.metaKey || event.ctrlKey || event.altKey || eventDraft) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable)) return;
+      switch (event.key) {
+        case "t": showToday(); break;
+        case "ArrowLeft": shiftRange(-1); break;
+        case "ArrowRight": shiftRange(1); break;
+        case "m": changeView("month"); break;
+        case "w": changeView("week"); break;
+        case "d": changeView("day"); break;
+        case "n": createEventFor(); break;
+        default: return;
+      }
+      event.preventDefault();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
   /** Persistent cursor spotlight on any [data-spot] object under the pointer. */
   function handleSpotlight(event: React.PointerEvent<HTMLElement>) {
     if (event.pointerType !== "mouse") return;
@@ -1007,19 +1029,30 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
               onDayHeader={viewMode === "week" ? openDay : undefined}
             />
             {viewMode === "day" ? (
-              <CalendarAgenda
-                date={selectedDate}
-                content={content}
-                tasks={selectedTasks}
-                occurrences={selectedOccurrences}
-                listById={listById}
-                recurringTaskIds={recurringTaskIds}
-                nowMinutes={isToday(selectedDate) ? nowMinutes : null}
-                onTaskSelect={onTaskSelect}
-                onEventSelect={editEvent}
-                onCreateEvent={() => createEventFor(selectedDate)}
-                rich
-              />
+              <div className="cal-day-side">
+                <MiniMonth
+                  selected={selectedDate}
+                  occurrencesByDate={occurrencesByDate}
+                  tasksByDate={tasksByDate}
+                  onSelect={(day) => {
+                    setSelectedDate(day);
+                    setAnchorDate(day);
+                  }}
+                />
+                <CalendarAgenda
+                  date={selectedDate}
+                  content={content}
+                  tasks={selectedTasks}
+                  occurrences={selectedOccurrences}
+                  listById={listById}
+                  recurringTaskIds={recurringTaskIds}
+                  nowMinutes={isToday(selectedDate) ? nowMinutes : null}
+                  onTaskSelect={onTaskSelect}
+                  onEventSelect={editEvent}
+                  onCreateEvent={() => createEventFor(selectedDate)}
+                  rich
+                />
+              </div>
             ) : null}
           </div>
         ) : null}
@@ -1077,6 +1110,8 @@ function TimeGrid({
   const reduceMotion = useReducedMotion();
   const todayKey = dayKey(new Date());
   const hours = Array.from({ length: 24 }, (_, hour) => hour);
+  // A 30-minute ghost slot follows the pointer across empty lane space.
+  const [ghost, setGhost] = useState<{ key: string; minutes: number } | null>(null);
   const columns = days.map((day) => {
     const key = dayKey(day);
     const occurrences = occurrencesByDate.get(key) ?? [];
@@ -1097,6 +1132,17 @@ function TimeGrid({
     const bounds = event.currentTarget.getBoundingClientRect();
     const minutes = Math.floor(((event.clientY - bounds.top) / HOUR_PX) * 60);
     onCreateAt(day, Math.max(0, Math.min(23 * 60, Math.round(minutes / 15) * 15)));
+  }
+
+  function handleLaneHover(key: string, event: React.PointerEvent<HTMLDivElement>) {
+    if (event.pointerType !== "mouse") return;
+    if (event.target !== event.currentTarget) {
+      setGhost((current) => (current ? null : current));
+      return;
+    }
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const minutes = Math.max(0, Math.min(23 * 60 + 30, Math.floor(((event.clientY - bounds.top) / HOUR_PX) * 60 / 15) * 15));
+    setGhost((current) => (current && current.key === key && current.minutes === minutes ? current : { key, minutes }));
   }
 
   return (
@@ -1189,8 +1235,15 @@ function TimeGrid({
               className={`cal-timegrid-lane${key === todayKey ? " today" : ""}${day.getDay() === 0 || day.getDay() === 6 ? " weekend" : ""}`}
               data-key={`lane-${key}`}
               onClick={(event) => handleLaneClick(day, event)}
+              onPointerMove={(event) => handleLaneHover(key, event)}
+              onPointerLeave={() => setGhost(null)}
               role="presentation"
             >
+              {ghost && ghost.key === key ? (
+                <span className="cal-ghost" style={{ top: (ghost.minutes / 60) * HOUR_PX, "--hour-px": `${HOUR_PX}px` } as React.CSSProperties} aria-hidden="true">
+                  <b>{clockLabel(ghost.minutes)}</b>
+                </span>
+              ) : null}
               {hours.map((hour) => (
                 <i key={hour} className="cal-timegrid-rule" style={{ top: hour * HOUR_PX }} aria-hidden="true" />
               ))}
@@ -1258,11 +1311,78 @@ function TimeGrid({
               {key === todayKey && nowMinutes !== null ? (
                 <span className="cal-now" style={{ top: (nowMinutes / 60) * HOUR_PX }} aria-hidden="true">
                   <i />
+                  <b>{clockLabel(nowMinutes)}</b>
                 </span>
               ) : null}
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------------
+   Mini month (day view navigator)
+   ------------------------------------------------------------------------ */
+
+function MiniMonth({
+  selected,
+  occurrencesByDate,
+  tasksByDate,
+  onSelect,
+}: {
+  selected: Date;
+  occurrencesByDate: Map<string, Occurrence[]>;
+  tasksByDate: Map<string, StickyTask[]>;
+  onSelect: (day: Date) => void;
+}) {
+  const [cursor, setCursor] = useState(() => startOfMonth(selected));
+  const shown = isSameMonth(cursor, selected) ? cursor : startOfMonth(selected);
+  const gridStart = startOfWeek(shown);
+  const days = eachDayOfInterval({ start: gridStart, end: addDays(gridStart, 41) });
+
+  return (
+    <div className="cal-mini" aria-label="Mini month">
+      <div className="cal-mini-head">
+        <strong>{format(shown, "MMMM")}</strong>
+        <span>
+          <button type="button" aria-label="Previous month" onClick={() => setCursor(addMonths(shown, -1))}>
+            <ChevronLeft size={14} />
+          </button>
+          <button type="button" aria-label="Next month" onClick={() => setCursor(addMonths(shown, 1))}>
+            <ChevronRight size={14} />
+          </button>
+        </span>
+      </div>
+      <div className="cal-mini-grid">
+        {WEEKDAYS.map((day) => (
+          <i key={day}>{day[0]}</i>
+        ))}
+        {days.map((day) => {
+          const key = dayKey(day);
+          const eventColors = Array.from(new Set((occurrencesByDate.get(key) ?? []).map((item) => item.event.color ?? "azure"))).slice(0, 3);
+          const hasTasks = (tasksByDate.get(key) ?? []).length > 0;
+          return (
+            <button
+              key={key}
+              type="button"
+              className={`cal-mini-day${isSameMonth(day, shown) ? "" : " muted"}${isToday(day) ? " today" : ""}${isSameDay(day, selected) ? " selected" : ""}`}
+              aria-label={format(day, "EEEE, MMMM d")}
+              onClick={() => onSelect(day)}
+            >
+              {format(day, "d")}
+              {eventColors.length || hasTasks ? (
+                <span className="cal-mini-dots" aria-hidden="true">
+                  {eventColors.map((color) => (
+                    <i key={color} style={{ "--dot": `var(--${color}-edge)` } as React.CSSProperties} />
+                  ))}
+                  {hasTasks ? <i /> : null}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
