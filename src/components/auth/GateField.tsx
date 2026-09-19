@@ -98,7 +98,6 @@ export function GateField() {
 
     function tick(now: number) {
       if (!running) return;
-      pointerBounds = null;
       const dt = Math.min(Math.max(now - lastTime, 1), 40);
       lastTime = now;
       const step = dt / 16.67;
@@ -183,7 +182,7 @@ export function GateField() {
 
     function onPointerMove(event: PointerEvent) {
       // Every input still contributes to particle velocity, but a burst of
-      // mouse events shares one geometry read until the next frame or scroll.
+      // mouse events shares geometry until the canvas resizes or scrolls.
       const rect = pointerBounds ?? (pointerBounds = canvas!.getBoundingClientRect());
       pointer.x = event.clientX - rect.left;
       pointer.y = event.clientY - rect.top;
@@ -246,6 +245,8 @@ export function GateField() {
       window.addEventListener("pointerdown", onPointerMove, { passive: true });
       window.addEventListener("scroll", invalidatePointerBounds, { passive: true, capture: true });
       window.addEventListener("resize", invalidatePointerBounds, { passive: true });
+      window.visualViewport?.addEventListener("resize", invalidatePointerBounds, { passive: true });
+      window.visualViewport?.addEventListener("scroll", invalidatePointerBounds, { passive: true });
       document.addEventListener("pointerleave", onPointerLeave);
       window.addEventListener("blur", onPointerLeave);
       document.addEventListener("visibilitychange", onVisibility);
@@ -260,6 +261,8 @@ export function GateField() {
       window.removeEventListener("pointerdown", onPointerMove);
       window.removeEventListener("scroll", invalidatePointerBounds, true);
       window.removeEventListener("resize", invalidatePointerBounds);
+      window.visualViewport?.removeEventListener("resize", invalidatePointerBounds);
+      window.visualViewport?.removeEventListener("scroll", invalidatePointerBounds);
       document.removeEventListener("pointerleave", onPointerLeave);
       window.removeEventListener("blur", onPointerLeave);
       document.removeEventListener("visibilitychange", onVisibility);

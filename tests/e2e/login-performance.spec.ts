@@ -39,6 +39,11 @@ test("login spotlight preserves its gradient without inheriting through form con
   await page.addStyleTag({ content: ".gate-door-google::after { background: radial-gradient(220px circle at 25% 75%, rgba(var(--accent-rgb), 0.14), transparent 70%) !important; }" });
   const original = await door.screenshot({ animations: "disabled" });
   expect(original.equals(optimized), "spotlight pixels must match the original gradient").toBe(true);
+  const card = page.locator(".gate-card");
+  const isolatedCard = await card.screenshot({ animations: "disabled" });
+  await page.addStyleTag({ content: ".gate-card { contain: none !important; }" });
+  const originalCard = await card.screenshot({ animations: "disabled" });
+  expect(originalCard.equals(isolatedCard), "layout isolation must preserve the card pixels").toBe(true);
 });
 
 test("login text animation survives form edits and motion preference changes", async ({ page }) => {
@@ -49,7 +54,7 @@ test("login text animation survives form edits and motion preference changes", a
   await expect(text).toHaveText("Your lists are right where you left them.");
   await page.locator("input[type=email]").fill("updated@example.com");
   await expect(text).toHaveText("Your lists are right where you left them.");
-  const canvasReads = await page.locator(".gate-canvas").evaluate(canvas => {
+  const canvasReads = await page.locator(".gate-canvas").evaluate(async canvas => {
     let reads = 0;
     const originalRead = canvas.getBoundingClientRect.bind(canvas);
     canvas.getBoundingClientRect = () => { reads++; return originalRead(); };
@@ -57,12 +62,26 @@ test("login text animation survives form edits and motion preference changes", a
       window.dispatchEvent(new PointerEvent("pointermove", { clientX: 20 + i, clientY: 30 }));
     }
     const burst = reads;
+    for (let i = 0; i < 5; i++) {
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      window.dispatchEvent(new PointerEvent("pointermove", { clientX: 120 + i, clientY: 30 }));
+    }
+    const acrossFrames = reads;
     window.dispatchEvent(new Event("scroll"));
     window.dispatchEvent(new PointerEvent("pointermove", { clientX: 120, clientY: 30 }));
-    return { burst, afterScroll: reads };
+    const afterScroll = reads;
+    window.dispatchEvent(new Event("resize"));
+    window.dispatchEvent(new PointerEvent("pointermove", { clientX: 120, clientY: 30 }));
+    const afterResize = reads;
+    window.visualViewport?.dispatchEvent(new Event("scroll"));
+    window.dispatchEvent(new PointerEvent("pointermove", { clientX: 120, clientY: 30 }));
+    return { burst, acrossFrames, afterScroll, afterResize, afterViewport: reads, hasViewport: !!window.visualViewport };
   });
   expect(canvasReads.burst).toBeLessThanOrEqual(1);
+  expect(canvasReads.acrossFrames).toBe(canvasReads.burst);
   expect(canvasReads.afterScroll).toBe(canvasReads.burst + 1);
+  expect(canvasReads.afterResize).toBe(canvasReads.afterScroll + 1);
+  expect(canvasReads.afterViewport).toBe(canvasReads.afterResize + Number(canvasReads.hasViewport));
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(text).toHaveText("Your lists are right where you left them.");
   await page.emulateMedia({ reducedMotion: "no-preference" });

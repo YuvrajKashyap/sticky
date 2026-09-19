@@ -8428,6 +8428,8 @@ button.cal-timegrid-day:hover {
 /* Gate card: a chamfered glass keycard ------------------------------------ */
 
 .gate-card {
+  /* Isolate layout work without clipping the existing halo or caching moving bounds. */
+  contain: layout;
   --chamfer: 22px;
   --card-clip: polygon(
     0 0,
