@@ -79,11 +79,11 @@ export function GateField() {
       seed();
     }
 
-    function field(x: number, y: number, t: number) {
+    function field(x: number, y: number, phaseX: number, phaseY: number, phaseDiagonal: number) {
       return (
-        Math.sin(x * 0.0021 + t * 0.00035) * 1.6 +
-        Math.cos(y * 0.0019 - t * 0.00042) * 1.6 +
-        Math.sin((x + y) * 0.0009 + t * 0.0002)
+        Math.sin(x * 0.0021 + phaseX) * 1.6 +
+        Math.cos(y * 0.0019 - phaseY) * 1.6 +
+        Math.sin((x + y) * 0.0009 + phaseDiagonal)
       );
     }
 
@@ -113,6 +113,10 @@ export function GateField() {
       const cx = width / 2;
       const cy = height / 2;
       const speedBoost = 1 + energy * 1.6;
+      // Time is shared by every particle in this frame.
+      const phaseX = now * 0.00035;
+      const phaseY = now * 0.00042;
+      const phaseDiagonal = now * 0.0002;
 
       for (let i = 0; i < count; i += 1) {
         let x = xs[i];
@@ -120,7 +124,7 @@ export function GateField() {
         let vx = vxs[i];
         let vy = vys[i];
 
-        const angle = field(x, y, now);
+        const angle = field(x, y, phaseX, phaseY, phaseDiagonal);
         vx += Math.cos(angle) * 0.055 * step;
         vy += Math.sin(angle) * 0.055 * step;
 
