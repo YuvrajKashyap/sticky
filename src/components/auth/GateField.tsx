@@ -79,6 +79,8 @@ export function GateField() {
       ctx!.fillStyle = "#05070f";
       ctx!.fillRect(0, 0, width, height);
       seed();
+      // Animated frames use the same trail fill; stroke colors do not change it.
+      ctx!.fillStyle = "rgba(5, 7, 15, 0.16)";
     }
 
     function field(x: number, y: number, phaseX: number, phaseY: number, phaseDiagonal: number) {
@@ -106,7 +108,6 @@ export function GateField() {
 
       // Trails: fade the previous frame instead of clearing it.
       ctx!.globalCompositeOperation = "source-over";
-      ctx!.fillStyle = "rgba(5, 7, 15, 0.16)";
       ctx!.fillRect(0, 0, width, height);
       ctx!.globalCompositeOperation = "lighter";
 
