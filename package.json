@@ -28,6 +28,7 @@
     "verify": "npm run typecheck && npm run lint && npm run test:unit && npm run security:check && npm run schema:check && npm run build && npm run audit:moderate && npm run test:e2e"
   },
   "overrides": {
+    "devalue": "5.9.2",
     "filelist": "2.0.2",
     "gaxios": "7.3.0",
     "js-yaml": "4.3.2",
