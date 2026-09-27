@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 
 test("interface size drag stays controlled as the page resizes", async ({ page, isMobile }) => {
+  // Rendering the full board at 400% can exceed the default budget on slower GPUs.
+  test.setTimeout(60_000);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   await page.getByLabel("Open appearance settings").click();
@@ -17,7 +19,9 @@ test("interface size drag stays controlled as the page resizes", async ({ page, 
   const beforeTools = (await tools.boundingBox())!;
   const beforePanel = (await panel.boundingBox())!;
   const box = (await slider.boundingBox())!;
-  const x = box.x + box.width * (100 - min) / (max - min);
+  // Relative dragging can start anywhere on the track. Leave room for the
+  // 240px gesture inside the mobile viewport, where pointer capture can end.
+  const x = box.x + 8;
   await page.mouse.move(x, box.y + box.height / 2);
   await page.mouse.down();
   await page.mouse.move(x + 20, box.y + box.height / 2, { steps: 10 });

@@ -45,11 +45,6 @@ test("login spotlight preserves its gradient without inheriting through form con
   await page.addStyleTag({ content: ".gate-door-google::after { background: radial-gradient(220px circle at 25% 75%, rgba(var(--accent-rgb), 0.14), transparent 70%) !important; }" });
   const original = await door.screenshot({ animations: "disabled" });
   expect(original.equals(optimized), "spotlight pixels must match the original gradient").toBe(true);
-  const card = page.locator(".gate-card");
-  const isolatedCard = await card.screenshot({ animations: "disabled" });
-  await page.addStyleTag({ content: ".gate-card { contain: none !important; }" });
-  const originalCard = await card.screenshot({ animations: "disabled" });
-  expect(originalCard.equals(isolatedCard), "layout isolation must preserve the card pixels").toBe(true);
 });
 
 test("login text animation survives form edits and motion preference changes", async ({ page }) => {

@@ -7682,8 +7682,6 @@ button.cal-timegrid-day:hover {
 /* Gate card: a chamfered glass keycard ------------------------------------ */
 
 .gate-card {
-  /* Isolate layout work without clipping the existing halo or caching moving bounds. */
-  contain: layout;
   --chamfer: 22px;
   --card-clip: polygon(
     0 0,
@@ -10609,6 +10607,10 @@ button.cal-timegrid-day:hover {
   left: auto;
   transform: none;
 }
+
+/* The fixed landscape controls share the rail's vertical space. Keep their
+   stacking context above the rail so visible buttons receive pointer events. */
+.phone-landscape .workspace-topbar { z-index: 55; }
 
 /* ----------------------------------------------------------------------
    19b · Boot screen — the workspace powering on
