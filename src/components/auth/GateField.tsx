@@ -74,6 +74,8 @@ export function GateField() {
       canvas!.width = Math.round(width * dpr);
       canvas!.height = Math.round(height * dpr);
       ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // Canvas dimensions reset drawing state; restore this once per resize.
+      ctx!.lineCap = "round";
       ctx!.fillStyle = "#05070f";
       ctx!.fillRect(0, 0, width, height);
       seed();
@@ -172,7 +174,6 @@ export function GateField() {
 
       const glow = 0.62 + energy * 0.35;
       ctx!.lineWidth = 1.5 + energy * 0.7;
-      ctx!.lineCap = "round";
       ctx!.strokeStyle = `rgba(94, 224, 255, ${Math.min(glow, 0.95)})`;
       ctx!.stroke(cyan);
       ctx!.strokeStyle = `rgba(143, 123, 255, ${Math.min(glow * 0.9, 0.9)})`;
