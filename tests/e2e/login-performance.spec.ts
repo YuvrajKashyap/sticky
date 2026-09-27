@@ -8,6 +8,12 @@ test("login spotlight preserves its gradient without inheriting through form con
   await expect(page.locator(".gate-decrypt")).toHaveText("Your lists are right where you left them.");
   await page.evaluate(() => document.fonts.ready);
   await expect(page.locator(".gate-card")).toHaveCSS("filter", "blur(0px)");
+  // Motion's JS-driven entrance can outlive the rounded blur value. Wait for
+  // its actual scale and translation before sampling geometry or pixels.
+  await expect.poll(() => page.locator(".gate-card").evaluate(element => {
+    const transform = new DOMMatrixReadOnly(getComputedStyle(element).transform);
+    return [transform.m11, transform.m22, transform.m41, transform.m42];
+  })).toEqual([1, 1, 0, 0]);
   const result = await door.evaluate(async element => {
     const rect = element.getBoundingClientRect();
     let reads = 0;
