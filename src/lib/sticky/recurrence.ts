@@ -1,6 +1,9 @@
 import { monthlyOccurrence } from "@sticky/domain";
 import type { StickyRecurrenceRule, StickyTask } from "@/types/sticky";
 
+// A single entry keeps the common workspace timezone fast without unbounded caching.
+let dateKeyFormatter: { timeZone: string; formatter: Intl.DateTimeFormat } | undefined;
+
 export function localDateKey(date = new Date()) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 10);
@@ -12,12 +15,18 @@ export function zonedDateKey(timeZone: string | null | undefined, date = new Dat
   }
 
   try {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      day: "2-digit",
-      month: "2-digit",
-      timeZone,
-      year: "numeric",
-    }).formatToParts(date);
+    if (dateKeyFormatter?.timeZone !== timeZone) {
+      dateKeyFormatter = {
+        timeZone,
+        formatter: new Intl.DateTimeFormat("en-US", {
+          day: "2-digit",
+          month: "2-digit",
+          timeZone,
+          year: "numeric",
+        }),
+      };
+    }
+    const parts = dateKeyFormatter.formatter.formatToParts(date);
     const values = new Map(parts.map((part) => [part.type, part.value]));
     const year = values.get("year");
     const month = values.get("month");
