@@ -30,7 +30,8 @@ export function tasksShareDueGroup(
   first: Pick<OrderableTask, "dueDate" | "dueTime">,
   second: Pick<OrderableTask, "dueDate" | "dueTime">,
 ) {
-  return taskDueGroupKey(first) === taskDueGroupKey(second);
+  return (first.dueDate ?? "undated") === (second.dueDate ?? "undated") &&
+    normalizedDueTime(first) === normalizedDueTime(second);
 }
 
 export function compareTasksByDueSchedule<T extends OrderableTask>(first: T, second: T) {
