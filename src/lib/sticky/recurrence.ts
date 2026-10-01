@@ -27,10 +27,14 @@ export function zonedDateKey(timeZone: string | null | undefined, date = new Dat
       };
     }
     const parts = dateKeyFormatter.formatter.formatToParts(date);
-    const values = new Map(parts.map((part) => [part.type, part.value]));
-    const year = values.get("year");
-    const month = values.get("month");
-    const day = values.get("day");
+    let year: string | undefined;
+    let month: string | undefined;
+    let day: string | undefined;
+    for (const part of parts) {
+      if (part.type === "year") year = part.value;
+      else if (part.type === "month") month = part.value;
+      else if (part.type === "day") day = part.value;
+    }
 
     if (year && month && day) {
       return `${year}-${month}-${day}`;
