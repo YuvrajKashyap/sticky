@@ -28,6 +28,7 @@ import { errorResponse } from "./errors";
 import { idempotent } from "./idempotency";
 import { agentRateLimit, authenticate, enforceOrigin, requestContext, type ApiVariables } from "./middleware";
 import { createMcpApp } from "./mcp";
+import { createOAuthApp } from "./oauth-routes";
 import { createCredentialToken, getRuntime } from "./runtime";
 import { dailyAgendaSettingsSchema, getDailyAgendaSettings, sendDailyAgendaTest, updateDailyAgendaSettings } from "./services/daily-agenda-settings";
 import {
@@ -156,6 +157,7 @@ const app = new Hono<Env>();
   app.use("*", secureHeaders());
   app.use("*", requestContext);
   app.onError((error, c) => errorResponse(c, error));
+  app.route("/api/oauth", createOAuthApp());
 
   app.get("/api/health", (c) => c.json({ data: { status: "ok", service: "sticky-api", version: "1.0.0", time: new Date().toISOString() }, meta: { requestId: c.get("requestId") } }));
 

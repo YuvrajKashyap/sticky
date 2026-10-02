@@ -44,6 +44,11 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
   const [codexConnection, setCodexConnection] = useState<McpConnection | null>(null);
   const [littlebirdConnection, setLittlebirdConnection] = useState<McpConnection | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const disconnectChatGPT = useMutation({
+    mutationFn: (id: string) => client!.request(`/api/v1/credentials/${id}`, { method: "DELETE", body: "{}" }),
+    onSuccess: () => { setStatusMessage("ChatGPT access revoked, including refresh access."); void queryClient.invalidateQueries({ queryKey: ["credentials"] }); },
+    onError: (error) => setStatusMessage(error.message),
+  });
   const [googleSyncStep, setGoogleSyncStep] = useState<0 | 1 | 2>(0);
   const [dailyAgendaDraft, setDailyAgendaDraft] = useState<{ enabled: boolean; time: string; timezone: string } | null>(null);
   const timezoneOptions = useMemo(() => {
@@ -217,6 +222,19 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
           <div><span>Settings</span><h3>Connections</h3></div>
           <button type="button" className="icon-chip" onClick={onClose} aria-label="Close connections"><X size={18} /></button>
         </header>
+
+        <div className="connection-row">
+          <span className="connection-icon codex"><Bot size={20} /></span>
+          <div className="connection-copy"><strong>ChatGPT / dot</strong><small>Connect through ChatGPT Plugins using OAuth. No key to copy.</small></div>
+          <a className="connection-secondary" href="https://chatgpt.com/plugins" target="_blank" rel="noopener noreferrer">Set up</a>
+        </div>
+        <div className="connection-inline-form"><code>https://sticky.yuvrajkashyap.com/api/mcp</code></div>
+        {credentials.data?.credentials.filter(item => item.provider === "chatgpt_oauth" && !item.revoked_at).map(item => (
+          <div className="connection-row" key={item.id}>
+            <div className="connection-copy"><strong>{item.name}</strong><small>{item.last_used_at ? "OAuth access used" : "Authorized · awaiting first use"}</small></div>
+            <button className="connection-secondary" disabled={disconnectChatGPT.isPending} onClick={() => disconnectChatGPT.mutate(item.id)}>Disconnect ChatGPT</button>
+          </div>
+        ))}
 
         <div className="connection-row">
           <span className="connection-icon poke"><Send size={20} /></span>

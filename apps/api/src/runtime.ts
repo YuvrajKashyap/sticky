@@ -82,6 +82,11 @@ async function authenticateCredential(token: string, request: Request, requestId
   if (!data || data.token_hash !== hashCredential(secret) || (data.expires_at && new Date(data.expires_at) <= new Date())) {
     throw new StickyDomainError("unauthorized", "Invalid or revoked Sticky API credential.", 401);
   }
+  if (data.provider === "chatgpt_oauth") {
+    const { data: profile, error: profileError } = await db.from("users").select("id")
+      .eq("id", data.user_id).eq("is_active", true).maybeSingle();
+    if (profileError || !profile) throw new StickyDomainError("unauthorized", "This Sticky account is no longer active.", 401);
+  }
   const pokeUserId = request.headers.get("x-poke-user-id")?.trim() || null;
   if (data.provider === "poke") {
     if (!pokeUserId) {

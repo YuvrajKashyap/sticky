@@ -8,6 +8,7 @@ import { start } from "workflow/api";
 import { z } from "zod";
 import { idempotent } from "./idempotency";
 import { authenticateRequest, getRuntime } from "./runtime";
+import { oauthChallenge } from "./oauth";
 import {
   createGoogleCalendarEvent,
   createGoogleTask,
@@ -768,6 +769,7 @@ export function createMcpApp() {
   app.onError((error, c) => {
     console.error("Sticky MCP request failed", { error });
     const status = error instanceof StickyDomainError ? error.status : 500;
+    if (status === 401) c.header("WWW-Authenticate", oauthChallenge());
     const code = status === 401 ? -32001 : status === 403 ? -32003 : -32603;
     return c.json({ jsonrpc: "2.0", error: { code, message: error instanceof Error ? error.message : "MCP request failed" }, id: null }, status as 401);
   });

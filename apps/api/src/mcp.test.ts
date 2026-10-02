@@ -31,6 +31,12 @@ function setAgentCredentialRuntime(provider: "codex" | "littlebird" | "poke" = "
 describe("Sticky MCP source isolation", () => {
   afterEach(() => setRuntimeForTests(undefined));
 
+  it("advertises OAuth discovery when no credential is supplied", async () => {
+    const response = await createMcpApp().request("http://localhost/", { method: "POST", headers: { Host: "localhost" } });
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toContain("/.well-known/oauth-protected-resource");
+  });
+
   it("gives Codex separate Sticky and live Google tool sets", async () => {
     const { credentialId, secret } = setAgentCredentialRuntime("codex");
 
