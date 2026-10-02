@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createTestOwner, testEnvironment } from "./fixtures";
+import { authenticateRequest, hashCredential } from "../../apps/api/src/runtime";
+import { requireScope } from "../../packages/domain/src/authorization";
 
 describe("OAuth transactional security", () => {
   let owner: Awaited<ReturnType<typeof createTestOwner>>;
@@ -14,7 +16,7 @@ describe("OAuth transactional security", () => {
       challenge: "challenge", expires_at: new Date(Date.now() + 300000).toISOString() });
     expect(insert.error).toBeNull();
     const args = { p_code_hash: code, p_client_id: "client", p_redirect_uri: "callback", p_resource: "resource",
-      p_challenge: "challenge", p_id: id, p_access_hash: "access", p_refresh_hash: randomUUID() };
+      p_challenge: "challenge", p_id: id, p_access_hash: hashCredential("access"), p_refresh_hash: randomUUID() };
     expect((await admin.rpc("exchange_oauth_code", { ...args, p_challenge: "wrong" })).data).toBeNull();
     const results = await Promise.all([admin.rpc("exchange_oauth_code", args), admin.rpc("exchange_oauth_code", args)]);
     expect(results.every(result => !result.error)).toBe(true);
@@ -33,7 +35,15 @@ describe("OAuth transactional security", () => {
   });
   it("blocks refresh after owner revocation and denies direct browser access", async () => {
     const { admin, anonymous } = testEnvironment(); const args = await exchange();
+    const request = new Request("https://sticky.yuvrajkashyap.com/api/mcp", { headers: { Authorization: `Bearer stk_${args.p_id}_access` } });
+    const actor = await authenticateRequest(request, randomUUID());
+    expect(actor.userId).toBe(owner.userId);
+    expect(actor.actorType).toBe("agent");
+    expect(() => requireScope(actor, "tasks:read")).not.toThrow();
+    expect(() => requireScope(actor, "tasks:write")).toThrow();
+    expect(() => requireScope(actor, "credentials:manage")).toThrow();
     await admin.from("api_credentials").update({ revoked_at: new Date().toISOString() }).eq("id", args.p_id);
+    await expect(authenticateRequest(request, randomUUID())).rejects.toThrow("revoked");
     const refreshed = await admin.rpc("rotate_oauth_token", { p_refresh_hash: args.p_refresh_hash, p_client_id: "client",
       p_resource: "resource", p_access_hash: "unused", p_next_refresh_hash: randomUUID() });
     expect(refreshed.error).toBeNull(); expect(refreshed.data).toBeNull();
