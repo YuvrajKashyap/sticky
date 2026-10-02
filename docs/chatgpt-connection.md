@@ -62,6 +62,21 @@ Release verification must additionally record the deployed SHA, actual discovere
 tools, a bounded dot read, denial with a revoked grant, and successful relinking.
 Do not test deletion against real user data merely to demonstrate permissions.
 
+### Verified live on October 2, 2026
+
+- Deployed OAuth implementation: `7605a6e6e377500e47d95054bc68db59d19503b5`.
+- The owner's ChatGPT account created a private Sticky plugin using discovered
+  CIMD settings and all six scopes; discovery exposed 22 read and 54 write tools.
+- The actual dot conversation successfully called `list_tasks` and
+  `list_calendar_events`, returning current tasks and a one-day event result.
+- After **Disconnect ChatGPT** in Sticky, dot's next fresh `list_tasks` request
+  failed with `UNAUTHORIZED`, reauthentication required, and
+  `oauth_token_invalid_grant`; no task data was returned.
+- Reconnecting through dot restored access, and a fresh one-day
+  `list_calendar_events` call succeeded. The final connection was left enabled.
+- No real tasks or events were mutated during this check. Write permissions were
+  granted and discovered; this does not claim every write tool was live-tested.
+
 References: https://developers.openai.com/plugins/build/auth,
 https://developers.openai.com/plugins/deploy/connect-chatgpt,
 https://learn.chatgpt.com/docs/dots/getting-started.

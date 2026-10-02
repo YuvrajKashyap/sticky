@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
+import { writeFile } from "node:fs/promises";
 
-test("login spotlight preserves its gradient without inheriting through form contents", async ({ page }) => {
+test("login spotlight preserves its gradient without inheriting through form contents", async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/?auth_error=Sign%20in%20to%20continue");
   const door = page.locator(".gate-door-google");
@@ -8,6 +9,7 @@ test("login spotlight preserves its gradient without inheriting through form con
   await expect(page.locator(".gate-decrypt")).toHaveText("Your lists are right where you left them.");
   await page.evaluate(() => document.fonts.ready);
   await expect(page.locator(".gate-card")).toHaveCSS("filter", "blur(0px)");
+  await expect(page.locator(".gate-card")).toHaveCSS("opacity", "1");
   // Motion's JS-driven entrance can outlive the rounded blur value. Wait for
   // its actual scale and translation before sampling geometry or pixels.
   await expect.poll(() => page.locator(".gate-card").evaluate(element => {
@@ -41,10 +43,40 @@ test("login spotlight preserves its gradient without inheriting through form con
   // Wait for the focus spotlight to finish fading in before comparing pixels.
   await expect.poll(() => door.evaluate(element => getComputedStyle(element, "::after").opacity)).toBe("1");
   const optimized = await door.screenshot({ animations: "disabled" });
+  const optimizedGradient = await door.evaluate(e => getComputedStyle(e, "::after").backgroundImage);
   // Recreate the original gradient at the identical pointer coordinates.
   await page.addStyleTag({ content: ".gate-door-google::after { background: radial-gradient(220px circle at 25% 75%, rgba(var(--accent-rgb), 0.14), transparent 70%) !important; }" });
   const original = await door.screenshot({ animations: "disabled" });
-  expect(original.equals(optimized), "spotlight pixels must match the original gradient").toBe(true);
+  expect(await door.evaluate(e => getComputedStyle(e, "::after").backgroundImage)).toBe(optimizedGradient);
+  // Compare decoded pixels, allowing only Chromium's observed 1-2/255 channel
+  // rounding on repaints. CSS must match exactly above; no pixels are ignored.
+  const difference = await page.evaluate(async ({ actual, expected }) => {
+    async function decode(bytes: number[]) {
+      const bitmap = await createImageBitmap(new Blob([new Uint8Array(bytes)], { type: "image/png" }));
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+      const context = canvas.getContext("2d")!;
+      context.drawImage(bitmap, 0, 0);
+      bitmap.close();
+      return { width: canvas.width, height: canvas.height, pixels: context.getImageData(0, 0, canvas.width, canvas.height).data };
+    }
+    const [a, b] = await Promise.all([decode(actual), decode(expected)]);
+    if (a.width !== b.width || a.height !== b.height) return { sameSize: false, maxChannelDelta: 255 };
+    let maxChannelDelta = 0;
+    for (let i = 0; i < a.pixels.length; i++) {
+      maxChannelDelta = Math.max(maxChannelDelta, Math.abs(a.pixels[i] - b.pixels[i]));
+    }
+    return { sameSize: true, maxChannelDelta };
+  }, { actual: [...optimized], expected: [...original] });
+  if (!difference.sameSize || difference.maxChannelDelta > 2) {
+    const optimizedPath = testInfo.outputPath("optimized-spotlight.png");
+    const originalPath = testInfo.outputPath("original-spotlight.png");
+    await writeFile(optimizedPath, optimized);
+    await writeFile(originalPath, original);
+    await testInfo.attach("optimized-spotlight", { path: optimizedPath, contentType: "image/png" });
+    await testInfo.attach("original-spotlight", { path: originalPath, contentType: "image/png" });
+  }
+  expect(difference.sameSize).toBe(true);
+  expect(difference.maxChannelDelta, "spotlight pixels must match apart from 8-bit rounding").toBeLessThanOrEqual(2);
 });
 
 test("login text animation survives form edits and motion preference changes", async ({ page }) => {
