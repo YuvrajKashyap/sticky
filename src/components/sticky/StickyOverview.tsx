@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { addDays, format } from "date-fns";
+import { relativeDueDateLabel } from "@/lib/sticky/due-date-label";
 import type {
   StickyColor,
   StickyList,
@@ -122,7 +123,8 @@ function buildReactorSegments(
 function dueLabelFor(task: StickyTask, todayKey: string): string | null {
   if (!task.dueDate) return null;
   const timeSuffix = task.dueTime ? ` at ${captureTimeLabel(task.dueTime)}` : "";
-  if (task.dueDate === todayKey) return `Today${timeSuffix}`;
+  const relativeLabel = relativeDueDateLabel(task.dueDate, new Date(`${todayKey}T12:00:00`));
+  if (relativeLabel) return `${relativeLabel}${timeSuffix}`;
   const parsed = new Date(`${task.dueDate}T00:00:00`);
   return `${format(parsed, "EEE MMM d")}${timeSuffix}`;
 }

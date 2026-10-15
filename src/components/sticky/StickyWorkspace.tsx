@@ -59,6 +59,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import { format } from "date-fns";
+import { relativeDueDateLabel } from "@/lib/sticky/due-date-label";
 import { MonthDaysPicker } from "./MonthDaysPicker";
 import { monthlyOccurrence, monthDaysLabel } from "@sticky/domain";
 import { calendarTaskItems, itemMatchesView, matchingTaskItems } from "@/lib/sticky/task-filter";
@@ -470,7 +471,7 @@ function humanDue(task: StickyTask) {
   }
 
   const date = new Date(`${task.dueDate}T${task.dueTime ?? "00:00"}`);
-  const dateLabel = task.dueDate === localDateKey() ? "Today" : format(date, "MMM d");
+  const dateLabel = relativeDueDateLabel(task.dueDate) ?? format(date, "MMM d");
   return `${dateLabel}${task.dueTime ? ` at ${captureTimeLabel(task.dueTime)}` : ""}`;
 }
 

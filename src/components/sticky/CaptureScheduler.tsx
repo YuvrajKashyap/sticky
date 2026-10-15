@@ -20,6 +20,7 @@ import {
   startOfWeek,
 } from "date-fns";
 import { useState } from "react";
+import { relativeDueDateLabel } from "@/lib/sticky/due-date-label";
 import { MonthDaysPicker } from "./MonthDaysPicker";
 import { monthDaysLabel } from "@sticky/domain";
 import { AnimatedNumber, springs } from "./motion";
@@ -74,9 +75,8 @@ function sortedDays(days: number[]) {
 export function captureDateLabel(dueDate: string) {
   const today = new Date();
 
-  if (dueDate === dateKey(today)) {
-    return "Today";
-  }
+  const relativeLabel = relativeDueDateLabel(dueDate, today);
+  if (relativeLabel) return relativeLabel;
 
   if (dueDate === dateKey(addDays(today, 1))) {
     return "Tomorrow";
