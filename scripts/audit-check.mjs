@@ -11,6 +11,15 @@ const severityRank = {
 const minimumSeverity = "moderate";
 const allowedAdvisories = new Map([
   [
+    "1240992",
+    {
+      id: "GHSA-vfj7-8cjw-p6xm",
+      reason:
+        "braces 3.0.3 has no patched release. It is used only by Next.js ESLint's fast-glob/micromatch chain with trusted repository glob patterns, never user input or application runtime. Recheck for an upstream fix before expiry.",
+      reviewBy: "2026-10-29",
+    },
+  ],
+  [
     "1124334",
     {
       id: "GHSA-mh99-v99m-4gvg",

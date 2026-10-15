@@ -1977,7 +1977,7 @@ test.describe("Sticky workspace", () => {
 
       await details.locator('input[aria-label="Due date"]').fill(overdueDate);
       await expect(activeRegion.locator(".task-card", { hasText: overdueTitle })).toContainText(
-        shortDateLabel(overdueDate),
+        "Yesterday",
       );
 
       await runCommand(page, "show overdue tasks");
@@ -2252,7 +2252,7 @@ test.describe("Sticky workspace", () => {
 
       // Clear just the time from the panel, then re-add it (panel stays open)
       await details.getByRole("button", { name: /^Due time:/ }).click();
-      await details.getByRole("button", { name: "Clear", exact: true }).click();
+      await details.getByLabel("Pick a due time").getByRole("button", { name: "Clear", exact: true }).click();
       await expect(card).toContainText(shortDateLabel(nextWeek));
       await expect(card).not.toContainText("17:00");
       await details.getByRole("button", { name: "Evening", exact: true }).click();

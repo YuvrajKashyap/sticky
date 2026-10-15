@@ -14,6 +14,7 @@ test("browser remembers the three main workspace views", async ({ page }) => {
   ]);
   await expect(page.locator(".calendar-view")).toBeVisible();
   await page.getByRole("button", { name: "Open command deck overview" }).click();
+  await expect(page.getByRole("dialog", { name: "Command deck overview" })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("dialog", { name: "Command deck overview" })).toBeVisible();
   await page.getByRole("button", { name: "Close command deck" }).click();
