@@ -31,6 +31,40 @@ function setAgentCredentialRuntime(provider: "codex" | "littlebird" | "poke" = "
 describe("Sticky MCP source isolation", () => {
   afterEach(() => setRuntimeForTests(undefined));
 
+
+  it.each(["codex", "poke"] as const)("publishes explicit action metadata and sequencing guidance for %s", async (provider) => {
+    const { credentialId, secret, pokeUserId } = setAgentCredentialRuntime(provider);
+    const request = async (method: string, params: object) => {
+      const response = await createMcpApp().request("http://localhost/", {
+        method: "POST",
+        headers: { Authorization: `Bearer stk_${credentialId}_${secret}`, Accept: "application/json, text/event-stream", "Content-Type": "application/json", Host: "localhost", ...(provider === "poke" ? { "X-Poke-User-Id": pokeUserId } : {}) },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+      });
+      expect(response.status).toBe(200);
+      return response.json();
+    };
+    const body = await request("tools/list", {});
+    const tools = new Map<string, { annotations: Record<string, boolean>; description: string }>(body.result.tools.map((tool: { name: string }) => [tool.name, tool]));
+    for (const tool of tools.values()) {
+      for (const hint of ["readOnlyHint", "destructiveHint", "openWorldHint"]) expect(typeof tool.annotations?.[hint]).toBe("boolean");
+    }
+    expect(tools.get("list_tasks")?.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false, openWorldHint: false });
+    expect(tools.get("create_list")?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, openWorldHint: false });
+    expect(tools.get("update_task")?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });
+    expect(tools.get("delete_task")?.annotations.destructiveHint).toBe(true);
+    expect(tools.get("send_daily_agenda_test")?.annotations.openWorldHint).toBe(true);
+    if (provider === "codex") {
+      // Calendar creation can send invitations; it is not always an additive private write.
+      expect(tools.get("create_google_calendar_event")?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true, openWorldHint: true });
+    }
+    expect(tools.get("move_google_tasks_to_sticky")?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true, openWorldHint: true });
+    for (const name of ["update_task", "complete_task"]) expect(tools.get(name)?.description).toContain("sequentially");
+    const initialized = await request("initialize", { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "metadata-test", version: "1" } });
+    expect(initialized.result.instructions).toContain("same task sequentially");
+    expect(initialized.result.instructions).toContain("returned version");
+    expect(initialized.result.instructions).toContain("Independent tasks");
+  });
+
   it("advertises OAuth discovery when no credential is supplied", async () => {
     const response = await createMcpApp().request("http://localhost/", { method: "POST", headers: { Host: "localhost" } });
     expect(response.status).toBe(401);

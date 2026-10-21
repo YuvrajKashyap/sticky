@@ -37,6 +37,17 @@ public plugin directory.
 
 ## Security and revocation
 
+Tool discovery explicitly labels reads, overwrites/deletions, and external effects.
+These annotations do not change granted scopes, tool inputs, or action handlers.
+Writes that can affect configured reminders or provider delivery retain conservative
+external-effect labels, even when those integrations are disabled for a user.
+ChatGPT still controls its own approval review; accurate metadata does not bypass it.
+
+For multiple changes to one task, await each result and use its returned version
+before the next change. In particular, an authorized note edit must finish before
+completion. Independent tasks can still run in parallel. Read after an ambiguous
+cancellation before retrying; reconciliation notes are not required for completion.
+
 - Authorization uses the existing active Sticky user, explicit consent, S256 PKCE,
   a five-minute single-use code, exact callback/client/resource binding, and `iss`.
 - Access tokens expire after one hour. Refresh tokens rotate on every exchange,

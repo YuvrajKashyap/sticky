@@ -189,6 +189,10 @@ async function externalMutationResult<T>(tool: string, input: unknown, operation
 }
 
 function registerTools(server: McpServer, options: { includeDirectGoogle: boolean }) {
+  // Annotations describe effects; scopes and confirmation checks still enforce access.
+  // Overwrites are destructive even when reversible. Task/calendar mutations retain
+  // open-world hints for configured reminder delivery and optional provider outbox effects.
+  // Do not claim idempotence solely from request-key replay protection.
   const id = z.uuid();
   const version = z.int().positive();
   const dueTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/);
@@ -215,19 +219,19 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
     z.object({ calendarId: z.string().min(1).max(1_000), eventId: z.string().min(1).max(1_000), title: z.string().trim().min(1).max(1_000), details: z.string().max(20_000).default(""), location: z.string().max(500).default(""), timezone: z.string().default("America/Chicago"), attendeeEmails: z.array(z.email()).max(200).optional(), recurrence: z.array(z.string().trim().min(1).max(2_000)).max(100).optional(), transparency: z.enum(["opaque", "transparent"]).optional(), sendUpdates: z.enum(["all", "externalOnly", "none"]).default("none"), allDay: z.literal(true), startDate: z.iso.date(), endDate: z.iso.date() }),
   ]);
 
-  server.registerTool("list_lists", { description: "List the user's active or archived Sticky lists.", inputSchema: z.object({ includeArchived: z.boolean().default(false) }), annotations: { readOnlyHint: true } },
+  server.registerTool("list_lists", { description: "List the user's active or archived Sticky lists.", inputSchema: z.object({ includeArchived: z.boolean().default(false) }), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
     async ({ includeArchived }) => { const current = actor(); requireScope(current, "tasks:read"); return result({ lists: await getRuntime().repository.listLists(current, includeArchived) }); });
 
-  server.registerTool("list_tasks", { description: "List Sticky tasks, optionally within one list.", inputSchema: z.object({ listId: id.optional(), includeCompleted: z.boolean().default(false) }), annotations: { readOnlyHint: true } },
+  server.registerTool("list_tasks", { description: "List Sticky tasks, optionally within one list.", inputSchema: z.object({ listId: id.optional(), includeCompleted: z.boolean().default(false) }), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
     async (input) => { const current = actor(); requireScope(current, "tasks:read"); return result({ tasks: await getRuntime().repository.listTasks(current, input) }); });
 
-  server.registerTool("search_tasks", { description: "Search task titles and details across Sticky.", inputSchema: z.object({ query: z.string().trim().min(1).max(180), includeCompleted: z.boolean().default(true) }), annotations: { readOnlyHint: true } },
+  server.registerTool("search_tasks", { description: "Search task titles and details across Sticky.", inputSchema: z.object({ query: z.string().trim().min(1).max(180), includeCompleted: z.boolean().default(true) }), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
     async (input) => { const current = actor(); requireScope(current, "tasks:read"); return result({ tasks: await getRuntime().repository.listTasks(current, input) }); });
 
-  server.registerTool("get_task", { description: "Get one Sticky task by id.", inputSchema: z.object({ taskId: id }), annotations: { readOnlyHint: true } },
+  server.registerTool("get_task", { description: "Get one Sticky task by id.", inputSchema: z.object({ taskId: id }), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
     async ({ taskId }) => { const current = actor(); requireScope(current, "tasks:read"); return result({ task: await getRuntime().repository.getTask(current, taskId) }); });
 
-  server.registerTool("get_workspace_snapshot", { description: "Read the complete current Sticky workspace in one call: lists, active and completed tasks, subtasks, recurrence rules, reminders, calendars, workspace preferences, and daily-agenda settings. Use this before a compound request that changes several kinds of Sticky data.", inputSchema: z.object({ includeArchivedLists: z.boolean().default(true) }), annotations: { readOnlyHint: true } },
+  server.registerTool("get_workspace_snapshot", { description: "Read the complete current Sticky workspace in one call: lists, active and completed tasks, subtasks, recurrence rules, reminders, calendars, workspace preferences, and daily-agenda settings. Use this before a compound request that changes several kinds of Sticky data.", inputSchema: z.object({ includeArchivedLists: z.boolean().default(true) }), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
     async ({ includeArchivedLists }) => {
       const current = actor();
       requireScope(current, "tasks:read"); requireScope(current, "calendar:read");
@@ -244,28 +248,28 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
       return result({ lists, tasks, subtasks, recurrences, reminders, calendars, preferences, dailyAgenda });
     });
 
-  server.registerTool("list_task_recurrences", { description: "List Sticky task recurrence rules. A rule is attached to the current active occurrence and is separate from reminders. Optionally filter by one task id.", inputSchema: z.object({ taskId: id.optional() }), annotations: { readOnlyHint: true } },
+  server.registerTool("list_task_recurrences", { description: "List Sticky task recurrence rules. A rule is attached to the current active occurrence and is separate from reminders. Optionally filter by one task id.", inputSchema: z.object({ taskId: id.optional() }), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
     async ({ taskId }) => { const current = actor(); requireScope(current, "tasks:read"); return result({ recurrences: await getRuntime().repository.listTaskRecurrenceRules(current, taskId) }); });
 
-  server.registerTool("list_subtasks", { description: "List the real Sticky subtasks under one task, including each subtask's own due date, completion state, order, and version. Use this before changing, completing, moving, or deleting a subtask. These are Sticky subtasks, never Google Tasks.", inputSchema: z.object({ taskId: id, includeCompleted: z.boolean().default(true) }), annotations: { readOnlyHint: true } },
+  server.registerTool("list_subtasks", { description: "List the real Sticky subtasks under one task, including each subtask's own due date, completion state, order, and version. Use this before changing, completing, moving, or deleting a subtask. These are Sticky subtasks, never Google Tasks.", inputSchema: z.object({ taskId: id, includeCompleted: z.boolean().default(true) }), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
     async ({ taskId, includeCompleted }) => { const current = actor(); requireScope(current, "tasks:read"); return result({ subtasks: await getRuntime().repository.listSubtasks(current, taskId, includeCompleted) }); });
 
-  server.registerTool("get_subtask", { description: "Get one Sticky subtask by id, including its parent task id, due date, completion state, order, and version.", inputSchema: z.object({ subtaskId: id }), annotations: { readOnlyHint: true } },
+  server.registerTool("get_subtask", { description: "Get one Sticky subtask by id, including its parent task id, due date, completion state, order, and version.", inputSchema: z.object({ subtaskId: id }), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
     async ({ subtaskId }) => { const current = actor(); requireScope(current, "tasks:read"); return result({ subtask: await getRuntime().repository.getSubtask(current, subtaskId) }); });
 
-  server.registerTool("list_reminders", { description: "List Sticky task reminders, optionally for one task. Recurrence and reminders are separate features.", inputSchema: z.object({ taskId: id.optional() }), annotations: { readOnlyHint: true } },
+  server.registerTool("list_reminders", { description: "List Sticky task reminders, optionally for one task. Recurrence and reminders are separate features.", inputSchema: z.object({ taskId: id.optional() }), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
     async ({ taskId }) => { const current = actor(); requireScope(current, "tasks:read"); return result({ reminders: await getRuntime().repository.listReminders(current, taskId) }); });
 
-  server.registerTool("get_workspace_preferences", { description: "Read the user's persisted Sticky workspace preferences, including completed-pile state, density, theme, board style, interface sizing, task filter, and task sorting.", inputSchema: z.object({}), annotations: { readOnlyHint: true } },
+  server.registerTool("get_workspace_preferences", { description: "Read the user's persisted Sticky workspace preferences, including completed-pile state, density, theme, board style, interface sizing, task filter, and task sorting.", inputSchema: z.object({}), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
     async () => { const current = actor(); requireScope(current, "tasks:read"); return result({ preferences: await getRuntime().repository.getWorkspacePreferences(current) }); });
 
-  server.registerTool("get_daily_agenda_settings", { description: "Read whether Sticky's daily Poke agenda is enabled, its delivery time and timezone, delivery readiness, and last send state.", inputSchema: z.object({}), annotations: { readOnlyHint: true } },
+  server.registerTool("get_daily_agenda_settings", { description: "Read whether Sticky's daily Poke agenda is enabled, its delivery time and timezone, delivery readiness, and last send state.", inputSchema: z.object({}), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
     async () => { const current = actor(); requireScope(current, "tasks:read"); return result({ settings: await getDailyAgendaSettings(current.userId) }); });
 
   server.registerTool("get_daily_agenda_preview", {
     description: "Return Sticky's canonical three-bucket daily agenda for today or a requested date. Always use this tool when the user asks for their daily brief, morning brief, agenda right now, or a preview of the scheduled agenda. Relay the returned message exactly instead of rebuilding it from raw tasks. Its exact order is: every active task and subtask due that day; every active task and subtask without a due date; then the top three dated tasks or subtasks strictly after that day.",
     inputSchema: z.object({ date: z.iso.date().optional() }),
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   }, async ({ date }) => {
     const current = actor();
     requireScope(current, "tasks:read");
@@ -286,19 +290,19 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
     });
   });
 
-  server.registerTool("get_agenda", { description: "Get incomplete tasks due in an inclusive date range.", inputSchema: z.object({ from: z.iso.date(), to: z.iso.date() }), annotations: { readOnlyHint: true } },
+  server.registerTool("get_agenda", { description: "Get incomplete tasks due in an inclusive date range.", inputSchema: z.object({ from: z.iso.date(), to: z.iso.date() }), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
     async ({ from, to }) => { const current = actor(); requireScope(current, "tasks:read"); const tasks = await getRuntime().repository.listTasks(current); return result({ tasks: tasks.filter((task) => task.dueDate && task.dueDate >= from && task.dueDate <= to) }); });
 
-  server.registerTool("list_calendars", { description: "List the user's Sticky calendars and identify the default calendar.", inputSchema: z.object({ includeArchived: z.boolean().default(false) }), annotations: { readOnlyHint: true } },
+  server.registerTool("list_calendars", { description: "List the user's Sticky calendars and identify the default calendar.", inputSchema: z.object({ includeArchived: z.boolean().default(false) }), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
     async ({ includeArchived }) => { const current = actor(); requireScope(current, "calendar:read"); return result({ calendars: await getRuntime().repository.listCalendars(current, includeArchived) }); });
 
-  server.registerTool("list_calendar_events", { description: "List real Sticky calendar event occurrences that overlap a time range, including recurring meetings. These are time commitments, distinct from task due dates. Recurring results share their saved event id and have a unique occurrenceId. Use id with get_calendar_event to read the original series before updating it; updates and deletes affect the entire series.", inputSchema: z.object({ from: z.iso.datetime({ offset: true }), to: z.iso.datetime({ offset: true }) }), annotations: { readOnlyHint: true } },
+  server.registerTool("list_calendar_events", { description: "List real Sticky calendar event occurrences that overlap a time range, including recurring meetings. These are time commitments, distinct from task due dates. Recurring results share their saved event id and have a unique occurrenceId. Use id with get_calendar_event to read the original series before updating it; updates and deletes affect the entire series.", inputSchema: z.object({ from: z.iso.datetime({ offset: true }), to: z.iso.datetime({ offset: true }) }), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
     async (range) => { const current = actor(); requireScope(current, "calendar:read"); return result({ events: await getRuntime().repository.listCalendarEvents(current, range) }); });
 
-  server.registerTool("get_calendar_event", { description: "Get one Sticky calendar event by id, including its current record version.", inputSchema: z.object({ eventId: id }), annotations: { readOnlyHint: true } },
+  server.registerTool("get_calendar_event", { description: "Get one Sticky calendar event by id, including its current record version.", inputSchema: z.object({ eventId: id }), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
     async ({ eventId }) => { const current = actor(); requireScope(current, "calendar:read"); return result({ event: await getRuntime().repository.getCalendarEvent(current, eventId) }); });
 
-  server.registerTool("get_daily_plan", { description: "Read one day of Sticky due tasks and calendar events together before planning or changing the day.", inputSchema: z.object({ date: z.iso.date(), timezone: z.string().refine((value) => { try { new Intl.DateTimeFormat("en-US", { timeZone: value }); return true; } catch { return false; } }, "Use a valid IANA timezone.").default("America/Chicago") }), annotations: { readOnlyHint: true } },
+  server.registerTool("get_daily_plan", { description: "Read one day of Sticky due tasks and calendar events together before planning or changing the day.", inputSchema: z.object({ date: z.iso.date(), timezone: z.string().refine((value) => { try { new Intl.DateTimeFormat("en-US", { timeZone: value }); return true; } catch { return false; } }, "Use a valid IANA timezone.").default("America/Chicago") }), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
     async ({ date, timezone }) => {
       const current = actor();
       requireScope(current, "tasks:read"); requireScope(current, "calendar:read");
@@ -312,16 +316,16 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
     });
 
   if (options.includeDirectGoogle) {
-    server.registerTool("list_google_task_lists", { description: "List the user's live Google Tasks lists. Google data stays separate from Sticky and is never imported by this tool.", inputSchema: z.object({}), annotations: { readOnlyHint: true } },
+    server.registerTool("list_google_task_lists", { description: "List the user's live Google Tasks lists. Google data stays separate from Sticky and is never imported by this tool.", inputSchema: z.object({}), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true } },
       async () => { const current = actor(); requireScope(current, "tasks:read"); return result({ lists: await listGoogleTaskLists(current), source: "google_tasks" }); });
 
-    server.registerTool("list_google_tasks", { description: "List tasks directly from one Google Tasks list without copying them into Sticky.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), includeCompleted: z.boolean().default(false), includeHidden: z.boolean().default(false) }), annotations: { readOnlyHint: true } },
+    server.registerTool("list_google_tasks", { description: "List tasks directly from one Google Tasks list without copying them into Sticky.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), includeCompleted: z.boolean().default(false), includeHidden: z.boolean().default(false) }), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true } },
       async (input) => { const current = actor(); requireScope(current, "tasks:read"); return result({ tasks: await listGoogleTasks(current, input), source: "google_tasks" }); });
 
-    server.registerTool("list_google_calendars", { description: "List the user's live Google calendars without copying them into Sticky Calendar.", inputSchema: z.object({}), annotations: { readOnlyHint: true } },
+    server.registerTool("list_google_calendars", { description: "List the user's live Google calendars without copying them into Sticky Calendar.", inputSchema: z.object({}), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true } },
       async () => { const current = actor(); requireScope(current, "calendar:read"); return result({ calendars: await listGoogleCalendars(current), source: "google_calendar" }); });
 
-    server.registerTool("list_google_calendar_events", { description: "List live Google Calendar events in a time range. This reads Google directly and does not create Sticky Calendar events.", inputSchema: z.object({ calendarId: z.string().min(1).max(1_000), from: z.iso.datetime({ offset: true }), to: z.iso.datetime({ offset: true }), query: z.string().trim().max(500).optional() }), annotations: { readOnlyHint: true } },
+    server.registerTool("list_google_calendar_events", { description: "List live Google Calendar events in a time range. This reads Google directly and does not create Sticky Calendar events.", inputSchema: z.object({ calendarId: z.string().min(1).max(1_000), from: z.iso.datetime({ offset: true }), to: z.iso.datetime({ offset: true }), query: z.string().trim().max(500).optional() }), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true } },
       async (input) => { const current = actor(); requireScope(current, "calendar:read"); return result({ events: await listGoogleCalendarEvents(current, input), source: "google_calendar" }); });
   }
 
@@ -334,7 +338,7 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
       includeCompleted: z.boolean().default(false),
       includeHidden: z.boolean().default(false),
     }),
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
   }, async (input) => {
     const current = actor();
     requireScope(current, "tasks:read");
@@ -353,7 +357,7 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
     confirmationPhrase: z.string().trim().min(10).max(240),
   });
 
-  server.registerTool("copy_google_tasks_to_sticky", {
+  server.registerTool("copy_google_tasks_to_sticky", { annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     description: "After preview_google_tasks_to_sticky and a new explicit user confirmation, copy that exact Google list snapshot into the chosen Sticky list once. Repeats are deduplicated. Google originals remain and no sync is enabled.",
     inputSchema: confirmedTransfer,
   }, async (input) => mutationResult("copy_google_tasks_to_sticky", input, async (current) => executeGoogleTaskTransfer(current, { ...input, mode: "copy" })));
@@ -361,30 +365,30 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
   server.registerTool("move_google_tasks_to_sticky", {
     description: "After preview_google_tasks_to_sticky and explicit user approval to delete the Google originals, copy and verify every task in Sticky first, then delete the originals from Google. No sync is enabled.",
     inputSchema: confirmedTransfer.extend({ confirmedDeleteGoogleOriginals: z.literal(true) }),
-    annotations: { destructiveHint: true },
+    annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
   }, async (input) => {
     const current = actor();
     requireScope(current, "tasks:destructive");
     return mutationResult("move_google_tasks_to_sticky", input, async () => executeGoogleTaskTransfer(current, { ...input, mode: "move" }));
   });
 
-  server.registerTool("create_list", { description: "Create a Sticky list.", inputSchema: z.object({ name: z.string().trim().min(1).max(80), color: stickyColorSchema.default("sun") }) },
+  server.registerTool("create_list", { annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false }, description: "Create a Sticky list.", inputSchema: z.object({ name: z.string().trim().min(1).max(80), color: stickyColorSchema.default("sun") }) },
     async (input) => mutationResult("create_list", input, async (current) => ({ list: await getRuntime().repository.createList(current, input) })));
 
-  server.registerTool("update_list", { description: "Rename a Sticky list, change its color, show or hide it on the board, archive it, or restore it. The record version is optional; when omitted, Sticky safely reads the current version.", inputSchema: z.object({ listId: id, version: version.optional(), name: z.string().trim().min(1).max(80).optional(), color: stickyColorSchema.optional(), isVisibleOnBoard: z.boolean().optional(), archived: z.boolean().optional() }).refine((input) => [input.name, input.color, input.isVisibleOnBoard, input.archived].some((value) => value !== undefined), { message: "At least one list field must change." }) },
+  server.registerTool("update_list", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false }, description: "Rename a Sticky list, change its color, show or hide it on the board, archive it, or restore it. The record version is optional; when omitted, Sticky safely reads the current version.", inputSchema: z.object({ listId: id, version: version.optional(), name: z.string().trim().min(1).max(80).optional(), color: stickyColorSchema.optional(), isVisibleOnBoard: z.boolean().optional(), archived: z.boolean().optional() }).refine((input) => [input.name, input.color, input.isVisibleOnBoard, input.archived].some((value) => value !== undefined), { message: "At least one list field must change." }) },
     async (input) => mutationResult("update_list", input, async (current) => {
       const existing = await getRuntime().repository.getList(current, input.listId);
       const { listId, ...patch } = input;
       return { list: await getRuntime().repository.updateList(current, listId, { ...patch, version: input.version ?? existing.version }) };
     }));
 
-  server.registerTool("restore_list", { description: "Restore one archived Sticky list to the active board. The record version is optional.", inputSchema: z.object({ listId: id, version: version.optional() }) },
+  server.registerTool("restore_list", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false }, description: "Restore one archived Sticky list to the active board. The record version is optional.", inputSchema: z.object({ listId: id, version: version.optional() }) },
     async (input) => mutationResult("restore_list", input, async (current) => {
       const existing = await getRuntime().repository.getList(current, input.listId);
       return { list: await getRuntime().repository.updateList(current, input.listId, { version: input.version ?? existing.version, archived: false }) };
     }));
 
-  server.registerTool("move_list", {
+  server.registerTool("move_list", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
     description: "Move one active Sticky list immediately before or after another active Sticky list. Use position=before for requests such as move Jobs to the left of Internships. This changes Sticky only and never reorders Google Tasks lists.",
     inputSchema: z.object({
       listId: id.describe("Sticky list to move. Resolve it with list_lists first."),
@@ -397,7 +401,7 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
     return { lists: await getRuntime().repository.reorderLists(current, listIds) };
   }));
 
-  server.registerTool("reorder_lists", {
+  server.registerTool("reorder_lists", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
     description: "Set the complete left-to-right order of all active Sticky lists. Pass every active list id exactly once in the desired order. This changes Sticky only and never reorders Google Tasks lists.",
     inputSchema: z.object({
       listIds: z.array(id).min(1).max(200).describe("Every active Sticky list id, in exact left-to-right order. Read list_lists first."),
@@ -406,7 +410,7 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
     lists: await getRuntime().repository.reorderLists(current, input.listIds),
   })));
 
-  server.registerTool("create_recurring_task", {
+  server.registerTool("create_recurring_task", { annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     description: "Create a genuinely recurring Sticky task using flat, explicit schedule fields. Always use this tool when the user says recurring, repeats, every day/week/month/year, or names a weekday cadence. Sticky supports automatic recurrence. Set startsOn to the first due date; use dueTime=23:59 when the user says end of day. Weekly days use 0=Sunday through 6=Saturday.",
     inputSchema: z.object({
       listId: id,
@@ -448,7 +452,7 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
     }
   }));
 
-  server.registerTool("make_task_recurring", {
+  server.registerTool("make_task_recurring", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     description: "Turn an existing active Sticky task into a genuinely recurring task using flat schedule fields. Always use this when the task already exists and the user says it should repeat. Sticky sets startsOn as the current occurrence due date and preserves the task's existing due time unless dueTime is supplied. Weekly days use 0=Sunday through 6=Saturday.",
     inputSchema: z.object({ taskId: id, dueTime: dueTime.nullable().optional(), ...flatRecurrenceShape }),
   }, async (input) => mutationResult("make_task_recurring", input, async (current) => {
@@ -461,7 +465,7 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
     };
   }));
 
-  server.registerTool("create_task", { description: "Create a Sticky task and either all of its Sticky subtasks or its recurrence in the same call. Parent and child due dates follow one rule: any undated subtask forces the parent to stay undated; when every subtask is dated, Sticky never invents a parent date, but an explicitly dated parent is kept on or after its latest subtask. For a repeating task, set recurrence and make startsOn the first due date; dueTime is the local occurrence time. Use daysOfWeek 0=Sunday through 6=Saturday. Never substitute a reminder for recurrence. Repeating tasks cannot have subtasks. When color is omitted, Sticky uses the target list's color. Any non-EOD due time automatically gets one Poke reminder 10 minutes before it unless schedule_reminder explicitly replaces that default.", inputSchema: z.object({ listId: id, title: z.string().trim().min(1).max(180), details: z.string().max(20_000).default(""), color: stickyColorSchema.optional(), dueDate: z.iso.date().nullable().default(null), dueTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/).nullable().default(null), timezone: z.string().default("America/Chicago"), subtasks: z.array(z.object({ title: z.string().trim().min(1).max(160), dueDate: z.iso.date().nullable().default(null) })).max(100).default([]), recurrence: recurrenceScheduleSchema.nullable().default(null) }).superRefine((input, context) => {
+  server.registerTool("create_task", { annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true }, description: "Create a Sticky task and either all of its Sticky subtasks or its recurrence in the same call. Parent and child due dates follow one rule: any undated subtask forces the parent to stay undated; when every subtask is dated, Sticky never invents a parent date, but an explicitly dated parent is kept on or after its latest subtask. For a repeating task, set recurrence and make startsOn the first due date; dueTime is the local occurrence time. Use daysOfWeek 0=Sunday through 6=Saturday. Never substitute a reminder for recurrence. Repeating tasks cannot have subtasks. When color is omitted, Sticky uses the target list's color. Any non-EOD due time automatically gets one Poke reminder 10 minutes before it unless schedule_reminder explicitly replaces that default.", inputSchema: z.object({ listId: id, title: z.string().trim().min(1).max(180), details: z.string().max(20_000).default(""), color: stickyColorSchema.optional(), dueDate: z.iso.date().nullable().default(null), dueTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/).nullable().default(null), timezone: z.string().default("America/Chicago"), subtasks: z.array(z.object({ title: z.string().trim().min(1).max(160), dueDate: z.iso.date().nullable().default(null) })).max(100).default([]), recurrence: recurrenceScheduleSchema.nullable().default(null) }).superRefine((input, context) => {
     if (input.recurrence && input.subtasks.length > 0) context.addIssue({ code: "custom", path: ["subtasks"], message: "A repeating Sticky task cannot have subtasks." });
   }) },
     async (input) => mutationResult("create_task", input, async (current) => {
@@ -501,7 +505,7 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
       }
     }));
 
-  server.registerTool("set_task_recurrence", { description: "Create or replace the recurrence on an existing active Sticky task. This schedules its first occurrence on schedule.startsOn, preserves its current due time unless dueTime is supplied, and supports daily, weekly, monthly, yearly, or custom repetition. Use daysOfWeek 0=Sunday through 6=Saturday. This is recurrence, not a reminder; recurring tasks cannot have subtasks.", inputSchema: z.object({ taskId: id, schedule: recurrenceScheduleSchema, dueTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/).nullable().optional() }) },
+  server.registerTool("set_task_recurrence", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Create or replace the recurrence on an existing active Sticky task. This schedules its first occurrence on schedule.startsOn, preserves its current due time unless dueTime is supplied, and supports daily, weekly, monthly, yearly, or custom repetition. Use daysOfWeek 0=Sunday through 6=Saturday. This is recurrence, not a reminder; recurring tasks cannot have subtasks.", inputSchema: z.object({ taskId: id, schedule: recurrenceScheduleSchema, dueTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/).nullable().optional() }) },
     async ({ taskId, schedule, dueTime }) => mutationResult("set_task_recurrence", { taskId, schedule, dueTime }, async (current) => {
       const recurrence = await getRuntime().repository.setTaskRecurrence(current, taskId, schedule, dueTime);
       return {
@@ -511,13 +515,13 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
       };
     }));
 
-  server.registerTool("set_task_recurrence_paused", { description: "Pause or resume a Sticky task's recurrence without deleting the task or its schedule.", inputSchema: z.object({ taskId: id, paused: z.boolean() }) },
+  server.registerTool("set_task_recurrence_paused", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Pause or resume a Sticky task's recurrence without deleting the task or its schedule.", inputSchema: z.object({ taskId: id, paused: z.boolean() }) },
     async (input) => mutationResult("set_task_recurrence_paused", input, async (current) => ({ recurrence: await getRuntime().repository.setTaskRecurrencePaused(current, input.taskId, input.paused) })));
 
-  server.registerTool("remove_task_recurrence", { description: "Stop a Sticky task from repeating by deleting only its recurrence rule. The current task remains. Use only when the user explicitly asks to stop or remove repetition.", inputSchema: z.object({ taskId: id }), annotations: { destructiveHint: true } },
+  server.registerTool("remove_task_recurrence", { description: "Stop a Sticky task from repeating by deleting only its recurrence rule. The current task remains. Use only when the user explicitly asks to stop or remove repetition.", inputSchema: z.object({ taskId: id }), annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true } },
     async (input) => mutationResult("remove_task_recurrence", input, async (current) => { await getRuntime().repository.removeTaskRecurrence(current, input.taskId); return { removed: true, taskId: input.taskId }; }));
 
-  server.registerTool("advance_recurring_tasks", { description: "Catch overdue recurring Sticky tasks up to their next valid occurrence on or after a target date. Omit taskIds to catch up every overdue recurrence; omit throughDate to use today in each rule's timezone. Returns exactly which tasks advanced and which were already current or ended.", inputSchema: z.object({ taskIds: z.array(id).max(500).optional(), throughDate: z.iso.date().optional() }) },
+  server.registerTool("advance_recurring_tasks", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Catch overdue recurring Sticky tasks up to their next valid occurrence on or after a target date. Omit taskIds to catch up every overdue recurrence; omit throughDate to use today in each rule's timezone. Returns exactly which tasks advanced and which were already current or ended.", inputSchema: z.object({ taskIds: z.array(id).max(500).optional(), throughDate: z.iso.date().optional() }) },
     async (input) => mutationResult("advance_recurring_tasks", input, async (current) => {
       const rules = await getRuntime().repository.listTaskRecurrenceRules(current);
       const requested = input.taskIds ? new Set(input.taskIds) : null;
@@ -541,59 +545,59 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
     }));
 
   if (options.includeDirectGoogle) {
-    server.registerTool("create_google_task", { description: "Create a task directly in Google Tasks. This never creates a Sticky task.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), title: z.string().trim().min(1).max(1_000), notes: z.string().max(20_000).default(""), dueDate: z.iso.date().nullable().default(null), parentId: z.string().min(1).max(1_000).optional(), previousId: z.string().min(1).max(1_000).optional() }) },
+    server.registerTool("create_google_task", { annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true }, description: "Create a task directly in Google Tasks. This never creates a Sticky task.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), title: z.string().trim().min(1).max(1_000), notes: z.string().max(20_000).default(""), dueDate: z.iso.date().nullable().default(null), parentId: z.string().min(1).max(1_000).optional(), previousId: z.string().min(1).max(1_000).optional() }) },
       async (input) => externalMutationResult("create_google_task", input, async (current) => ({ task: await createGoogleTask(current, input), source: "google_tasks" }), "tasks:write"));
 
-    server.registerTool("create_google_task_list", { description: "Create a list directly in Google Tasks. This never creates a Sticky list.", inputSchema: z.object({ title: z.string().trim().min(1).max(1_000) }) },
+    server.registerTool("create_google_task_list", { annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true }, description: "Create a list directly in Google Tasks. This never creates a Sticky list.", inputSchema: z.object({ title: z.string().trim().min(1).max(1_000) }) },
       async ({ title }) => externalMutationResult("create_google_task_list", { title }, async (current) => ({ list: await createGoogleTaskList(current, title), source: "google_tasks" }), "tasks:write"));
 
-    server.registerTool("update_google_task_list", { description: "Rename a list directly in Google Tasks. This never changes a Sticky list.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), title: z.string().trim().min(1).max(1_000) }) },
+    server.registerTool("update_google_task_list", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Rename a list directly in Google Tasks. This never changes a Sticky list.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), title: z.string().trim().min(1).max(1_000) }) },
       async (input) => externalMutationResult("update_google_task_list", input, async (current) => ({ list: await updateGoogleTaskList(current, input.taskListId, input.title), source: "google_tasks" }), "tasks:write"));
 
-    server.registerTool("update_google_task", { description: "Update or complete a task directly in Google Tasks. This never changes a Sticky task.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), taskId: z.string().min(1).max(1_000), title: z.string().trim().min(1).max(1_000).optional(), notes: z.string().max(20_000).optional(), dueDate: z.iso.date().nullable().optional(), completed: z.boolean().optional() }) },
+    server.registerTool("update_google_task", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Update or complete a task directly in Google Tasks. This never changes a Sticky task.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), taskId: z.string().min(1).max(1_000), title: z.string().trim().min(1).max(1_000).optional(), notes: z.string().max(20_000).optional(), dueDate: z.iso.date().nullable().optional(), completed: z.boolean().optional() }) },
       async (input) => externalMutationResult("update_google_task", input, async (current) => ({ task: await updateGoogleTask(current, input), source: "google_tasks" }), "tasks:write"));
 
-    server.registerTool("complete_google_task", { description: "Mark one live Google Task complete. This never changes or creates a Sticky task.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), taskId: z.string().min(1).max(1_000) }) },
+    server.registerTool("complete_google_task", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Mark one live Google Task complete. This never changes or creates a Sticky task.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), taskId: z.string().min(1).max(1_000) }) },
       async (input) => externalMutationResult("complete_google_task", input, async (current) => ({ task: await updateGoogleTask(current, { ...input, completed: true }), source: "google_tasks" }), "tasks:write"));
 
-    server.registerTool("restore_google_task", { description: "Restore one completed Google Task to active. This never changes or creates a Sticky task.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), taskId: z.string().min(1).max(1_000) }) },
+    server.registerTool("restore_google_task", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Restore one completed Google Task to active. This never changes or creates a Sticky task.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), taskId: z.string().min(1).max(1_000) }) },
       async (input) => externalMutationResult("restore_google_task", input, async (current) => ({ task: await updateGoogleTask(current, { ...input, completed: false }), source: "google_tasks" }), "tasks:write"));
 
-    server.registerTool("delete_google_task", { description: "Permanently delete a Google task. Requires explicit confirmation and never touches Sticky.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), taskId: z.string().min(1).max(1_000), confirmation: destructive }), annotations: { destructiveHint: true } },
+    server.registerTool("delete_google_task", { description: "Permanently delete a Google task. Requires explicit confirmation and never touches Sticky.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), taskId: z.string().min(1).max(1_000), confirmation: destructive }), annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true } },
       async (input) => { const current = actor(); requireDestructiveConfirmation(current, input.confirmation, ["delete", "Google", input.taskId]); return externalMutationResult("delete_google_task", input, async () => deleteGoogleTask(current, input.taskListId, input.taskId), "tasks:write"); });
 
-    server.registerTool("delete_google_task_list", { description: "Permanently delete a Google Tasks list and its tasks. Requires explicit confirmation and never touches Sticky.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), confirmation: destructive }), annotations: { destructiveHint: true } },
+    server.registerTool("delete_google_task_list", { description: "Permanently delete a Google Tasks list and its tasks. Requires explicit confirmation and never touches Sticky.", inputSchema: z.object({ taskListId: z.string().min(1).max(1_000), confirmation: destructive }), annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true } },
       async (input) => { const current = actor(); requireDestructiveConfirmation(current, input.confirmation, ["delete", "Google", "list", input.taskListId]); return externalMutationResult("delete_google_task_list", input, async () => deleteGoogleTaskList(current, input.taskListId), "tasks:write"); });
   }
 
-  server.registerTool("create_calendar_event", { description: "Create a timed or all-day event in Sticky Calendar.", inputSchema: z.discriminatedUnion("allDay", [
+  server.registerTool("create_calendar_event", { annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true }, description: "Create a timed or all-day event in Sticky Calendar.", inputSchema: z.discriminatedUnion("allDay", [
     z.object({ calendarId: id.optional(), taskId: id.nullable().default(null), title: z.string().trim().min(1).max(240), details: z.string().max(20_000).default(""), location: z.string().max(500).default(""), allDay: z.literal(false), startAt: z.iso.datetime({ offset: true }), endAt: z.iso.datetime({ offset: true }), timezone: z.string().default("America/Chicago") }),
     z.object({ calendarId: id.optional(), taskId: id.nullable().default(null), title: z.string().trim().min(1).max(240), details: z.string().max(20_000).default(""), location: z.string().max(500).default(""), allDay: z.literal(true), startDate: z.iso.date(), endDate: z.iso.date(), timezone: z.string().default("America/Chicago") }),
   ]) },
     async (input) => mutationResult("create_calendar_event", input, async (current) => ({ event: await getRuntime().repository.createCalendarEvent(current, { ...input, recurrence: [], status: "confirmed", transparency: "opaque", color: null }) }), "calendar:write"));
 
   if (options.includeDirectGoogle) {
-    server.registerTool("create_google_calendar_event", { description: "Create an event directly in Google Calendar. This never creates a Sticky Calendar event.", inputSchema: googleCalendarEventInput },
+    server.registerTool("create_google_calendar_event", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Create an event directly in Google Calendar. This never creates a Sticky Calendar event.", inputSchema: googleCalendarEventInput },
       async (input) => externalMutationResult("create_google_calendar_event", input, async (current) => ({ event: await createGoogleCalendarEvent(current, input), source: "google_calendar" }), "calendar:write"));
 
-    server.registerTool("update_google_calendar_event", { description: "Update an event directly in Google Calendar. Supply its current schedule; Sticky Calendar remains unchanged.", inputSchema: googleCalendarEventUpdateInput },
+    server.registerTool("update_google_calendar_event", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Update an event directly in Google Calendar. Supply its current schedule; Sticky Calendar remains unchanged.", inputSchema: googleCalendarEventUpdateInput },
       async (input) => externalMutationResult("update_google_calendar_event", input, async (current) => ({ event: await updateGoogleCalendarEvent(current, input), source: "google_calendar" }), "calendar:write"));
 
-    server.registerTool("delete_google_calendar_event", { description: "Permanently delete a Google Calendar event. Requires explicit confirmation and never touches Sticky Calendar.", inputSchema: z.object({ calendarId: z.string().min(1).max(1_000), eventId: z.string().min(1).max(1_000), confirmation: destructive }), annotations: { destructiveHint: true } },
+    server.registerTool("delete_google_calendar_event", { description: "Permanently delete a Google Calendar event. Requires explicit confirmation and never touches Sticky Calendar.", inputSchema: z.object({ calendarId: z.string().min(1).max(1_000), eventId: z.string().min(1).max(1_000), confirmation: destructive }), annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true } },
       async (input) => { const current = actor(); requireDestructiveConfirmation(current, input.confirmation, ["delete", "Google", input.eventId], "calendar:destructive"); return externalMutationResult("delete_google_calendar_event", input, async () => deleteGoogleCalendarEvent(current, input.calendarId, input.eventId), "calendar:write"); });
   }
 
-  server.registerTool("update_calendar_event", { description: "Update any editable field on a Sticky calendar event. The record version is optional; when omitted, Sticky safely reads the current version.", inputSchema: z.object({ eventId: id, version: version.optional(), calendarId: id.optional(), taskId: id.nullable().optional(), title: z.string().trim().min(1).max(240).optional(), details: z.string().max(20_000).optional(), location: z.string().max(500).optional(), allDay: z.boolean().optional(), startAt: z.iso.datetime({ offset: true }).nullable().optional(), endAt: z.iso.datetime({ offset: true }).nullable().optional(), startDate: z.iso.date().nullable().optional(), endDate: z.iso.date().nullable().optional(), timezone: z.string().optional(), recurrence: z.array(z.string().trim().min(1).max(500)).max(20).optional(), status: z.enum(["confirmed", "tentative", "cancelled"]).optional(), transparency: z.enum(["opaque", "transparent"]).optional(), color: stickyColorSchema.nullable().optional() }) },
+  server.registerTool("update_calendar_event", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Update any editable field on a Sticky calendar event. The record version is optional; when omitted, Sticky safely reads the current version.", inputSchema: z.object({ eventId: id, version: version.optional(), calendarId: id.optional(), taskId: id.nullable().optional(), title: z.string().trim().min(1).max(240).optional(), details: z.string().max(20_000).optional(), location: z.string().max(500).optional(), allDay: z.boolean().optional(), startAt: z.iso.datetime({ offset: true }).nullable().optional(), endAt: z.iso.datetime({ offset: true }).nullable().optional(), startDate: z.iso.date().nullable().optional(), endDate: z.iso.date().nullable().optional(), timezone: z.string().optional(), recurrence: z.array(z.string().trim().min(1).max(500)).max(20).optional(), status: z.enum(["confirmed", "tentative", "cancelled"]).optional(), transparency: z.enum(["opaque", "transparent"]).optional(), color: stickyColorSchema.nullable().optional() }) },
     async (input) => mutationResult("update_calendar_event", input, async (current) => {
       const existing = await getRuntime().repository.getCalendarEvent(current, input.eventId);
       const { eventId, ...patch } = input;
       return { event: await getRuntime().repository.updateCalendarEvent(current, eventId, { ...patch, version: input.version ?? existing.version }) };
     }, "calendar:write"));
 
-  server.registerTool("time_block_task", { description: "Reserve time on Sticky Calendar for an existing task and link the event back to that task.", inputSchema: z.object({ taskId: id, startAt: z.iso.datetime({ offset: true }), durationMinutes: z.int().min(5).max(1_440).default(30), calendarId: id.optional(), location: z.string().max(500).default("") }) },
+  server.registerTool("time_block_task", { annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true }, description: "Reserve time on Sticky Calendar for an existing task and link the event back to that task.", inputSchema: z.object({ taskId: id, startAt: z.iso.datetime({ offset: true }), durationMinutes: z.int().min(5).max(1_440).default(30), calendarId: id.optional(), location: z.string().max(500).default("") }) },
     async ({ taskId, ...input }) => mutationResult("time_block_task", { taskId, ...input }, async (current) => ({ event: await getRuntime().repository.timeBlockTask(current, taskId, input) }), "calendar:write"));
 
-  server.registerTool("update_task", { description: "Update a Sticky task's title, details, color, due date, due time, or timezone. A parent can be dated only when every subtask is dated, and its date cannot precede its latest subtask; clearing a parent date is always allowed. The record version is optional; when omitted, Sticky safely reads the current version.", inputSchema: z.object({ taskId: id, version: version.optional(), title: z.string().trim().min(1).max(180).optional(), details: z.string().max(20_000).optional(), color: stickyColorSchema.optional(), dueDate: z.iso.date().nullable().optional(), dueTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/).nullable().optional(), timezone: z.string().optional() }) },
+  server.registerTool("update_task", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Update a Sticky task's title, details, color, due date, due time, or timezone. A parent can be dated only when every subtask is dated, and its date cannot precede its latest subtask; clearing a parent date is always allowed. The record version is optional; when omitted, Sticky safely reads the current version. Apply changes to the same task sequentially, awaiting each result and using its returned version; never edit details and complete the same task in parallel.", inputSchema: z.object({ taskId: id, version: version.optional(), title: z.string().trim().min(1).max(180).optional(), details: z.string().max(20_000).optional(), color: stickyColorSchema.optional(), dueDate: z.iso.date().nullable().optional(), dueTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/).nullable().optional(), timezone: z.string().optional() }) },
     async (input) => mutationResult("update_task", input, async (current) => {
       const existing = await getRuntime().repository.getTask(current, input.taskId);
       const { taskId, ...patch } = input;
@@ -601,29 +605,29 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
       return { task, reminder: await reconcileTaskReminder(current, taskId) };
     }));
 
-  server.registerTool("move_task", { description: "Move an active or completed task to another Sticky list. The record version is optional.", inputSchema: z.object({ taskId: id, targetListId: id, version: version.optional() }) },
+  server.registerTool("move_task", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Move an active or completed task to another Sticky list. The record version is optional.", inputSchema: z.object({ taskId: id, targetListId: id, version: version.optional() }) },
     async (input) => mutationResult("move_task", input, async (current) => {
       const existing = await getRuntime().repository.getTask(current, input.taskId);
       return { task: await getRuntime().repository.moveTask(current, input.taskId, input.targetListId, input.version ?? existing.version) };
     }));
 
-  server.registerTool("move_task_in_list", { description: "Move one active Sticky task immediately before or after another active task in the same list. Read list_tasks first. This changes custom order only.", inputSchema: z.object({ listId: id, taskId: id, relativeToTaskId: id, position: z.enum(["before", "after"]) }) },
+  server.registerTool("move_task_in_list", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false }, description: "Move one active Sticky task immediately before or after another active task in the same list. Read list_tasks first. This changes custom order only.", inputSchema: z.object({ listId: id, taskId: id, relativeToTaskId: id, position: z.enum(["before", "after"]) }) },
     async (input) => mutationResult("move_task_in_list", input, async (current) => {
       const tasks = await getRuntime().repository.listTasks(current, { listId: input.listId });
       const taskIds = moveTaskId(tasks.map((task) => task.id), input.taskId, input.relativeToTaskId, input.position);
       return { tasks: await getRuntime().repository.reorderTasks(current, input.listId, taskIds) };
     }));
 
-  server.registerTool("reorder_tasks", { description: "Set the complete top-to-bottom custom order of every active Sticky task in one list. Pass every active task id exactly once.", inputSchema: z.object({ listId: id, taskIds: z.array(id).min(1).max(1_000) }) },
+  server.registerTool("reorder_tasks", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false }, description: "Set the complete top-to-bottom custom order of every active Sticky task in one list. Pass every active task id exactly once.", inputSchema: z.object({ listId: id, taskIds: z.array(id).min(1).max(1_000) }) },
     async (input) => mutationResult("reorder_tasks", input, async (current) => ({ tasks: await getRuntime().repository.reorderTasks(current, input.listId, input.taskIds) })));
 
-  server.registerTool("duplicate_task", { description: "Duplicate a Sticky task into the same list. The copy keeps details, color, dates, times, and either its subtasks or its recurrence; copied subtasks are reset to active. A custom title is optional.", inputSchema: z.object({ taskId: id, title: z.string().trim().min(1).max(180).optional() }) },
+  server.registerTool("duplicate_task", { annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true }, description: "Duplicate a Sticky task into the same list. The copy keeps details, color, dates, times, and either its subtasks or its recurrence; copied subtasks are reset to active. A custom title is optional.", inputSchema: z.object({ taskId: id, title: z.string().trim().min(1).max(180).optional() }) },
     async (input) => mutationResult("duplicate_task", input, async (current) => {
       const duplicated = await getRuntime().repository.duplicateTask(current, input.taskId, input.title);
       return { ...duplicated, reminder: await reconcileTaskReminder(current, duplicated.task.id) };
     }));
 
-  server.registerTool("complete_task", { description: "Mark a Sticky task complete. If it repeats, Sticky atomically creates the next scheduled occurrence and moves the recurrence rule to it. The record version is optional; when omitted, Sticky safely uses the current version.", inputSchema: z.object({ taskId: id, version: version.optional() }) },
+  server.registerTool("complete_task", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Mark a Sticky task complete. If it repeats, Sticky atomically creates the next scheduled occurrence and moves the recurrence rule to it. The record version is optional; when omitted, Sticky safely uses the current version. Apply changes to the same task sequentially, awaiting each result and using its returned version; never edit details and complete the same task in parallel.", inputSchema: z.object({ taskId: id, version: version.optional() }) },
     async (input) => mutationResult("complete_task", input, async (current) => {
       const currentVersion = input.version ?? (await getRuntime().repository.getTask(current, input.taskId)).version;
       const completed = await getRuntime().repository.completeTaskWithRecurrence(current, input.taskId, currentVersion);
@@ -634,41 +638,41 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
       return { ...completed, reminder, nextReminder };
     }));
 
-  server.registerTool("undo_recurring_completion", { description: "Undo the most recent recurring-task completion using the completed task id and the generated next-task id returned by complete_task. Sticky deletes only that generated occurrence, restores the completed occurrence, and moves the recurrence rule back.", inputSchema: z.object({ completedTaskId: id, generatedTaskId: id }) },
+  server.registerTool("undo_recurring_completion", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Undo the most recent recurring-task completion using the completed task id and the generated next-task id returned by complete_task. Sticky deletes only that generated occurrence, restores the completed occurrence, and moves the recurrence rule back.", inputSchema: z.object({ completedTaskId: id, generatedTaskId: id }) },
     async (input) => mutationResult("undo_recurring_completion", input, async (current) => {
       const restored = await getRuntime().repository.undoRecurringCompletion(current, input.completedTaskId, input.generatedTaskId);
       return { ...restored, reminder: await reconcileTaskReminder(current, input.completedTaskId) };
     }));
 
-  server.registerTool("restore_task", { description: "Restore a completed Sticky task. The record version is optional; when omitted, Sticky safely uses the current version.", inputSchema: z.object({ taskId: id, version: version.optional() }) },
+  server.registerTool("restore_task", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Restore a completed Sticky task. The record version is optional; when omitted, Sticky safely uses the current version.", inputSchema: z.object({ taskId: id, version: version.optional() }) },
     async (input) => mutationResult("restore_task", input, async (current) => {
       const currentVersion = input.version ?? (await getRuntime().repository.getTask(current, input.taskId)).version;
       const task = await getRuntime().repository.setTaskCompleted(current, input.taskId, false, currentVersion);
       return { task, reminder: await reconcileTaskReminder(current, input.taskId) };
     }));
 
-  server.registerTool("add_subtask", { description: "Create a real subtask under an existing non-recurring Sticky task. Use this whenever the user says add/create a subtask; never claim the integration cannot create subtasks and never redirect this request to Google Tasks. An undated subtask clears the parent due date. A dated subtask never invents a parent date; if the parent is already dated, Sticky extends it when needed.", inputSchema: z.object({ taskId: id, title: z.string().trim().min(1).max(160), dueDate: z.iso.date().nullable().default(null) }) },
+  server.registerTool("add_subtask", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Create a real subtask under an existing non-recurring Sticky task. Use this whenever the user says add/create a subtask; never claim the integration cannot create subtasks and never redirect this request to Google Tasks. An undated subtask clears the parent due date. A dated subtask never invents a parent date; if the parent is already dated, Sticky extends it when needed.", inputSchema: z.object({ taskId: id, title: z.string().trim().min(1).max(160), dueDate: z.iso.date().nullable().default(null) }) },
     async (input) => mutationResult("add_subtask", input, async (current) => ({ subtask: await getRuntime().repository.createSubtask(current, input.taskId, input) })));
 
-  server.registerTool("update_subtask", { description: "Rename or reschedule one existing Sticky subtask. Read list_subtasks first. Clearing any subtask date clears the parent date. Dating every subtask does not invent a parent date; if the parent is already dated, Sticky keeps it on or after the latest subtask.", inputSchema: z.object({ subtaskId: id, version: version.optional(), title: z.string().trim().min(1).max(160).optional(), dueDate: z.iso.date().nullable().optional() }) },
+  server.registerTool("update_subtask", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Rename or reschedule one existing Sticky subtask. Read list_subtasks first. Clearing any subtask date clears the parent date. Dating every subtask does not invent a parent date; if the parent is already dated, Sticky keeps it on or after the latest subtask.", inputSchema: z.object({ subtaskId: id, version: version.optional(), title: z.string().trim().min(1).max(160).optional(), dueDate: z.iso.date().nullable().optional() }) },
     async (input) => mutationResult("update_subtask", input, async (current) => {
       const existing = await getRuntime().repository.getSubtask(current, input.subtaskId);
       return { subtask: await getRuntime().repository.updateSubtask(current, input.subtaskId, { version: input.version ?? existing.version, title: input.title, dueDate: input.dueDate }) };
     }));
 
-  server.registerTool("complete_subtask", { description: "Mark one Sticky subtask complete without completing its parent task. Read list_subtasks first. The record version is optional.", inputSchema: z.object({ subtaskId: id, version: version.optional() }) },
+  server.registerTool("complete_subtask", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Mark one Sticky subtask complete without completing its parent task. Read list_subtasks first. The record version is optional.", inputSchema: z.object({ subtaskId: id, version: version.optional() }) },
     async (input) => mutationResult("complete_subtask", input, async (current) => {
       const existing = await getRuntime().repository.getSubtask(current, input.subtaskId);
       return { subtask: await getRuntime().repository.setSubtaskCompleted(current, input.subtaskId, true, input.version ?? existing.version) };
     }));
 
-  server.registerTool("restore_subtask", { description: "Restore one completed Sticky subtask without changing its parent task. Read list_subtasks first. The record version is optional.", inputSchema: z.object({ subtaskId: id, version: version.optional() }) },
+  server.registerTool("restore_subtask", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Restore one completed Sticky subtask without changing its parent task. Read list_subtasks first. The record version is optional.", inputSchema: z.object({ subtaskId: id, version: version.optional() }) },
     async (input) => mutationResult("restore_subtask", input, async (current) => {
       const existing = await getRuntime().repository.getSubtask(current, input.subtaskId);
       return { subtask: await getRuntime().repository.setSubtaskCompleted(current, input.subtaskId, false, input.version ?? existing.version) };
     }));
 
-  server.registerTool("move_subtask", {
+  server.registerTool("move_subtask", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
     description: "Move one Sticky subtask immediately before or after another subtask under the same parent task. Read list_subtasks first. This never changes Google Tasks.",
     inputSchema: z.object({ taskId: id, subtaskId: id, relativeToSubtaskId: id, position: z.enum(["before", "after"]) }),
   }, async (input) => mutationResult("move_subtask", input, async (current) => {
@@ -677,14 +681,14 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
     return { subtasks: await getRuntime().repository.reorderSubtasks(current, input.taskId, subtaskIds) };
   }));
 
-  server.registerTool("reorder_subtasks", {
+  server.registerTool("reorder_subtasks", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
     description: "Set the complete top-to-bottom order of every Sticky subtask under one parent task. Pass every subtask id exactly once. This never changes Google Tasks.",
     inputSchema: z.object({ taskId: id, subtaskIds: z.array(id).min(1).max(500) }),
   }, async (input) => mutationResult("reorder_subtasks", input, async (current) => ({
     subtasks: await getRuntime().repository.reorderSubtasks(current, input.taskId, input.subtaskIds),
   })));
 
-  server.registerTool("schedule_reminder", {
+  server.registerTool("schedule_reminder", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     description: "Opt one task into a single Poke reminder. Use relativeMinutes=0 for the due time itself, a positive number for that many minutes before, or remindAt for an absolute instant. Replaces the task's prior reminder; reminders are never automatic.",
     inputSchema: z.object({
       taskId: id,
@@ -695,13 +699,13 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
   }, async ({ taskId, ...input }) => mutationResult("schedule_reminder", { taskId, ...input }, async (current) =>
     replaceTaskReminder(current, taskId, { ...input, channels: ["poke"] })));
 
-  server.registerTool("snooze_reminder", { description: "Move a reminder to a new absolute time.", inputSchema: z.object({ reminderId: id, version, remindAt: z.iso.datetime() }) },
+  server.registerTool("snooze_reminder", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Move a reminder to a new absolute time.", inputSchema: z.object({ reminderId: id, version, remindAt: z.iso.datetime() }) },
     async (input) => mutationResult("snooze_reminder", input, async (current) => {
       const reminder = await getRuntime().repository.snoozeReminder(current, input.reminderId, input.version, input.remindAt);
       return { reminder, workflowRunId: await scheduleReminderWorkflow(reminder) };
     }));
 
-  server.registerTool("delete_reminder", { description: "Permanently delete one Sticky task reminder so it will not be delivered. Read list_reminders first and require the user's explicit deletion request.", inputSchema: z.object({ reminderId: id, confirmation: destructive }), annotations: { destructiveHint: true } },
+  server.registerTool("delete_reminder", { description: "Permanently delete one Sticky task reminder so it will not be delivered. Read list_reminders first and require the user's explicit deletion request.", inputSchema: z.object({ reminderId: id, confirmation: destructive }), annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true } },
     async (input) => {
       const current = actor();
       requireDestructiveConfirmation(current, input.confirmation, ["delete", input.reminderId]);
@@ -714,31 +718,31 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
       });
     });
 
-  server.registerTool("update_workspace_preferences", { description: "Change persisted Sticky workspace preferences: completed-pile state, density, light/dark theme, pad/wood board style, automatic or manual interface sizing, task filter, or custom/due-date sorting. This changes the app's saved workspace presentation, not task data.", inputSchema: updateWorkspacePreferencesSchema },
+  server.registerTool("update_workspace_preferences", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false }, description: "Change persisted Sticky workspace preferences: completed-pile state, density, light/dark theme, pad/wood board style, automatic or manual interface sizing, task filter, or custom/due-date sorting. This changes the app's saved workspace presentation, not task data.", inputSchema: updateWorkspacePreferencesSchema },
     async (input) => mutationResult("update_workspace_preferences", input, async (current) => ({ preferences: await getRuntime().repository.updateWorkspacePreferences(current, input) })));
 
-  server.registerTool("update_daily_agenda_settings", { description: "Save the recurring daily Sticky agenda schedule. Always use this once when the user tells Poke what time the three-bucket daily or morning brief should arrive. Pass enabled=true, the requested 24-hour local time, and the IANA timezone. Sticky then sends it automatically every day; do not create a separate reminder or try to invoke this settings tool each day.", inputSchema: dailyAgendaSettingsSchema },
+  server.registerTool("update_daily_agenda_settings", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Save the recurring daily Sticky agenda schedule. Always use this once when the user tells Poke what time the three-bucket daily or morning brief should arrive. Pass enabled=true, the requested 24-hour local time, and the IANA timezone. Sticky then sends it automatically every day; do not create a separate reminder or try to invoke this settings tool each day.", inputSchema: dailyAgendaSettingsSchema },
     async (input) => mutationResult("update_daily_agenda_settings", input, async (current) => ({ settings: await updateDailyAgendaSettings(current.userId, input) })));
 
-  server.registerTool("send_daily_agenda_test", { description: "Send the user's canonical three-bucket Sticky daily agenda through the configured Poke delivery now as a test. This does not change the saved daily time. The response reports delivery or the exact configuration reason it could not send.", inputSchema: z.object({}) },
+  server.registerTool("send_daily_agenda_test", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Send the user's canonical three-bucket Sticky daily agenda through the configured Poke delivery now as a test. This does not change the saved daily time. The response reports delivery or the exact configuration reason it could not send.", inputSchema: z.object({}) },
     async (input) => mutationResult("send_daily_agenda_test", input, async (current) => ({ delivery: await sendDailyAgendaTest(current) })));
 
-  server.registerTool("archive_list", { description: "Archive a list so it leaves the main board without deleting its tasks. The record version is optional.", inputSchema: z.object({ listId: id, version: version.optional() }) },
+  server.registerTool("archive_list", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false }, description: "Archive a list so it leaves the main board without deleting its tasks. The record version is optional.", inputSchema: z.object({ listId: id, version: version.optional() }) },
     async (input) => mutationResult("archive_list", input, async (current) => {
       const existing = await getRuntime().repository.getList(current, input.listId);
       return { list: await getRuntime().repository.updateList(current, input.listId, { version: input.version ?? existing.version, archived: true }) };
     }));
 
-  server.registerTool("delete_task", { description: "Permanently delete a task. Requires explicit confirmation.", inputSchema: z.object({ taskId: id, confirmation: destructive }), annotations: { destructiveHint: true } },
+  server.registerTool("delete_task", { description: "Permanently delete a task. Requires explicit confirmation.", inputSchema: z.object({ taskId: id, confirmation: destructive }), annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true } },
     async (input) => { const current = actor(); destructiveConfirmationSchema.parse(input.confirmation); requireDestructiveConfirmation(current, input.confirmation, ["delete", input.taskId]); return mutationResult("delete_task", input, async () => { await getRuntime().repository.deleteTask(current, input.taskId); return { deleted: true, taskId: input.taskId }; }); });
 
-  server.registerTool("delete_subtask", { description: "Permanently delete one Sticky subtask without deleting its parent task. Read list_subtasks first and require the user's explicit deletion request. This never deletes a Google Task.", inputSchema: z.object({ subtaskId: id, confirmation: destructive }), annotations: { destructiveHint: true } },
+  server.registerTool("delete_subtask", { description: "Permanently delete one Sticky subtask without deleting its parent task. Read list_subtasks first and require the user's explicit deletion request. This never deletes a Google Task.", inputSchema: z.object({ subtaskId: id, confirmation: destructive }), annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true } },
     async (input) => { const current = actor(); requireDestructiveConfirmation(current, input.confirmation, ["delete", input.subtaskId]); return mutationResult("delete_subtask", input, async () => { await getRuntime().repository.deleteSubtask(current, input.subtaskId); return { deleted: true, subtaskId: input.subtaskId }; }); });
 
-  server.registerTool("delete_list", { description: "Permanently delete one Sticky list and every Sticky task, completed task, and subtask inside it. Read list_lists first. The user must explicitly request deletion; put the word delete and the exact Sticky list id in confirmation.summary. This never deletes a Google Tasks list, even when a Sticky task title mentions Google.", inputSchema: z.object({ listId: id, confirmation: destructive }), annotations: { destructiveHint: true } },
+  server.registerTool("delete_list", { description: "Permanently delete one Sticky list and every Sticky task, completed task, and subtask inside it. Read list_lists first. The user must explicitly request deletion; put the word delete and the exact Sticky list id in confirmation.summary. This never deletes a Google Tasks list, even when a Sticky task title mentions Google.", inputSchema: z.object({ listId: id, confirmation: destructive }), annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true } },
     async (input) => { const current = actor(); requireDestructiveConfirmation(current, input.confirmation, ["delete", input.listId]); return mutationResult("delete_list", input, async () => { await getRuntime().repository.deleteList(current, input.listId); return { deleted: true, listId: input.listId }; }); });
 
-  server.registerTool("delete_calendar_event", { description: "Permanently delete a Sticky calendar event. Requires explicit confirmation.", inputSchema: z.object({ eventId: id, confirmation: destructive }), annotations: { destructiveHint: true } },
+  server.registerTool("delete_calendar_event", { description: "Permanently delete a Sticky calendar event. Requires explicit confirmation.", inputSchema: z.object({ eventId: id, confirmation: destructive }), annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true } },
     async (input) => {
       const current = actor();
       requireDestructiveConfirmation(current, input.confirmation, ["delete", input.eventId], "calendar:destructive");
@@ -748,7 +752,7 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
       }, "calendar:write");
     });
 
-  server.registerTool("clear_completed", { description: "Permanently delete all completed tasks in a list. Requires explicit confirmation.", inputSchema: z.object({ listId: id, confirmation: destructive }), annotations: { destructiveHint: true } },
+  server.registerTool("clear_completed", { description: "Permanently delete all completed tasks in a list. Requires explicit confirmation.", inputSchema: z.object({ listId: id, confirmation: destructive }), annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true } },
     async (input) => { const current = actor(); requireDestructiveConfirmation(current, input.confirmation, ["clear", "completed", input.listId]); return mutationResult("clear_completed", input, async () => ({ deletedTaskIds: await getRuntime().repository.clearCompletedTasks(current, input.listId) })); });
 }
 
@@ -779,9 +783,9 @@ export function createMcpApp() {
     const server = new McpServer(
       { name: isPoke ? "Sticky Focused Workspace" : "Sticky", version: "1.9.0" },
       {
-        instructions: isPoke
+        instructions: "Run multiple changes to the same task sequentially: await each result and use its returned version for the next change. For example, finish an authorized details edit before completing that task; never run those two writes in parallel. After a version conflict, reread the task before deciding whether to retry. Independent tasks may be processed in parallel when their changes do not share ordering or parent state. Only add reconciliation notes when requested or authorized; a completion does not require an extra note. Preserve existing details when adding an authorized note. After an ambiguous cancellation, read the task before retrying; do not assume the write failed or bypass client approval. " + (isPoke
           ? "Sticky is the user's canonical focused task and planning system. All meaningful server-backed actions available in the Sticky app are exposed here. Before claiming an action is unsupported, inspect the available tools; for compound requests, call get_workspace_snapshot, complete every requested part in order, and report each result. Use this server only for Sticky tasks, Sticky subtasks, recurring tasks, Sticky Calendar, reminders, daily-agenda settings, workspace preferences, and the guarded one-time Google Tasks-to-Sticky transfer tools. You can create, rename, recolor, show, hide, move, reorder, archive, restore, and explicitly delete Sticky lists. You can create, edit, recolor, move, reorder, duplicate, complete, restore, and explicitly delete Sticky tasks. Recurring Sticky tasks are first-class and fully supported. Whenever the user says recurring, repeats, daily, weekly, monthly, yearly, every day, every week, or names a weekday cadence, you MUST use create_recurring_task instead of create_task. When the task already exists and should repeat, you MUST use make_task_recurring. Never create a one-time substitute for a requested recurrence. You can list, change, pause, resume, catch up, undo the latest recurring completion, and remove recurrence. Weekly days use 0=Sunday through 6=Saturday, startsOn is the first due date, dueTime is the local occurrence time, and dueTime=23:59 means end of day. The default timezone is America/Chicago. Recurrence and reminders are different: never replace a requested recurring task with a reminder or claim recurrence is unsupported. Completing a recurring task creates its next occurrence automatically. Repeating tasks cannot contain subtasks. When one request names a new non-recurring task and its subtasks, pass the subtasks directly to create_task so the whole hierarchy is created; never create only the parent, claim subtasks are unavailable, or redirect Sticky subtasks to Google Tasks. Sticky subtasks are first-class: you can list, inspect, add, rename, independently date, complete, restore, reorder, and delete them. Parent dates are optional. If any subtask is undated, the parent must also be undated. If every subtask is dated, Sticky still never invents a parent date; when the parent is explicitly dated, it must be on or after the latest subtask. A title such as 'Google test' inside a Sticky list is still Sticky data and does not make the list a Google Tasks list. Use Poke's own Google integration for routine Google Tasks and Google Calendar reads or changes. Google and Sticky are separate systems: never sync, mirror, or import them automatically. A transfer must start with preview_google_tasks_to_sticky and must receive a new explicit user confirmation before the matching copy or move tool. Moving also requires explicit approval to delete Google originals after Sticky verifies every copy. Tasks and calendar events are distinct: due dates are deadlines while events reserve time. Read the relevant Sticky record before changing it. When the user explicitly asks to delete a named Sticky item in the current message, that request can supply the confirmation summary required by the matching destructive tool; never infer destructive approval. Credential, OAuth, bulk-import override, browser-permission, sign-out, and device-local navigation controls remain human-only."
-          : "Sticky is the user's canonical focused task and planning system. This server exposes first-class Sticky tasks, subtasks, recurring tasks, calendar events, separate live Google tools, and a guarded one-time Google Tasks-to-Sticky transfer. Recurrence is separate from reminders: use create_recurring_task for every new repeating task and make_task_recurring when an existing task should repeat. Use startsOn as the first due date, daysOfWeek 0=Sunday through 6=Saturday, and dueTime=23:59 for end of day. Completing a recurring task creates its next occurrence. Repeating tasks cannot have subtasks. Never sync, import, mirror, or copy between Sticky and Google automatically. A transfer must start with preview_google_tasks_to_sticky and receive a new explicit user confirmation before the matching copy or move tool. Use Sticky tools for Sticky data and google-prefixed tools for Google data. Tasks and calendar events are distinct: due dates are deadlines while events reserve time. Read the relevant source before changing it and request explicit confirmation before destructive actions.",
+          : "Sticky is the user's canonical focused task and planning system. This server exposes first-class Sticky tasks, subtasks, recurring tasks, calendar events, separate live Google tools, and a guarded one-time Google Tasks-to-Sticky transfer. Recurrence is separate from reminders: use create_recurring_task for every new repeating task and make_task_recurring when an existing task should repeat. Use startsOn as the first due date, daysOfWeek 0=Sunday through 6=Saturday, and dueTime=23:59 for end of day. Completing a recurring task creates its next occurrence. Repeating tasks cannot have subtasks. Never sync, import, mirror, or copy between Sticky and Google automatically. A transfer must start with preview_google_tasks_to_sticky and receive a new explicit user confirmation before the matching copy or move tool. Use Sticky tools for Sticky data and google-prefixed tools for Google data. Tasks and calendar events are distinct: due dates are deadlines while events reserve time. Read the relevant source before changing it and request explicit confirmation before destructive actions."),
       },
     );
     registerTools(server, { includeDirectGoogle: !isPoke });
