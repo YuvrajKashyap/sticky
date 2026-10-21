@@ -25,6 +25,10 @@ async function expectNoConsoleErrors(page: Page, run: () => Promise<void>) {
 async function dragBetween(page: Page, source: Locator, target: Locator) {
   await source.scrollIntoViewIfNeeded();
   await target.scrollIntoViewIfNeeded();
+  // Raw mouse coordinates bypass Playwright's actionability checks. Wait for
+  // entering panels to settle and for both handles to receive pointer events.
+  await source.click({ trial: true });
+  await target.click({ trial: true });
   const sourceBox = await source.boundingBox();
   const targetBox = await target.boundingBox();
   expect(sourceBox).not.toBeNull();
