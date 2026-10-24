@@ -75,6 +75,8 @@ jobs:
       - run: npx playwright install --with-deps chrome
       - name: Start isolated Supabase and replay repository migrations
         run: npm run database:start
+      - name: Verify recurrence upgrade preserves existing records
+        run: npm run test:recurrence-migration
       - name: Verify API persistence, RLS, pagination, recurrence and outbox
         run: npm run test:database
       - name: Verify authenticated desktop and mobile workspace

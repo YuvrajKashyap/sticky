@@ -1,9 +1,11 @@
+import { isActiveOccurrence, occurrenceLocalDay } from "@sticky/domain";
 import type { RecurrenceFrequency, StickySubtask, StickyTask, StickyTaskViewFilter } from "@/types/sticky";
 
-type FilterItem = Pick<StickyTask, "id" | "title" | "dueDate" | "isCompleted"> & { details?: string; dueTime?: string | null };
+type FilterItem = Pick<StickyTask, "id" | "title" | "dueDate" | "isCompleted"> & Partial<Pick<StickyTask, "routineId" | "scheduledDate" | "occurrenceStatus" | "timezone">> & { details?: string; dueTime?: string | null };
 
 export function itemMatchesView(item: FilterItem, frequency: RecurrenceFrequency | null, filter: StickyTaskViewFilter, today: string, isChild = false) {
-  if (item.isCompleted) return false;
+  if (!isActiveOccurrence(item)) return false;
+  if (item.routineId && item.timezone) today = occurrenceLocalDay(item.timezone);
   switch (filter) {
     case "due": return Boolean(item.dueDate);
     case "undated": return !item.dueDate;

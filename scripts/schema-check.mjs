@@ -14,6 +14,8 @@ const expectedTables = [
   "subtasks",
   "task_recurrence_rules",
   "task_activity",
+  "routine_templates",
+  "routine_schedule_versions",
 ];
 
 const authenticatedRpcAllowlist = new Set([
@@ -22,6 +24,7 @@ const authenticatedRpcAllowlist = new Set([
   "clear_completed_tasks",
   "complete_task_with_recurrence",
   "is_active_user",
+  "reconcile_my_routines",
   "move_task",
   "reorder_lists",
   "reorder_subtasks",

@@ -248,7 +248,7 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
       return result({ lists, tasks, subtasks, recurrences, reminders, calendars, preferences, dailyAgenda });
     });
 
-  server.registerTool("list_task_recurrences", { description: "List Sticky task recurrence rules. A rule is attached to the current active occurrence and is separate from reminders. Optionally filter by one task id.", inputSchema: z.object({ taskId: id.optional() }), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
+  server.registerTool("list_task_recurrences", { description: "List Sticky task recurrence rules. Each rule has a stable routine ID and a pointer to its latest occurrence; dated status is separate from the future schedule and reminders. Optionally filter by one task id.", inputSchema: z.object({ taskId: id.optional() }), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
     async ({ taskId }) => { const current = actor(); requireScope(current, "tasks:read"); return result({ recurrences: await getRuntime().repository.listTaskRecurrenceRules(current, taskId) }); });
 
   server.registerTool("list_subtasks", { description: "List the real Sticky subtasks under one task, including each subtask's own due date, completion state, order, and version. Use this before changing, completing, moving, or deleting a subtask. These are Sticky subtasks, never Google Tasks.", inputSchema: z.object({ taskId: id, includeCompleted: z.boolean().default(true) }), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
@@ -627,7 +627,19 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
       return { ...duplicated, reminder: await reconcileTaskReminder(current, duplicated.task.id) };
     }));
 
-  server.registerTool("complete_task", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Mark a Sticky task complete. If it repeats, Sticky atomically creates the next scheduled occurrence and moves the recurrence rule to it. The record version is optional; when omitted, Sticky safely uses the current version. Apply changes to the same task sequentially, awaiting each result and using its returned version; never edit details and complete the same task in parallel.", inputSchema: z.object({ taskId: id, version: version.optional() }) },
+  server.registerTool("list_routines", { description: "List routine templates, including retired routines and the reliable history tracking boundary.", inputSchema: z.object({}), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
+    async () => { const current = actor(); requireScope(current, "tasks:read"); return result({ routines: await getRuntime().repository.listRoutines(current) }); });
+  server.registerTool("get_routine_history", { description: "Read dated routine occurrences and completion rates for a period. Not completed means not checked off, not proof the activity never happened. Skipped, pending and unknown dates are excluded from the rate denominator.", inputSchema: z.object({ routineId: id, from: z.iso.date(), through: z.iso.date() }), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
+    async input => { const current = actor(); requireScope(current, "tasks:read"); return result(await getRuntime().repository.routineHistory(current, input.routineId, input.from, input.through)); });
+  server.registerTool("set_occurrence_status", { description: "Correct or explicitly skip exactly one routine occurrence. Use its exact task ID and scheduled date from history. Completion records the actual current timestamp and never affects today or future occurrences.", inputSchema: z.object({ taskId: id, scheduledDate: z.iso.date(), status: z.enum(["completed", "not_completed", "skipped"]), version: version.optional() }), annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true } },
+    async input => mutationResult("set_occurrence_status", input, async current => {
+      requireScope(current, "tasks:write");
+      const currentVersion = input.version ?? (await getRuntime().repository.getTask(current, input.taskId)).version;
+      const task = await getRuntime().repository.setOccurrenceStatus(current, input.taskId, input.scheduledDate, input.status, currentVersion);
+      return { task, reminder: await reconcileTaskReminder(current, task.id) };
+    }));
+
+  server.registerTool("complete_task", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Mark a Sticky task complete. For a routine, taskId identifies exactly one dated occurrence. This never advances or completes another day; scheduled occurrences are generated independently. The record version is optional; when omitted, Sticky safely uses the current version. Apply changes to the same task sequentially, awaiting each result and using its returned version; never edit details and complete the same task in parallel.", inputSchema: z.object({ taskId: id, version: version.optional() }) },
     async (input) => mutationResult("complete_task", input, async (current) => {
       const currentVersion = input.version ?? (await getRuntime().repository.getTask(current, input.taskId)).version;
       const completed = await getRuntime().repository.completeTaskWithRecurrence(current, input.taskId, currentVersion);
@@ -638,7 +650,7 @@ function registerTools(server: McpServer, options: { includeDirectGoogle: boolea
       return { ...completed, reminder, nextReminder };
     }));
 
-  server.registerTool("undo_recurring_completion", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Undo the most recent recurring-task completion using the completed task id and the generated next-task id returned by complete_task. Sticky deletes only that generated occurrence, restores the completed occurrence, and moves the recurrence rule back.", inputSchema: z.object({ completedTaskId: id, generatedTaskId: id }) },
+  server.registerTool("undo_recurring_completion", { annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true }, description: "Undo the most recent recurring-task completion using the completed task id and the generated next-task id returned by complete_task. Only the completed occurrence is restored. The generatedTaskId is accepted for compatibility and is never modified.", inputSchema: z.object({ completedTaskId: id, generatedTaskId: id }) },
     async (input) => mutationResult("undo_recurring_completion", input, async (current) => {
       const restored = await getRuntime().repository.undoRecurringCompletion(current, input.completedTaskId, input.generatedTaskId);
       return { ...restored, reminder: await reconcileTaskReminder(current, input.completedTaskId) };

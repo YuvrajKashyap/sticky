@@ -1,4 +1,5 @@
-import { reminderDeliveryKey } from "@sticky/domain";
+import { isActiveOccurrence, reminderDeliveryKey } from "@sticky/domain";
+import { mapTaskRow } from "@sticky/data";
 import { getRuntime } from "../runtime";
 
 export async function deliverReminder(reminderId: string, expectedRemindAt: string) {
@@ -6,7 +7,7 @@ export async function deliverReminder(reminderId: string, expectedRemindAt: stri
   const { data: reminder } = await db.from("task_reminders").select("*,tasks(*)").eq("id", reminderId).maybeSingle();
   if (!reminder || reminder.status !== "scheduled" || reminder.remind_at !== expectedRemindAt) return { skipped: "obsolete" };
   const task = reminder.tasks as Record<string, unknown>;
-  if (task.is_completed) return { skipped: "completed" };
+  if (!isActiveOccurrence(mapTaskRow(task))) return { skipped: "inactive_occurrence" };
   const results: Record<string, unknown>[] = [];
   const failures: string[] = [];
   for (const channel of reminder.channels as string[]) {

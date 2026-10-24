@@ -9,11 +9,13 @@ export type WorkspaceRecords = {
 };
 
 export async function readWorkspaceRecords(db: StickySupabaseClient, userId: string, completedListIds: string[] = []): Promise<WorkspaceRecords> {
+  const reconciled = await db.rpc("reconcile_my_routines", { p_request_user_id: userId });
+  if (reconciled.error) throw new Error(reconciled.error.message);
   const [listResult, preferencesResult, stateResult, activeResult, openChildrenResult] = await Promise.all([
     readAllPages<DataRow>((from, to) => db.from("lists").select("*").eq("user_id", userId).order("sort_order").order("id").range(from, to)),
     db.from("user_preferences").select("*").eq("user_id", userId).maybeSingle(),
     db.from("user_state").select("selected_list_id,search_query").eq("user_id", userId).maybeSingle(),
-    readAllPages<DataRow>((from, to) => db.from("tasks").select("*").eq("user_id", userId).eq("is_completed", false).order("id").range(from, to)),
+    readAllPages<DataRow>((from, to) => db.from("tasks").select("*").eq("user_id", userId).eq("is_completed", false).or("routine_id.is.null,occurrence_status.eq.pending").order("id").range(from, to)),
     readAllPages<DataRow>((from, to) => db.from("subtasks").select("task_id").eq("user_id", userId).eq("is_completed", false).order("id").range(from, to)),
   ]);
   for (const result of [listResult, preferencesResult, stateResult, activeResult, openChildrenResult]) {
@@ -54,17 +56,18 @@ export async function readWorkspaceRecords(db: StickySupabaseClient, userId: str
   // A completion can commit between these reads. Keep the later row once.
   const tasks = [...new Map([...(activeResult.data ?? []), ...completed.flat(), ...contextParents].map((task) => [String(task.id), task])).values()];
   const subtasks: DataRow[] = [];
-  const recurrenceRules: DataRow[] = [];
+  const rules = await readAllPages<DataRow>((from, to) => db.from("task_recurrence_rules").select("*").eq("user_id", userId).order("id").range(from, to));
+  if (rules.error) throw new Error(rules.error.message);
+  const recurrenceRules = rules.data ?? [];
   // Bound IN filters as well as result pages; a large workspace must not exceed
   // URL limits when loading the children of its active tasks.
   for (let offset = 0; offset < tasks.length; offset += 100) {
     const ids = tasks.slice(offset, offset + 100).map((task) => String(task.id));
-    const results = await Promise.all(["subtasks", "task_recurrence_rules"].map((table) =>
+    const results = await Promise.all(["subtasks"].map((table) =>
       readAllPages<DataRow>((from, to) => db.from(table).select("*").eq("user_id", userId).in("task_id", ids).order("id").range(from, to)),
     ));
     for (const result of results) if (result.error) throw new Error(result.error.message);
     subtasks.push(...(results[0].data ?? []));
-    recurrenceRules.push(...(results[1].data ?? []));
   }
   return {
     lists, tasks, subtasks, recurrenceRules, preferences, userState,

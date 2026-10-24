@@ -5,6 +5,7 @@ export * from "./errors";
 export * from "./google";
 export * from "./reminders";
 export * from "./recurrence";
+export * from "./occurrences";
 export * from "./monthly";
 export * from "./task-hierarchy";
 export * from "./calendar-recurrence";

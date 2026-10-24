@@ -35,6 +35,8 @@ test("monthly capture selects multiple dates and preserves them through completi
   await details.getByRole("button", { name: "Complete Monthly dates verification", exact: true }).click();
   await page.clock.setSystemTime(new Date());
   await page.reload();
+  await expect(page.locator(".task-card", { hasText: "Monthly dates verification" })).toHaveCount(0);
+  await page.locator(".completed-toggle").first().click();
   await page.getByText("Monthly dates verification", { exact: true }).first().click();
   await expect(details.getByRole("button", { name: "Repeat on last day", exact: true })).toHaveAttribute("aria-pressed", "true");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

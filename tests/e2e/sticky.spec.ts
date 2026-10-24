@@ -1312,14 +1312,8 @@ test.describe("Sticky workspace", () => {
       await details.locator('input[aria-label="Due date"]').fill(twoDaysAgo);
       await details.locator('input[aria-label="Due time"]').fill("08:00");
       await details.getByLabel("Not repeating").check();
-      await expect(page.getByText(/1 repeating task behind schedule/)).toBeVisible();
-      await expect(details.getByText(/Behind schedule/)).toBeVisible();
-      await details.getByRole("button", { name: "Advance repeat" }).click();
-      await expect(page.getByText("Repeats caught up")).toBeVisible();
-      await expect(page.locator(".task-card", { hasText: "Overdue repeat catch-up" })).toContainText(
-        "Today at 8:00 AM",
-      );
-      await expect(page.getByText(/behind schedule/)).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Advance repeat", exact: true })).toHaveCount(0);
+      await expect(details.locator('input[aria-label="Due date"]')).toHaveValue(twoDaysAgo);
 
       await page.getByLabel("Quick add task").fill("Repeat without subtasks");
       await quickAddButton(page, "Move Target").click();
@@ -1351,20 +1345,12 @@ test.describe("Sticky workspace", () => {
       await expect(details.getByText("Every week on Mon")).toBeVisible();
 
       await details.getByRole("button", { name: "Complete Repeat without subtasks" }).click();
-      const repeatToast = page.locator(".toast", { hasText: "Next repeat: Jun 22, 2026" });
+      const repeatToast = page.locator(".toast", { hasText: "Repeat without subtasks" });
       await expect(repeatToast).toBeVisible();
       const completedRegion = page.getByRole("region", { name: "Completed tasks", exact: true });
       await completedRegion.getByRole("button", { name: /Completed/ }).click();
       await expect(completedRegion.getByRole("button", { name: "Repeat without subtasks", exact: true })).toBeVisible();
-      const generatedRepeatCard = activeRegion
-        .locator(".task-card", { hasText: "Repeat without subtasks" })
-        .filter({ hasText: "Jun 22" });
-      await expect(generatedRepeatCard).toContainText("Repeat without subtasks");
-      await expect(generatedRepeatCard).toContainText("Every week on Mon");
-      const repeatTaskButton = generatedRepeatCard.locator("button.task-body-button");
-
-      await repeatTaskButton.click();
-      await details.getByRole("button", { name: "Complete Repeat without subtasks" }).click();
+      await expect(activeRegion.locator(".task-card", { hasText: "Repeat without subtasks" })).toHaveCount(0);
       const clearCompletedButton = page.getByRole("button", { name: "Clear completed" });
       await clearCompletedButton.click();
       const clearDialog = page.getByRole("dialog", { name: "Clear completed pile?" });
@@ -2360,7 +2346,7 @@ test.describe("Sticky workspace", () => {
     });
   });
 
-  test("monthly and yearly repeats generate clamped next dates", async ({ page }, testInfo) => {
+  test("monthly and yearly editors preserve their schedules without completion generating tasks", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "recurrence date math runs in the desktop project");
 
     await expectNoConsoleErrors(page, async () => {
@@ -2380,12 +2366,7 @@ test.describe("Sticky workspace", () => {
       await expect(details.getByText("Every month on day 31")).toBeVisible();
 
       await details.getByRole("button", { name: "Complete Monthly closeout" }).click();
-      await expect(page.locator(".toast", { hasText: "Next repeat: Sep 30, 2026" })).toBeVisible();
-      const monthlyRepeat = activeRegion.locator(".task-card", { hasText: "Sep 30" });
-      await expect(monthlyRepeat).toContainText("Sep 30");
-      await expect(monthlyRepeat).toContainText("Every month on day 31");
-      await monthlyRepeat.click();
-      await expect(details.locator('input[aria-label="Due date"]')).toHaveValue("2026-09-30");
+      await expect(activeRegion.locator(".task-card", { hasText: "Monthly closeout" })).toHaveCount(0);
 
       await page.getByLabel("Quick add task").fill("Leap review");
       await quickAddButton(page, "reminders").click();
@@ -2399,16 +2380,11 @@ test.describe("Sticky workspace", () => {
       await expect(details.getByText("Every year on Feb 29")).toBeVisible();
 
       await details.getByRole("button", { name: "Complete Leap review" }).click();
-      await expect(page.locator(".toast", { hasText: "Next repeat: Feb 28, 2029" })).toBeVisible();
-      const yearlyRepeat = activeRegion.locator(".task-card", { hasText: "Feb 28" });
-      await expect(yearlyRepeat).toContainText("Feb 28");
-      await expect(yearlyRepeat).toContainText("Every year on Feb 29");
-      await yearlyRepeat.click();
-      await expect(details.locator('input[aria-label="Due date"]')).toHaveValue("2029-02-28");
+      await expect(activeRegion.locator(".task-card", { hasText: "Leap review" })).toHaveCount(0);
     });
   });
 
-  test("after-count repeats stop when the series is exhausted", async ({ page }, testInfo) => {
+  test("completing a count-limited routine does not consume or create its next occurrence", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "finite recurrence runs in the desktop project");
 
     await expectNoConsoleErrors(page, async () => {
@@ -2417,7 +2393,6 @@ test.describe("Sticky workspace", () => {
       await page.locator("button.list-tab", { hasText: "reminders" }).click();
 
       const startDate = localDateKey(1);
-      const secondDate = localDateKey(2);
       const thirdDate = localDateKey(3);
       const details = page.getByRole("complementary", { name: "Task details", exact: true });
       const activeRegion = page.getByRole("region", { name: "Active tasks" });
@@ -2429,13 +2404,6 @@ test.describe("Sticky workspace", () => {
       await details.getByLabel("Ends").selectOption("after_count");
       await details.getByRole("spinbutton", { name: "Count" }).fill("2");
       await expect(details.getByText("Ends after 2 times")).toBeVisible();
-
-      await details.getByRole("button", { name: "Complete Two-shot repeat" }).click();
-      await expect(page.locator(".toast", { hasText: "Next repeat:" })).toContainText(shortDateLabel(secondDate));
-      const secondOccurrence = activeRegion.locator(".task-card", { hasText: shortDateLabel(secondDate) });
-      await expect(secondOccurrence).toContainText("Two-shot repeat");
-      await secondOccurrence.click();
-      await expect(details.getByText("Ends after 1 time")).toBeVisible();
 
       await details.getByRole("button", { name: "Complete Two-shot repeat" }).click();
       await expect(activeRegion.locator(".task-card", { hasText: "Two-shot repeat" })).toHaveCount(0);

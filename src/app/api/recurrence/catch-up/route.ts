@@ -1,10 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { readAllPages, type DataRow } from "@sticky/data";
 import type { ActorContext } from "@sticky/contracts";
 import { reconcileTaskReminder } from "../../../../../apps/api/src/services/reminder-policy";
-import { mapRecurrenceRule, mapTask } from "@/lib/sticky/mappers";
-import { localDateKey, recurrenceCatchUpTarget, zonedDateKey } from "@/lib/sticky/recurrence";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import type { DbRecurrenceRule, DbTask } from "@/types/sticky";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -32,14 +30,6 @@ function parseLimit(value: string | null) {
   }
 
   return Math.min(1000, Math.max(1, Math.floor(parsed)));
-}
-
-function parseTodayOverride(value: string | null) {
-  if (!value) {
-    return null;
-  }
-
-  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "invalid";
 }
 
 function workflowActor(userId: string): ActorContext {
@@ -87,163 +77,21 @@ export async function GET(request: NextRequest) {
   }
 
   const limit = parseLimit(request.nextUrl.searchParams.get("limit"));
-  const todayOverride = parseTodayOverride(request.nextUrl.searchParams.get("today"));
-
-  if (todayOverride === "invalid") {
-    return jsonResponse(
-      {
-        ok: false,
-        error: "today must use YYYY-MM-DD format.",
-      },
-      400,
-    );
-  }
-
-  const runDate = new Date();
-  const reminderTasksResult = await supabase
-    .from("tasks")
-    .select("id,user_id")
-    .eq("is_completed", false)
-    .not("due_date", "is", null)
-    .not("due_time", "is", null)
-    .limit(limit);
-  if (reminderTasksResult.error) {
-    return jsonResponse({ ok: false, error: reminderTasksResult.error.message }, 500);
-  }
-  let remindersReconciled = 0;
-  const reminderErrors: WorkerError[] = [];
-  for (const row of reminderTasksResult.data ?? []) {
-    try {
-      await reconcileTaskReminder(workflowActor(String(row.user_id)), String(row.id));
-      remindersReconciled += 1;
-    } catch (error) {
-      reminderErrors.push({
-        taskId: String(row.id),
-        message: error instanceof Error ? error.message : "Reminder reconciliation failed.",
-      });
+  const owners = await supabase.from("users").select("id").order("id").limit(limit);
+  if (owners.error) return jsonResponse({ ok: false, error: "Could not load routine owners." }, 500);
+  const errors: WorkerError[] = [];
+  let generated = 0;
+  for (const owner of owners.data ?? []) {
+    const reconciled = await supabase.rpc("reconcile_routine_occurrences", { p_request_user_id: String(owner.id) });
+    if (reconciled.error) { errors.push({ taskId: String(owner.id), message: reconciled.error.message }); continue; }
+    generated += Number(reconciled.data ?? 0);
+    const tasks = await readAllPages<DataRow>((from, to) => supabase.from("tasks").select("id").eq("user_id", String(owner.id)).eq("is_completed", false)
+      .or("routine_id.is.null,occurrence_status.eq.pending").not("due_date", "is", null).not("due_time", "is", null).order("id").range(from, to));
+    if (tasks.error) { errors.push({ taskId: String(owner.id), message: tasks.error.message }); continue; }
+    for (const task of tasks.data ?? []) {
+      try { await reconcileTaskReminder(workflowActor(String(owner.id)), String(task.id)); }
+      catch { errors.push({ taskId: String(task.id), message: "Could not reconcile reminder." }); }
     }
   }
-
-  const maxLookupDate = localDateKey(new Date(runDate.getTime() + 86_400_000));
-  const recurrenceResult = await supabase
-    .from("task_recurrence_rules")
-    .select("*")
-    .eq("paused", false)
-    .order("updated_at", { ascending: true })
-    .limit(limit);
-
-  if (recurrenceResult.error) {
-    return jsonResponse(
-      {
-        ok: false,
-        error: recurrenceResult.error.message,
-      },
-      500,
-    );
-  }
-
-  const recurrenceRows = (recurrenceResult.data ?? []) as DbRecurrenceRule[];
-  const taskIds = recurrenceRows.map((rule) => rule.task_id);
-
-  if (!taskIds.length) {
-    return jsonResponse({
-      ok: true,
-      checked: 0,
-      eligible: 0,
-      advanced: 0,
-      skipped: 0,
-      remindersReconciled,
-      errors: reminderErrors,
-    });
-  }
-
-  const tasksResult = await supabase
-    .from("tasks")
-    .select("*")
-    .in("id", taskIds)
-    .eq("is_completed", false)
-    .not("due_date", "is", null)
-    .lte("due_date", maxLookupDate)
-    .limit(limit);
-
-  if (tasksResult.error) {
-    return jsonResponse(
-      {
-        ok: false,
-        error: tasksResult.error.message,
-      },
-      500,
-    );
-  }
-
-  const tasks = ((tasksResult.data ?? []) as DbTask[]).map(mapTask);
-  const rulesByTask = new Map(
-    recurrenceRows.map((rule) => [rule.task_id, mapRecurrenceRule(rule)]),
-  );
-  const errors: WorkerError[] = [...reminderErrors];
-  let eligible = 0;
-  let advanced = 0;
-  let skipped = 0;
-  let missedRepeats = 0;
-
-  for (const task of tasks) {
-    const rule = rulesByTask.get(task.id);
-
-    if (!rule) {
-      continue;
-    }
-
-    const targetDate =
-      todayOverride ?? zonedDateKey(rule.timezone || task.timezone, runDate);
-    const catchUpTarget = recurrenceCatchUpTarget(rule, task, targetDate);
-
-    if (!catchUpTarget) {
-      skipped += 1;
-      continue;
-    }
-
-    eligible += 1;
-    missedRepeats += catchUpTarget.skippedCount;
-
-    const { data, error } = await supabase.rpc("advance_recurring_task_for_worker", {
-      p_next_due_date: catchUpTarget.dueDate,
-      p_next_occurrence_count: catchUpTarget.occurrenceCount,
-      p_reason: "vercel_cron",
-      p_skipped_count: catchUpTarget.skippedCount,
-      p_task_id: task.id,
-    });
-
-    if (error) {
-      errors.push({ taskId: task.id, message: error.message });
-      continue;
-    }
-
-    if (data === true) {
-      advanced += 1;
-      try {
-        await reconcileTaskReminder(workflowActor(task.userId), task.id);
-      } catch (error) {
-        errors.push({
-          taskId: task.id,
-          message: error instanceof Error ? error.message : "Reminder reconciliation failed.",
-        });
-      }
-    } else {
-      skipped += 1;
-    }
-  }
-
-  return jsonResponse(
-    {
-      ok: errors.length === 0,
-      checked: tasks.length,
-      eligible,
-      advanced,
-      skipped,
-      missedRepeats,
-      remindersReconciled,
-      errors,
-    },
-    errors.length ? 207 : 200,
-  );
+  return jsonResponse({ ok: errors.length === 0, generated, errors }, errors.length ? 207 : 200);
 }

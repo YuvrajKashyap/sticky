@@ -58,6 +58,9 @@ export type StickyList = {
 };
 
 export type StickyTask = {
+  routineId?: string | null;
+  scheduledDate?: string | null;
+  occurrenceStatus?: "pending" | "completed" | "not_completed" | "skipped" | "unknown" | "not_scheduled" | null;
   id: string;
   userId: string;
   listId: string;
@@ -155,6 +158,9 @@ export type DbList = {
 };
 
 export type DbTask = {
+  routine_id?: string | null;
+  scheduled_date?: string | null;
+  occurrence_status?: StickyTask["occurrenceStatus"];
   id: string;
   user_id: string;
   list_id: string;

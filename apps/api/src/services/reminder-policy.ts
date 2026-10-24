@@ -1,3 +1,4 @@
+import { isActiveOccurrence } from "@sticky/domain";
 import type { ActorContext, CreateReminderInput, ReminderDto, TaskDto } from "@sticky/contracts";
 import {
   resolveReminderTime,
@@ -54,7 +55,7 @@ export async function reconcileTaskReminder(actor: ActorContext, taskId: string)
     repository.listScheduledReminders(actor, taskId),
   ]);
 
-  if (task.isCompleted) {
+  if (!isActiveOccurrence(task)) {
     const cancelledReminderIds = await repository.cancelScheduledReminders(actor, taskId);
     return { action: "cancelled" as const, cancelledReminderIds };
   }

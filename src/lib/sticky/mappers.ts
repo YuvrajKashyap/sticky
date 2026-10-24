@@ -55,6 +55,10 @@ export function mapList(row: DbList): StickyList {
 
 export function mapTask(row: DbTask): StickyTask {
   return {
+    routineId: row.routine_id ?? null,
+    scheduledDate: row.scheduled_date ?? null,
+    occurrenceStatus: row.occurrence_status ?? null,
+
     id: row.id,
     userId: row.user_id,
     listId: row.list_id,

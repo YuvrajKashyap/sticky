@@ -78,30 +78,32 @@ describe("authenticated Sticky persistence", () => {
     await command({ kind: "table", table: "task_recurrence_rules", action: "insert", payload: { user_id: owner.userId, task_id: taskId, frequency: "monthly", starts_on: "2026-09-01", month_days: [1, 15, -1] } });
     const nextId = randomUUID();
     await command({ kind: "rpc", name: "complete_task_with_recurrence", args: { p_task_id: taskId, p_next_task_id: nextId, p_next_due_date: "2026-09-15", p_next_due_time: null, p_next_occurrence_count: null } });
-    const saved = await owner.client.from("task_recurrence_rules").select("month_days").eq("task_id", nextId).single();
+    const saved = await owner.client.from("task_recurrence_rules").select("month_days").eq("task_id", taskId).single();
     expect(saved.error).toBeNull();
     expect(saved.data?.month_days).toEqual([1, 15, -1]);
     const { admin } = testEnvironment();
-    const invalid = await admin.from("task_recurrence_rules").update({ month_days: [0, 32] }).eq("task_id", nextId);
+    const invalid = await admin.from("task_recurrence_rules").update({ month_days: [0, 32] }).eq("task_id", taskId);
     expect(invalid.error?.code).toBe("23514");
   });
 
-  it("commits recurrence and outbox events atomically, and rolls both back on invalid completion", async () => {
+  it("completes only the specified occurrence and retains transactional activity", async () => {
     const { admin } = testEnvironment();
     const taskId = randomUUID();
     await command({ kind: "table", table: "tasks", action: "insert", payload: { id: taskId, user_id: owner.userId, list_id: owner.listId, title: "Recurring", due_date: "2026-09-04" } });
     await command({ kind: "table", table: "task_recurrence_rules", action: "insert", payload: { user_id: owner.userId, task_id: taskId, frequency: "daily", starts_on: "2026-09-04" } });
     const before = await admin.from("outbox_events").select("id", { head: true, count: "exact" }).eq("user_id", owner.userId);
-    const invalid = await admin.rpc("complete_task_with_recurrence", { p_task_id: taskId, p_next_task_id: taskId, p_next_due_date: "2026-09-05", p_next_due_time: null, p_next_occurrence_count: null, p_request_user_id: owner.userId });
-    expect(invalid.error).not.toBeNull();
+    const denied = await admin.rpc("complete_task_with_recurrence", { p_task_id: taskId, p_request_user_id: other.userId });
+    expect(denied.error).not.toBeNull();
     const original = await owner.client.from("tasks").select("is_completed").eq("id", taskId).single();
     expect(original.data?.is_completed).toBe(false);
     const after = await admin.from("outbox_events").select("id", { head: true, count: "exact" }).eq("user_id", owner.userId);
     expect(after.count).toBe(before.count);
-    const nextId = randomUUID();
-    await command({ kind: "rpc", name: "complete_task_with_recurrence", args: { p_task_id: taskId, p_next_task_id: nextId, p_next_due_date: "2026-09-05", p_next_due_time: null, p_next_occurrence_count: null } });
-    const next = await owner.client.from("tasks").select("due_date,is_completed").eq("id", nextId).single();
-    expect(next.data).toEqual({ due_date: "2026-09-05", is_completed: false });
+    const guessedNextId = randomUUID();
+    await command({ kind: "rpc", name: "complete_task_with_recurrence", args: { p_task_id: taskId, p_next_task_id: guessedNextId, p_next_due_date: "2026-09-05", p_next_due_time: null, p_next_occurrence_count: null } });
+    const next = await owner.client.from("tasks").select("id").eq("id", guessedNextId).maybeSingle();
+    expect(next.data).toBeNull();
+    const completed = await owner.client.from("tasks").select("is_completed,occurrence_status").eq("id", taskId).single();
+    expect(completed.data).toEqual({ is_completed: true, occurrence_status: "completed" });
     const events = await admin.from("outbox_events").select("id", { head: true, count: "exact" }).eq("user_id", owner.userId);
     expect(events.count!).toBeGreaterThan(before.count!);
   });

@@ -60,8 +60,9 @@ import {
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import { format } from "date-fns";
 import { relativeDueDateLabel } from "@/lib/sticky/due-date-label";
+import { RoutineHistory } from "./RoutineHistory";
 import { MonthDaysPicker } from "./MonthDaysPicker";
-import { monthlyOccurrence, monthDaysLabel } from "@sticky/domain";
+import { monthlyOccurrence, monthDaysLabel, isActiveOccurrence, occurrenceStatus } from "@sticky/domain";
 import { calendarTaskItems, itemMatchesView, matchingTaskItems } from "@/lib/sticky/task-filter";
 import { parentDueDateIssue, reconcileParentDueDate } from "@sticky/domain";
 import { createStickyPlatformClient } from "@/lib/sticky/api-client";
@@ -89,11 +90,6 @@ import {
   reorderItemsWithinVisibleSubset,
   type DueSchedule,
 } from "@/lib/sticky/task-order";
-import {
-  nextOccurrenceCount,
-  nextRecurrenceDate,
-  recurrenceCatchUpTarget,
-} from "@/lib/sticky/recurrence";
 import { AccentWheel, DEFAULT_ACCENT_HUE, ListColorWheel, applyAccentHue } from "./AccentWheel";
 import {
   CaptureScheduler,
@@ -1141,43 +1137,6 @@ function recurrenceUsesMonthDay(frequency: RecurrenceFrequency) {
   return frequency === "monthly" || frequency === "yearly" || frequency === "custom";
 }
 
-function createNextRecurringOccurrence(
-  workspace: StickyWorkspaceData,
-  task: StickyTask,
-  rule: StickyRecurrenceRule,
-) {
-  const dueDate = nextRecurrenceDate(rule, task);
-
-  if (!dueDate) {
-    return null;
-  }
-
-  const timestamp = nowIso();
-  const activeInList = workspace.tasks.filter(
-    (item) => item.listId === task.listId && !item.isCompleted && item.id !== task.id,
-  );
-  const nextTask: StickyTask = {
-    ...task,
-    id: createId(),
-    dueDate,
-    dueTime: task.dueTime,
-    isCompleted: false,
-    completedAt: null,
-    completedSortOrder: null,
-    sortOrder: nextSortOrder(activeInList),
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  };
-  const nextRule: StickyRecurrenceRule = {
-    ...rule,
-    taskId: nextTask.id,
-    occurrenceCount: nextOccurrenceCount(rule),
-    updatedAt: timestamp,
-  };
-
-  return { task: nextTask, rule: nextRule };
-}
-
 function recurrenceFamilyKey(task: StickyTask) {
   return JSON.stringify([
     task.listId,
@@ -1484,7 +1443,9 @@ export function StickyWorkspace({
     window.addEventListener("online", requestReconciliation);
     document.addEventListener("visibilitychange", reconcileVisibleWorkspace);
     void connectRealtime();
+    const rolloverTimer = window.setInterval(reconcileVisibleWorkspace, 60_000);
     return () => {
+      window.clearInterval(rolloverTimer);
       disposed = true;
       persistence.setActive(false);
       reconcileRef.current = async () => false;
@@ -1878,8 +1839,14 @@ export function StickyWorkspace({
   }, [workspace.subtasks]);
 
   const recurrenceByTask = useMemo(() => {
-    return new Map(workspace.recurrenceRules.map((rule) => [rule.taskId, rule]));
-  }, [workspace.recurrenceRules]);
+    const map = new Map(workspace.recurrenceRules.map((rule) => [rule.taskId, rule]));
+    const rules = new Map(workspace.recurrenceRules.map(rule => [rule.id, rule]));
+    for (const task of workspace.tasks) {
+      const rule = task.routineId ? rules.get(task.routineId) : null;
+      if (rule) map.set(task.id, rule);
+    }
+    return map;
+  }, [workspace.recurrenceRules, workspace.tasks]);
   const recurringTaskIds = useMemo(() => {
     const currentRecurringFamilies = new Set(
       workspace.tasks
@@ -1908,7 +1875,7 @@ export function StickyWorkspace({
       }
       if (task.isCompleted) {
         item.completed += 1;
-      } else {
+      } else if (isActiveOccurrence(task)) {
         item.active += 1;
       }
     });
@@ -1922,7 +1889,7 @@ export function StickyWorkspace({
   }, [workspace.lists, workspace.tasks, workspace.history]);
   const totalActiveTasks = useMemo(
     () =>
-      workspace.tasks.filter((task) => unarchivedListIds.has(task.listId) && !task.isCompleted)
+      workspace.tasks.filter((task) => unarchivedListIds.has(task.listId) && isActiveOccurrence(task))
         .length,
     [unarchivedListIds, workspace.tasks],
   );
@@ -1952,7 +1919,7 @@ export function StickyWorkspace({
 
   const activeListTasks = useMemo(() => {
     return workspace.tasks
-      .filter((task) => task.listId === activeListId && (!task.isCompleted || (subtasksByTask.get(task.id) ?? []).some(child => !child.isCompleted)))
+      .filter((task) => task.listId === activeListId && (isActiveOccurrence(task) || (subtasksByTask.get(task.id) ?? []).some(child => !child.isCompleted)))
       .sort(bySortOrder);
   }, [activeListId, subtasksByTask, workspace.tasks]);
 
@@ -1962,7 +1929,7 @@ export function StickyWorkspace({
     }
 
     return workspace.tasks
-      .filter((task) => visibleBoardListIds.has(task.listId) && (!task.isCompleted || (subtasksByTask.get(task.id) ?? []).some(child => !child.isCompleted)))
+      .filter((task) => visibleBoardListIds.has(task.listId) && (isActiveOccurrence(task) || (subtasksByTask.get(task.id) ?? []).some(child => !child.isCompleted)))
       .sort(bySortOrder);
   }, [activeListId, activeListTasks, visibleBoardListIds, workspace.tasks, subtasksByTask]);
 
@@ -2125,7 +2092,7 @@ export function StickyWorkspace({
 
     return boardLists.map((list) => {
       const listActiveTasks = workspace.tasks
-        .filter((task) => task.listId === list.id && (!task.isCompleted || (subtasksByTask.get(task.id) ?? []).some(child => !child.isCompleted)))
+        .filter((task) => task.listId === list.id && (isActiveOccurrence(task) || (subtasksByTask.get(task.id) ?? []).some(child => !child.isCompleted)))
         .sort(bySortOrder);
       const listCompletedTasks = workspace.tasks
         .filter((task) => task.listId === list.id && task.isCompleted)
@@ -2216,22 +2183,6 @@ export function StickyWorkspace({
     [],
   );
 
-  const recurringCatchUps = useMemo(() => {
-    if (!activeListId) {
-      return [];
-    }
-
-    return workspace.tasks
-      .filter((task) => task.listId === activeListId && !task.isCompleted)
-      .map((task) => {
-        const rule = recurrenceByTask.get(task.id) ?? null;
-        const target = rule ? recurrenceCatchUpTarget(rule, task) : null;
-
-        return rule && target ? { task, rule, target } : null;
-      })
-      .filter((item): item is NonNullable<typeof item> => Boolean(item));
-  }, [activeListId, recurrenceByTask, workspace.tasks]);
-
   const selectedTask = selectedTaskId
     ? workspace.tasks.find((task) => task.id === selectedTaskId) ?? null
     : null;
@@ -2243,11 +2194,6 @@ export function StickyWorkspace({
   const selectedTaskRecurrence = selectedTask
     ? recurrenceByTask.get(selectedTask.id) ?? null
     : null;
-  const selectedTaskCatchUp =
-    selectedTask && selectedTaskRecurrence
-      ? recurrenceCatchUpTarget(selectedTaskRecurrence, selectedTask)
-      : null;
-
   const completedOpen = activeListId
     ? workspace.preferences.completedOpenByList[activeListId] ?? false
     : false;
@@ -2259,7 +2205,7 @@ export function StickyWorkspace({
   const workspacePulse = useMemo<WorkspacePulse>(() => {
     const todayKey = format(new Date(), "yyyy-MM-dd");
     const workspaceTasks = workspace.tasks.filter((task) => unarchivedListIds.has(task.listId));
-    const activeAll = workspaceTasks.filter((task) => !task.isCompleted);
+    const activeAll = workspaceTasks.filter((task) => isActiveOccurrence(task));
     const completedCount = workspaceTasks.length - activeAll.length;
     const workspaceTaskIds = new Set(workspaceTasks.map((task) => task.id));
     const openSubtasks = workspace.subtasks.filter(
@@ -2469,7 +2415,7 @@ export function StickyWorkspace({
       };
     }),
     ...workspace.tasks
-      .filter((task) => unarchivedListIds.has(task.listId) && !task.isCompleted)
+      .filter((task) => unarchivedListIds.has(task.listId) && isActiveOccurrence(task))
       .slice()
       .sort((a, b) => {
         const aDue = `${a.dueDate ?? "9999-12-31"}T${a.dueTime ?? "23:59"}`;
@@ -3336,7 +3282,7 @@ export function StickyWorkspace({
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago",
       isCompleted: false,
       completedAt: null,
-      sortOrder: nextSortOrder(workspace.tasks.filter((item) => item.listId === targetListId && !item.isCompleted)),
+      sortOrder: nextSortOrder(workspace.tasks.filter((item) => item.listId === targetListId && isActiveOccurrence(item))),
       completedSortOrder: null,
       createdAt: nowIso(),
       updatedAt: nowIso(),
@@ -3500,7 +3446,7 @@ export function StickyWorkspace({
     }
 
     const before = workspace;
-    const targetActive = workspace.tasks.filter((item) => item.listId === listId && !item.isCompleted);
+    const targetActive = workspace.tasks.filter((item) => item.listId === listId && isActiveOccurrence(item));
     const targetCompleted = workspace.tasks.filter(
       (item) => item.listId === listId && item.isCompleted,
     );
@@ -3569,7 +3515,7 @@ export function StickyWorkspace({
     const task = workspace.tasks.find((item) => item.id === taskId);
     const listId = task?.listId ?? activeListId;
     const ordered = workspace.tasks
-      .filter((item) => item.listId === listId && !item.isCompleted)
+      .filter((item) => item.listId === listId && isActiveOccurrence(item))
       .sort(bySortOrder);
     if (!task) {
       return;
@@ -3630,104 +3576,23 @@ export function StickyWorkspace({
     const completedInList = workspace.tasks.filter(
       (item) => item.listId === task.listId && item.isCompleted,
     );
-    const recurrenceRule = recurrenceByTask.get(task.id) ?? null;
-    const nextOccurrence = recurrenceRule
-      ? createNextRecurringOccurrence(workspace, task, recurrenceRule)
-      : null;
-
+    const routine = recurrenceByTask.get(task.id);
     setWorkspace({
       ...workspace,
-      tasks: [
-        ...workspace.tasks.map((item) =>
-          item.id === task.id
-            ? {
-                ...item,
-                isCompleted: true,
-                completedAt,
-                completedSortOrder: nextCompletedSortOrder(completedInList),
-                version: (item.version ?? 1) + 1,
-                updatedAt: completedAt,
-              }
-            : item,
-        ),
-        ...(nextOccurrence ? [nextOccurrence.task] : []),
-      ],
-      recurrenceRules: nextOccurrence
-        ? workspace.recurrenceRules.map((rule) =>
-            rule.id === nextOccurrence.rule.id ? nextOccurrence.rule : rule,
-          )
-        : workspace.recurrenceRules,
+      tasks: workspace.tasks.map(item => item.id === task.id ? {
+        ...item,
+        routineId: item.routineId ?? routine?.id,
+        scheduledDate: item.scheduledDate ?? (routine ? item.dueDate ?? routine.startsOn : null),
+        isCompleted: true,
+        completedAt,
+        occurrenceStatus: item.routineId || routine ? "completed" : item.occurrenceStatus,
+        completedSortOrder: nextCompletedSortOrder(completedInList),
+        version: (item.version ?? 1) + 1,
+        updatedAt: completedAt,
+      } : item),
     });
-    void persist(
-      "Sticky completion",
-      () =>
-        nextOccurrence
-          ? supabase!.rpc("complete_task_with_recurrence", {
-              p_task_id: task.id,
-              p_next_task_id: nextOccurrence.task.id,
-              p_next_due_date: nextOccurrence.task.dueDate,
-              p_next_due_time: nextOccurrence.task.dueTime,
-              p_next_occurrence_count: nextOccurrence.rule.occurrenceCount,
-            })
-          : supabase!.rpc("set_task_completed", {
-              p_task_id: task.id,
-              p_completed: true,
-            }),
-      before,
-    );
-    pushToast({
-      title: "Task completed",
-      body: nextOccurrence?.task.dueDate
-        ? `Next repeat: ${humanDate(nextOccurrence.task.dueDate)}`
-        : task.title,
-      actionLabel: "Undo",
-      onAction: () => {
-        if (!nextOccurrence || !recurrenceRule) {
-          restoreTask(task.id);
-          return;
-        }
-
-        const restoreBefore = workspaceRef.current;
-        setWorkspace((current) => ({
-          ...current,
-          tasks: current.tasks
-            .filter((item) => item.id !== nextOccurrence.task.id)
-            .map((item) =>
-              item.id === task.id
-                ? {
-                    ...item,
-                    isCompleted: false,
-                    completedAt: null,
-                    completedSortOrder: null,
-                    sortOrder: nextSortOrder(
-                      current.tasks.filter(
-                        (active) =>
-                          active.listId === task.listId &&
-                          !active.isCompleted &&
-                          active.id !== nextOccurrence.task.id,
-                      ),
-                    ),
-                    updatedAt: nowIso(),
-                  }
-                : item,
-            ),
-          recurrenceRules: current.recurrenceRules.map((rule) =>
-            rule.id === recurrenceRule.id ? recurrenceRule : rule,
-          ),
-        }));
-        void persist(
-          "Undo completion",
-          () =>
-            supabase!.rpc("undo_recurring_completion", {
-              p_task_id: task.id,
-              p_generated_task_id: nextOccurrence.task.id,
-              p_recurrence_rule_id: recurrenceRule.id,
-              p_occurrence_count: recurrenceRule.occurrenceCount,
-            }),
-          restoreBefore,
-        );
-      },
-    });
+    void persist("Sticky completion", () => supabase!.rpc("set_task_completed", { p_task_id: task.id, p_completed: true }), before);
+    pushToast({ title: "Task completed", body: task.title, actionLabel: "Undo", onAction: () => restoreTask(task.id) });
   }
 
   function restoreTask(taskId: string) {
@@ -3737,7 +3602,7 @@ export function StickyWorkspace({
     }
     const before = workspace;
     const activeInList = workspace.tasks.filter(
-      (item) => item.listId === task.listId && !item.isCompleted,
+      (item) => item.listId === task.listId && isActiveOccurrence(item),
     );
 
     setWorkspace({
@@ -3747,6 +3612,7 @@ export function StickyWorkspace({
           ? {
               ...item,
               isCompleted: false,
+              occurrenceStatus: item.routineId ? occurrenceStatus({ ...item, isCompleted: false, occurrenceStatus: "pending" }) : item.occurrenceStatus,
               completedAt: null,
               completedSortOrder: null,
               sortOrder: nextSortOrder(activeInList),
@@ -3867,7 +3733,7 @@ export function StickyWorkspace({
     const timestamp = nowIso();
     const duplicateId = createId();
     const activeInList = workspace.tasks.filter(
-      (item) => item.listId === task.listId && !item.isCompleted,
+      (item) => item.listId === task.listId && isActiveOccurrence(item),
     );
     const sourceSubtasks = (subtasksByTask.get(task.id) ?? []).slice().sort(bySortOrder);
     const sourceRule = recurrenceByTask.get(task.id) ?? null;
@@ -4355,7 +4221,7 @@ export function StickyWorkspace({
       }
 
       const rule: StickyRecurrenceRule = {
-        id: createId(),
+        id: task.routineId ?? createId(),
         userId: workspace.user.id,
         taskId: task.id,
         frequency: "daily",
@@ -4437,71 +4303,6 @@ export function StickyWorkspace({
         ...workspace.preferences.completedOpenByList,
         [listId]: !(workspace.preferences.completedOpenByList[listId] ?? false),
       },
-    });
-  }
-
-  function advanceRecurringCatchUps(targets = recurringCatchUps) {
-    if (targets.length === 0) {
-      return;
-    }
-
-    const before = workspace;
-    const timestamp = nowIso();
-    const taskTargets = new Map(
-      targets.map((item) => [
-        item.task.id,
-        {
-          dueDate: item.target.dueDate,
-          skippedCount: item.target.skippedCount,
-        },
-      ]),
-    );
-    const ruleTargets = new Map(
-      targets.map((item) => [
-        item.rule.id,
-        {
-          occurrenceCount: item.target.occurrenceCount,
-        },
-      ]),
-    );
-    const totalSkipped = targets.reduce(
-      (count, item) => count + item.target.skippedCount,
-      0,
-    );
-
-    setWorkspace({
-      ...workspace,
-      tasks: workspace.tasks.map((task) => {
-        const target = taskTargets.get(task.id);
-
-        return target ? { ...task, dueDate: target.dueDate, updatedAt: timestamp } : task;
-      }),
-      recurrenceRules: workspace.recurrenceRules.map((rule) => {
-        const target = ruleTargets.get(rule.id);
-
-        return target
-          ? { ...rule, occurrenceCount: target.occurrenceCount, updatedAt: timestamp }
-          : rule;
-      }),
-    });
-
-    void persist(
-      "Recurring catch-up",
-      () =>
-        settleWorkspaceOperations(
-          targets.map((item) =>
-            supabase!.rpc("advance_recurring_task", {
-              p_task_id: item.task.id,
-              p_next_due_date: item.target.dueDate,
-              p_next_occurrence_count: item.target.occurrenceCount,
-            }),
-          ),
-        ),
-      before,
-    );
-    pushToast({
-      title: "Repeats caught up",
-      body: `${targets.length} ${plural(targets.length, "task")} advanced across ${totalSkipped} ${plural(totalSkipped, "missed repeat")}.`,
     });
   }
 
@@ -4593,7 +4394,7 @@ export function StickyWorkspace({
       }
 
       const ordered = workspace.tasks
-        .filter((task) => task.listId === activeTask.listId && !task.isCompleted)
+        .filter((task) => task.listId === activeTask.listId && isActiveOccurrence(task))
         .sort(bySortOrder);
       const visibleTasks = ordered
         .filter((task) =>
@@ -4844,6 +4645,10 @@ export function StickyWorkspace({
             </div>
 
             <div className={`workspace-tools${searchExpanded ? " search-expanded" : ""}`}>
+              <RoutineHistory workspace={workspace} demo={mode === "demo"} onChange={task => {
+                if (task) setWorkspace(current => ({ ...current, tasks: current.tasks.map(item => item.id === task.id ? task : item) }));
+                else void reconcileRef.current();
+              }} />
               <div
                 className="workspace-find-anchor"
                 onFocusCapture={() => setSearchFocused(true)}
@@ -5266,20 +5071,6 @@ export function StickyWorkspace({
             </div>
           ) : null}
 
-          {recurringCatchUps.length ? (
-            <div className="recurrence-catchup-banner">
-              <div>
-                <Repeat2 size={16} />
-                <span>
-                  {recurringCatchUps.length} repeating{" "}
-                  {plural(recurringCatchUps.length, "task")} behind schedule
-                </span>
-              </div>
-              <button type="button" onClick={() => advanceRecurringCatchUps()}>
-                Advance repeats
-              </button>
-            </div>
-          ) : null}
           </> : null}
 
           {historyLoading || historyError ? (
@@ -5413,7 +5204,6 @@ export function StickyWorkspace({
           taskSortMode={taskSortMode}
           reorderLocked={reorderLocked}
           recurrenceRule={selectedTaskRecurrence}
-          catchUpTarget={selectedTaskCatchUp}
           pulse={workspacePulse}
           onClose={() => {
             setSelectedTaskId(null);
@@ -5434,17 +5224,7 @@ export function StickyWorkspace({
           onDeleteSubtask={deleteSubtask}
           onToggleRecurrence={(enabled) => selectedTask && toggleRecurrence(selectedTask, enabled)}
           onUpdateRecurrence={updateRecurrence}
-          onAdvanceRecurrence={() => {
-            if (!selectedTask) {
-              return;
-            }
 
-            const target = recurringCatchUps.find((item) => item.task.id === selectedTask.id);
-
-            if (target) {
-              advanceRecurringCatchUps([target]);
-            }
-          }}
         />
 
         </div>
@@ -6271,7 +6051,7 @@ function SortableTaskCard({
   const matchingIds = new Set(matchingItems.map(item => item.id));
   const visibleChildren = subtasks.filter(child => matchingIds.has(child.id));
   const contextOnly = !matchingIds.has(task.id);
-  const showingCompletion = completing && !task.isCompleted;
+  const showingCompletion = completing && isActiveOccurrence(task);
   useEffect(() => {
     if (task.isCompleted) setCompleting(false);
   }, [task.isCompleted]);
@@ -6572,7 +6352,6 @@ function TaskDetailsPanel({
   taskSortMode,
   reorderLocked,
   recurrenceRule,
-  catchUpTarget,
   pulse,
   onClose,
   onOpenTask,
@@ -6588,7 +6367,6 @@ function TaskDetailsPanel({
   onDeleteSubtask,
   onToggleRecurrence,
   onUpdateRecurrence,
-  onAdvanceRecurrence,
 }: {
   task: StickyTask | null;
   lists: StickyList[];
@@ -6597,7 +6375,6 @@ function TaskDetailsPanel({
   taskSortMode: StickyTaskSortMode;
   reorderLocked: boolean;
   recurrenceRule: StickyRecurrenceRule | null;
-  catchUpTarget: ReturnType<typeof recurrenceCatchUpTarget>;
   pulse: WorkspacePulse;
   onClose: () => void;
   onOpenTask: (taskId: string) => void;
@@ -6613,7 +6390,6 @@ function TaskDetailsPanel({
   onDeleteSubtask: (subtaskId: string) => void;
   onToggleRecurrence: (enabled: boolean) => void;
   onUpdateRecurrence: (ruleId: string, patch: Partial<StickyRecurrenceRule>) => void;
-  onAdvanceRecurrence: () => void;
 }) {
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [titleDraft, setTitleDraft] = useState(task?.title ?? "");
@@ -6987,14 +6763,6 @@ function TaskDetailsPanel({
                 />
                 <span>Pause repeat</span>
               </label>
-              {catchUpTarget ? (
-                <div className="recurrence-inline-catchup">
-                  <span>Behind schedule - next is {humanDate(catchUpTarget.dueDate)}</span>
-                  <button type="button" onClick={onAdvanceRecurrence}>
-                    Advance repeat
-                  </button>
-                </div>
-              ) : null}
               <label className="detail-field">
                 <span>Every</span>
                 <input

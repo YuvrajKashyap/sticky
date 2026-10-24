@@ -104,7 +104,7 @@ describe("Sticky MCP source isolation", () => {
     expect(tools.has("set_task_recurrence_paused")).toBe(true);
     expect(tools.has("remove_task_recurrence")).toBe(true);
     expect(tools.get("create_task")?.description).toContain("recurrence");
-    expect(tools.get("complete_task")?.description).toContain("next scheduled occurrence");
+    expect(tools.get("complete_task")?.description).toContain("exactly one dated occurrence");
     expect(tools.get("add_subtask")?.description).toContain("never claim the integration cannot create subtasks");
     expect(tools.get("add_subtask")?.description).toContain("An undated subtask clears the parent due date");
     expect(tools.get("update_subtask")?.description).toContain("does not invent a parent date");
@@ -178,7 +178,7 @@ describe("Sticky MCP source isolation", () => {
     expect(tools.has("set_task_recurrence_paused")).toBe(true);
     expect(tools.has("remove_task_recurrence")).toBe(true);
     expect(tools.get("create_task")?.description).toContain("Never substitute a reminder for recurrence");
-    expect(tools.get("complete_task")?.description).toContain("next scheduled occurrence");
+    expect(tools.get("complete_task")?.description).toContain("exactly one dated occurrence");
     expect(tools.has("move_list")).toBe(true);
     expect(tools.has("reorder_lists")).toBe(true);
     expect(tools.has("delete_list")).toBe(true);

@@ -19,6 +19,10 @@ export function mapListRow(row: DataRow): ListDto {
 
 export function mapTaskRow(row: DataRow): TaskDto {
   return {
+    routineId: row.routine_id ? String(row.routine_id) : null,
+    scheduledDate: row.scheduled_date ? String(row.scheduled_date) : null,
+    occurrenceStatus: (row.occurrence_status as TaskDto["occurrenceStatus"]) ?? null,
+
     id: String(row.id),
     userId: String(row.user_id),
     listId: String(row.list_id),

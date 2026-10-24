@@ -16,6 +16,7 @@ function database(completeDuringRead = false, withChildren = false) {
     global: { fetch: async (input, init) => {
       const url = new URL(String(input));
       const table = url.pathname.split("/").at(-1);
+      if (table === "reconcile_my_routines") return Response.json(0);
       expect(url.searchParams.get("user_id")).toBe("eq.owner");
       let rows: object[] = [];
       if (table === "lists") rows = lists;

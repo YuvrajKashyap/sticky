@@ -229,6 +229,24 @@ const app = new Hono<Env>();
     return success(c, await readWorkspaceRecords(getRuntime().db, actor.userId, ids));
   });
 
+  app.get("/api/v1/routines", async c => {
+    const actor = c.get("actor"); requireScope(actor, "tasks:read");
+    return success(c, { routines: await getRuntime().repository.listRoutines(actor) });
+  });
+  app.get("/api/v1/routines/:id/history", async c => {
+    const actor = c.get("actor"); requireScope(actor, "tasks:read");
+    const range = z.object({ from: z.iso.date(), through: z.iso.date() }).parse(c.req.query());
+    return success(c, await getRuntime().repository.routineHistory(actor, z.uuid().parse(c.req.param("id")), range.from, range.through));
+  });
+  app.post("/api/v1/occurrences/:id/status", async c => {
+    const actor = c.get("actor"); requireScope(actor, "tasks:write");
+    const body = await parseJson(c, z.object({ scheduledDate: z.iso.date(), status: z.enum(["completed", "not_completed", "skipped"]), version: z.int().positive() }));
+    return mutate(c, body, async () => {
+      const task = await getRuntime().repository.setOccurrenceStatus(actor, z.uuid().parse(c.req.param("id")), body.scheduledDate, body.status, body.version);
+      return { task, reminder: await reconcileTaskReminder(actor, task.id) };
+    });
+  });
+
   const webCommandSchema = z.discriminatedUnion("kind", [
     z.object({
       kind: z.literal("table"),
@@ -275,9 +293,6 @@ const app = new Hono<Env>();
         });
         const changedTaskIds = new Set<string>();
         if (typeof body.args.p_task_id === "string") changedTaskIds.add(body.args.p_task_id);
-        if (body.name === "complete_task_with_recurrence" && typeof body.args.p_next_task_id === "string") {
-          changedTaskIds.add(body.args.p_next_task_id);
-        }
         for (const taskId of changedTaskIds) await reconcileTaskReminder(actor, taskId);
         return { result: { data: result.data, error: null } };
       }

@@ -15,6 +15,7 @@
     "test:unit": "vitest run",
     "database:start": "supabase start -x studio,postgres-meta,storage-api,imgproxy,mailpit,edge-runtime,logflare,vector,supavisor",
     "test:database": "node scripts/test-database.mjs",
+    "test:recurrence-migration": "node scripts/test-recurrence-migration.mjs --disposable-local",
     "test:database-browser": "node scripts/test-database.mjs --browser",
     "test:api": "vitest run packages/domain apps/api",
     "test:e2e": "playwright test",

@@ -1,0 +1,21 @@
+.dialog { margin: auto; box-sizing: border-box; color-scheme: dark; width: min(42rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; border: 1px solid var(--line-strong); border-radius: 1.25rem; background: var(--canvas); color: var(--ink); padding: 1.5rem; box-shadow: 0 1rem 4rem #0006; }
+.dialog::backdrop { background: #0008; }
+.header, .range, .rows li { display: flex; gap: 1rem; align-items: center; justify-content: space-between; }
+.header h2 { margin: 0; font-size: 1.35rem; }
+.dialog p, .summary small { font-size: .9rem; line-height: 1.5; opacity: .8; }
+.dialog label { display: grid; gap: .35rem; min-width: 0; font-size: .85rem; }
+.dialog select, .dialog input, .dialog button { color: inherit; background: #ffffff0a; border: 1px solid #8995b440; border-radius: .6rem; padding: .65rem; min-height: 44px; font: inherit; }
+.dialog select option { color: #172039; background: #fff; }
+.range { margin: 1rem 0; }
+.range label { flex: 1; }
+.range input { width: 100%; min-width: 0; box-sizing: border-box; }
+.summary { display: grid; gap: .5rem; padding: 1rem 0; border-block: 1px solid #8995b430; }
+.rows { padding: 0; list-style: none; }
+.rows li { padding: 1rem 0; border-bottom: 1px solid #8995b430; flex-wrap: wrap; }
+.rows li > div { display: grid; gap: .3rem; }
+.rows span { text-transform: capitalize; }
+.rows small { opacity: .75; }
+@media(max-width: 480px) { .dialog { margin: auto; box-sizing: border-box; color-scheme: dark; padding: 1rem; } .range { gap: .5rem; } }
+
+.trigger { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 40px; height: 40px; border: 1px solid var(--line-strong); border-radius: 50%; color: var(--ink-soft); background: var(--surface-sunken); }
+.trigger:hover { color: var(--accent); border-color: var(--accent); }

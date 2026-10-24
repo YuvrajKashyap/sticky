@@ -1,105 +1,54 @@
-# Sticky Recurrence Runbook
+# Independent routine occurrences
 
-Sticky V1 includes a production recurrence foundation, completion-driven next
-occurrence generation, user-controlled catch-up for overdue repeat series, and a
-protected Vercel Cron worker for automated overdue catch-up. This document
-records what is already shipped and what remains before the worker can be fully
-activated in production.
+## Behavior
 
-## Current Foundation
+A recurring task is now a routine template plus dated task records. Generation is independent of completion. An occurrence is active on its scheduled day in its saved timezone. Once that local day ends, an unchecked occurrence becomes **Not completed** and leaves the active board. A one-off remains overdue as before.
 
-- Recurrence data lives in `sticky.task_recurrence_rules`.
-- Rules are owner-scoped with RLS and runtime grants for authenticated users.
-- The UI supports daily, weekly, monthly, yearly, and custom frequencies.
-- Rules include interval count, start date, optional weekdays, optional month
-  day, end type, end date, occurrence count, timezone, and paused state.
-- The workspace renders human recurrence summaries on task cards and in the
-  details panel.
-- Sticky intentionally blocks repeating tasks with subtasks in both UI and
-  database triggers.
-- Completing an active repeating sticky creates the next active occurrence,
-  copies title, details, color, due time, timezone, and list placement, and
-  moves the recurrence rule to that next active sticky.
-- Recurring completion is handled by `sticky.complete_task_with_recurrence(...)`
-  so the current completion, next-task insert, and recurrence-rule handoff are
-  transactional.
-- Undo for a recurring completion uses `sticky.undo_recurring_completion(...)`
-  to move the rule back, delete the generated next sticky, and restore the
-  completed sticky.
-- Overdue active repeating stickies can be advanced from the workspace with the
-  catch-up banner. The update uses `sticky.advance_recurring_task(...)` so the
-  due-date move and after-count decrement stay transactional.
-- The manual catch-up flow and the scheduled worker share the same date math in
-  `src/lib/sticky/recurrence.ts`.
-- Vercel Cron is configured in `vercel.json` to call
-  `/api/recurrence/catch-up` daily. The route requires `CRON_SECRET`, uses a
-  server-only Supabase secret client, and never exposes admin credentials to the
-  browser.
-- Automated catch-up writes through
-  `sticky.advance_recurring_task_for_worker(...)`, which is granted only to
-  `service_role`, stays `SECURITY INVOKER`, rechecks active user/task/rule
-  state, and logs `recurrence_catch_up` events in `sticky.task_activity`.
-- Paused rules, end dates, and after-count exhaustion do not create a next
-  active occurrence. After-count rules are decremented on each generated
-  occurrence and on catch-up advances.
-- Deleting a task or clearing completed stickies removes the associated
-  recurrence rule.
-- Undo for task delete and completed-clear restores recurrence rules together
-  with the task rows.
-- E2E coverage now verifies weekly recurrence duplication, end-on-date
-  persistence, after-count exhaustion, monthly month-end clamping, and yearly
-  leap-day clamping through the real workspace flow.
+Not completed means the occurrence was not checked off in Sticky; it is not evidence that the activity did not happen. Routine history lets the owner correct an exact older occurrence. Completion records the actual correction timestamp. It never changes today's task or creates/completes a future task.
 
-## Remaining Limitation
+Use the history icon in the workspace toolbar to select a routine and date range. The rate is completed / (completed + not completed). Pending, explicitly skipped, unknown and not-scheduled occurrences are excluded. A paused/cancelled scheduled date is labelled Not scheduled, separately from an explicit Skip. Days that never belonged to the schedule have no occurrence row.
 
-The automated worker code, SQL, and Vercel schedule are shipped. Production
-activation still requires server-only Vercel environment variables:
+## Storage and reconciliation
 
-```text
-CRON_SECRET=<random string of at least 16 characters>
-SUPABASE_SECRET_KEY=<Supabase sb_secret_... key>
-```
+- `routine_templates` holds stable routine identity, future task fields, schedule snapshot, tracking boundary and generation cursor. Its ID matches the existing recurrence-rule ID.
+- `routine_schedule_versions` retains schedule revisions with their effective timestamps.
+- Existing `tasks` are the occurrence records, with `routine_id`, immutable `scheduled_date` and `occurrence_status`. Their existing completion timestamps and task IDs remain authoritative.
+- `(routine_id, scheduled_date)` is unique. The reconciler locks each template, inserts missing dates, expires pending dates using each occurrence's own timezone, and commits the cursor in the same transaction. Concurrent calls serialize; repeated calls do not duplicate records or completions.
+- Workspace reads, focus/reconnect, a visible-page minute timer, agent task/history reads, and the protected recurrence cron run reconciliation. Offline periods are materialized on the next connected read. No completion is inferred.
+- The engine iterates calendar dates rather than elapsed 24-hour intervals. It honors interval/weekday/month-day/yearly/custom selection, start/end boundaries, finite counts and pauses. Short months clamp and deduplicate requested dates, including last-day selection.
+- Only dates through the current local day are generated automatically. A deliberately scheduled initial future task can exist, but is never considered missed before its local day ends.
+- Before a schedule change, the old schedule is reconciled through the edit time. New schedule rules apply from the following local day; historical rows are not rewritten. Pausing cancels unchecked current/future dates and excludes them from rates. Resuming starts at the current local day without backfilling paused days. Each occurrence retains its original timezone even after a template timezone change.
+- Removing repeat retires its template and retains dated records. Clearing/deleting tasks is still an explicit destructive operation, not part of reconciliation. A completed occurrence is no longer a dependency for future generation.
+- Reminder delivery ignores expired, skipped and cancelled occurrences. Existing one-off reminder reconciliation remains in place.
 
-Until `SUPABASE_SECRET_KEY` is present, the authenticated cron route reports
-itself as disabled and does not mutate data. The worker advances the active
-repeating sticky to the next current occurrence; it does not materialize every
-missed historical instance as separate tasks.
+## Migration assumptions and release boundary
 
-## Future Worker Expansion
+Migration `20261024152319_independent_routine_occurrences.sql` is additive for task data: it does not delete tasks or change existing task IDs, scheduled due dates, checked states or completion timestamps. It copies existing rules/task fields into templates and links only the currently referenced occurrence. An old unchecked date becomes **Unknown**, not a manufactured miss. Tracking starts on migration day in the routine's timezone (or the current scheduled future date for generation).
 
-Keep any future expansion server-controlled. Do not put service-role or secret
-credentials in any `NEXT_PUBLIC_*` value.
+Earlier completed task records remain unchanged in completed lists. The old model moved a rule between tasks and does not guarantee a durable routine identity for older records. The migration does not guess relationships from matching titles, and it does not generate rows for earlier dates with unknown schedule/pause history. Rates therefore describe recorded, attributable occurrences, not lifetime adherence.
 
-If Sticky later needs full missed-instance backfill rather than advancing the
-active repeating sticky, use this path:
+The existing remaining-count value is treated as the remaining schedule at cutover, including the currently linked occurrence. Existing valid IANA timezone values are required; invalid values must be resolved explicitly before release rather than silently assigned a different timezone.
 
-1. Keep `/api/recurrence/catch-up` protected by `CRON_SECRET` or move the work
-   to a Supabase scheduled function with an equivalent server-only trust
-   boundary.
-2. Reuse `src/lib/sticky/recurrence.ts` for date calculations so UI and worker
-   behavior stay aligned.
-3. Preserve title, details, color, list, due time, timezone, and owner scope.
-4. Make generation idempotent. Add a migration before the expansion ships if a
-   durable marker is needed, for example `sticky.task_activity` event metadata
-   or explicit recurrence instance columns.
-5. Keep the current subtask restriction unless the product intentionally chooses
-   a different behavior and updates both UI and database constraints.
-6. Keep expanding tests around remaining recurrence worker edges: daily and
-   custom cycles, missed-run catch-up, duplicate-run prevention, and any future
-   historical-instance backfill behavior.
+The rule's task ID is now a compatibility pointer to its latest occurrence, not the routine template's identity. Its old cascade foreign key is removed so clearing a completed task cannot silently erase a future schedule. Owner checks, the template's owner/list foreign keys, RLS, and narrow server write paths remain in force.
 
-## Verification Before Shipping The Worker
+**Do not apply this migration or deploy without owner approval.** Review/stage the application and migration together. An already-open old browser may optimistically display its old next-task behavior until reloaded; server compatibility RPCs still only complete the exact requested occurrence. Refresh agent tool metadata after an approved release so clients see the new history tools/descriptions.
 
-- Run the worker twice against the same eligible active task and confirm only
-  the first run advances it.
-- Confirm a rule ending before the next occurrence creates nothing.
-- Confirm an after-count rule stops at the configured count.
-- Confirm a paused rule creates nothing.
-- Confirm the manual catch-up action can be run twice without moving an already
-  current repeat.
-- Confirm generated tasks stay in the same user's `sticky` rows and do not touch
-  any other app schema.
-- Confirm no service-role or worker secret appears in the browser bundle or
-  `NEXT_PUBLIC_*` Vercel variables.
-- Run `npm run verify`, Supabase RLS checks, and production smoke checks after
-  deploying the worker.
+## API and MCP
+
+Existing `complete_task` / task completion endpoints target the supplied task ID, which is one exact occurrence. Legacy next-task arguments are accepted but ignored. Undo restores only the exact completed task; it never deletes another day.
+
+New bounded history operations:
+
+- `GET /api/v1/routines` / `list_routines`
+- `GET /api/v1/routines/:id/history?from=YYYY-MM-DD&through=YYYY-MM-DD` / `get_routine_history`
+- `POST /api/v1/occurrences/:id/status` / `set_occurrence_status`, requiring the scheduled date and a supported status; HTTP also requires a version. A mismatched task/date fails without writing.
+
+Read and write scopes remain `tasks:read` and `tasks:write`. No extra agent permissions are removed. Google-source isolation and existing integrations remain unchanged.
+
+`reconcile_my_routines` is the only new authenticated SQL entry point. It accepts no clock or routine payload, checks the authenticated owner, and only materializes that owner's authorized schedules. The clock-selectable reconciler and all template writes remain service-only. Both new tables have owner SELECT RLS and no browser write grants.
+
+## Verification
+
+`npm run test:recurrence-migration` resets **only the disposable localhost:55321 verification stack**, seeds the old schema with completed/current legacy records, applies the new migration locally, and checks exact record/timestamp preservation, unknown history and idempotence. Never run this against a shared development database. The script refuses nonlocal endpoints and never uses `.env.local` or `--linked`.
+
+`npm run test:database` covers day rollover, late correction, concurrent offline catch-up, one-offs, pause/end/count bounds, DST, custom/monthly/yearly dates, ownership and exact-date API validation. Authenticated desktop/mobile browser tests cover the actual dashboard and history panel, including an unchanged today row after correcting yesterday. CI runs the preservation test before the normal database and browser suites.
