@@ -22,10 +22,10 @@
     "googleapis": "173.0.0",
     "hono": "4.13.13",
     "workflow": "4.7.0",
-    "zod": "4.4.3"
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "typescript": "6.0.3",
-    "vitest": "4.1.11"
+    "vitest": "4.1.12"
   }
 }
