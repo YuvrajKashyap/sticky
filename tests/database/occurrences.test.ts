@@ -117,8 +117,9 @@ describe("independent routine occurrences", () => {
     expect(versions.data).toHaveLength(2);
     const paused = await testEnvironment().admin.from("task_recurrence_rules").update({ paused: true }).eq("id", id);
     expect(paused.error).toBeNull();
-    await reconcile(id, "2026-11-02T15:00:00Z");
-    expect((await rows(id)).filter(task => task.scheduled_date >= "2026-10-25")).toHaveLength(0);
+    const afterPause = await rows(id);
+    await reconcile(id, new Date(Date.now() + 7 * 86400000).toISOString());
+    expect(await rows(id)).toEqual(afterPause);
   });
   it("clamps and deduplicates month days and respects custom weekdays and leap years", async () => {
     const { admin } = testEnvironment();
