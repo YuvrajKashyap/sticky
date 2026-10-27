@@ -34,9 +34,13 @@ test("dashboard retires yesterday and history corrects only that occurrence", as
     const todayBefore = await owner.client.from("tasks").select("*").eq("routine_id", id).eq("scheduled_date", today).single();
     expect(todayBefore.error).toBeNull();
     await page.getByRole("button", { name: "Show calendar view", exact: true }).click();
-    await expect(page.locator(`[data-key="tk-${taskId}"]`).first()).toBeVisible();
-    await expect(page.locator(`[data-key="tk-${taskId}"]`).first()).toHaveClass(/overdue/);
-    await page.locator(`[data-key="tk-${taskId}"]`).first().click();
+    const yesterdayLabel = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", timeZone: "UTC" }).format(previous);
+    await page.getByRole("button", { name: `Show ${yesterdayLabel}`, exact: true }).click();
+    const calendarOccurrence = page.locator(`.calendar-agenda-task[data-key="tk-${taskId}"]`);
+    await expect(calendarOccurrence).toBeVisible();
+    await expect(calendarOccurrence).toHaveClass(/overdue/);
+    await expect(calendarOccurrence).toContainText("not completed");
+    await calendarOccurrence.click();
     await expect(page.getByRole("complementary", { name: "Task details" })).toBeVisible();
     await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "Show board view", exact: true }).click();
