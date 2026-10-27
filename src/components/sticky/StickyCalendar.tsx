@@ -537,8 +537,11 @@ export function StickyCalendar({ tasks: currentTasks, lists, recurringTaskIds, o
   });
   const tasks = useMemo(() => {
     const listIds = new Set(lists.map(list => list.id));
-    return [...new Map([...currentTasks, ...(routineQuery.data?.tasks ?? []).filter(task => listIds.has(task.listId))]
-      .map(task => [task.id, task])).values()];
+    const merged = new Map(currentTasks.map(task => [task.id, task]));
+    for (const task of routineQuery.data?.tasks ?? []) {
+      if (listIds.has(task.listId) && (!merged.has(task.id) || task.version > merged.get(task.id)!.version)) merged.set(task.id, task);
+    }
+    return [...merged.values()];
   }, [currentTasks, lists, routineQuery.data]);
   const onTaskSelect = (id: string) => selectTask(id, tasks.find(task => task.id === id));
 
@@ -605,7 +608,7 @@ export function StickyCalendar({ tasks: currentTasks, lists, recurringTaskIds, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [tasks, viewMode, monthKey, weekStartKey, weekEndKey, selectedDateKey],
   );
-  const overdueCount = visibleTasks.filter((task) => Boolean(task.dueDate && task.dueDate < todayKey && !task.isCompleted)).length;
+  const overdueCount = visibleTasks.filter((task) => task.routineId ? occurrenceStatus(task) === "not_completed" : Boolean(task.dueDate && task.dueDate < todayKey && !task.isCompleted)).length;
   const busyMinutes = useMemo(
     () =>
       [...occurrencesByDate].reduce(
