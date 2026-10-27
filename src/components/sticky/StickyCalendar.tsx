@@ -539,7 +539,7 @@ export function StickyCalendar({ tasks: currentTasks, lists, recurringTaskIds, o
     const listIds = new Set(lists.map(list => list.id));
     const merged = new Map(currentTasks.map(task => [task.id, task]));
     for (const task of routineQuery.data?.tasks ?? []) {
-      if (listIds.has(task.listId) && (!merged.has(task.id) || task.version > merged.get(task.id)!.version)) merged.set(task.id, task);
+      if (listIds.has(task.listId) && (!merged.has(task.id) || (task.version ?? 0) > (merged.get(task.id)!.version ?? 0))) merged.set(task.id, task);
     }
     return [...merged.values()];
   }, [currentTasks, lists, routineQuery.data]);
