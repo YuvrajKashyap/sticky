@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { History, X } from "lucide-react";
 import { occurrenceStatus, routineStatistics } from "@sticky/domain";
 import { createStickyPlatformClient } from "@/lib/sticky/api-client";
@@ -18,6 +18,7 @@ export function RoutineHistory({ workspace, demo, onChange }: {
 }) {
   const client = useMemo(() => demo ? null : createStickyPlatformClient(), [demo]);
   const titleId = useId();
+  const queryClient = useQueryClient();
   const dialog = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState("");
@@ -51,6 +52,7 @@ export function RoutineHistory({ workspace, demo, onChange }: {
         onChange();
       }
       await history.refetch();
+      await queryClient.invalidateQueries({ queryKey: ["sticky-calendar-routines"] });
     } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not update occurrence."); }
     finally { setBusy(false); }
   }

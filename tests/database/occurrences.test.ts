@@ -144,6 +144,20 @@ describe("independent routine occurrences", () => {
     expect(tasks[1].occurrence_status).toBe("pending");
     expect(tasks.some(task => task.occurrence_status === "not_completed")).toBe(false);
   });
+  it("calendar reads retain missed dates with owner and range boundaries", async () => {
+    const { id, taskId } = await routine();
+    await reconcile(id, "2026-10-20T18:00:00Z");
+    const app = createApiApp();
+    const url = `http://localhost/api/v1/routine-occurrences?from=${monday}&through=${tuesday}`;
+    const response = await app.request(url, { headers: { Authorization: `Bearer ${owner.session.access_token}` } });
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.data.tasks.find((task: { id: string }) => task.id === taskId)?.occurrenceStatus).toBe("not_completed");
+    const otherResponse = await app.request(url, { headers: { Authorization: `Bearer ${other.session.access_token}` } });
+    expect((await otherResponse.json()).data.tasks).toEqual([]);
+    const invalid = await app.request("http://localhost/api/v1/routine-occurrences?from=2020-01-01&through=2026-01-01", { headers: { Authorization: `Bearer ${owner.session.access_token}` } });
+    expect(invalid.status).toBe(422);
+  });
   it("an agent task read alone reconciles an offline routine and omits its expired rows", async () => {
     const { id } = await routine();
     const response = await createApiApp().request("http://localhost/api/v1/tasks", { headers: { Authorization: `Bearer ${owner.session.access_token}` } });

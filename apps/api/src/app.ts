@@ -229,6 +229,13 @@ const app = new Hono<Env>();
     return success(c, await readWorkspaceRecords(getRuntime().db, actor.userId, ids));
   });
 
+  app.get("/api/v1/routine-occurrences", async c => {
+    const actor = c.get("actor"); requireScope(actor, "tasks:read");
+    const range = z.object({ from: z.iso.date(), through: z.iso.date() }).refine(value =>
+      value.from <= value.through && Date.parse(value.through) - Date.parse(value.from) <= 93 * 86400000,
+    "Choose a calendar range of at most 93 days.").parse(c.req.query());
+    return success(c, { tasks: await getRuntime().repository.calendarOccurrences(actor, range.from, range.through) });
+  });
   app.get("/api/v1/routines", async c => {
     const actor = c.get("actor"); requireScope(actor, "tasks:read");
     return success(c, { routines: await getRuntime().repository.listRoutines(actor) });

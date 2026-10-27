@@ -32,6 +32,7 @@ import {
   X,
 } from "lucide-react";
 import { createStickyPlatformClient } from "@/lib/sticky/api-client";
+import { occurrenceStatus } from "@sticky/domain";
 import {
   deleteDemoEvent,
   getDemoEventsSnapshot,
@@ -53,7 +54,7 @@ type StickyCalendarProps = {
   tasks: StickyTask[];
   lists: StickyList[];
   recurringTaskIds: ReadonlySet<string>;
-  onTaskSelect: (taskId: string) => void;
+  onTaskSelect: (taskId: string, occurrence?: StickyTask) => void;
   mode: AppMode;
   /** Remembered view and filter (from cookies) for a flash-free first paint. */
   initialViewMode?: CalendarViewMode;
@@ -208,8 +209,9 @@ function weekTitle(start: Date, end: Date) {
 }
 
 function taskStateClass(task: StickyTask, todayKey: string) {
+  const missed = task.routineId ? occurrenceStatus(task) === "not_completed" : !task.isCompleted && task.dueDate && task.dueDate < todayKey;
   return `${task.isCompleted ? " completed" : ""}${
-    !task.isCompleted && task.dueDate && task.dueDate < todayKey ? " overdue" : ""
+    missed ? " overdue" : ""
   }`;
 }
 
@@ -379,7 +381,7 @@ function EventStatusGlyph({ event }: { event: StickyCalendarEvent }) {
    Calendar
    ------------------------------------------------------------------------ */
 
-export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, mode, initialViewMode, initialContent }: StickyCalendarProps) {
+export function StickyCalendar({ tasks: currentTasks, lists, recurringTaskIds, onTaskSelect: selectTask, mode, initialViewMode, initialContent }: StickyCalendarProps) {
   const reduceMotion = useReducedMotion();
   const calendarRef = useRef<HTMLElement>(null);
   const timeGridRef = useRef<HTMLDivElement>(null);
@@ -525,6 +527,20 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
   });
 
   /* --- Derived data -------------------------------------------------------- */
+
+  const routineFrom = dayKey(visibleStart), routineThrough = dayKey(visibleEnd);
+  const routineQuery = useQuery({
+    queryKey: ["sticky-calendar-routines", routineFrom, routineThrough],
+    enabled: Boolean(client),
+    queryFn: () => client!.request<{ tasks: StickyTask[] }>(`/api/v1/routine-occurrences?from=${routineFrom}&through=${routineThrough}`),
+    refetchOnWindowFocus: "always",
+  });
+  const tasks = useMemo(() => {
+    const listIds = new Set(lists.map(list => list.id));
+    return [...new Map([...currentTasks, ...(routineQuery.data?.tasks ?? []).filter(task => listIds.has(task.listId))]
+      .map(task => [task.id, task])).values()];
+  }, [currentTasks, lists, routineQuery.data]);
+  const onTaskSelect = (id: string) => selectTask(id, tasks.find(task => task.id === id));
 
   const visibleTasks = useMemo(() => (showTasks ? tasks : []), [showTasks, tasks]);
 
@@ -820,6 +836,7 @@ export function StickyCalendar({ tasks, lists, recurringTaskIds, onTaskSelect, m
         onPointerOver={handleLinkOver}
         onPointerOut={handleLinkOut}
       >
+        {routineQuery.isError ? <p role="alert">Routine history could not load. <button type="button" onClick={() => void routineQuery.refetch()}>Retry</button></p> : null}
         <header className="calendar-header">
           <div className="calendar-heading">
             <span className="calendar-heading-icon" aria-hidden="true">
@@ -1585,7 +1602,7 @@ function CalendarAgenda({
                               <Repeat2 size={10} /> Repeats
                             </span>
                           ) : null}
-                          <span>{task.isCompleted ? "Completed" : task.dueTime ? "Scheduled" : "Flexible"}</span>
+                          <span>{task.routineId ? occurrenceStatus(task).replaceAll("_", " ") : task.isCompleted ? "Completed" : task.dueTime ? "Scheduled" : "Flexible"}</span>
                         </span>
                       </span>
                       <span className={`cal-task-check${task.isCompleted ? " done" : ""}`} aria-hidden="true">

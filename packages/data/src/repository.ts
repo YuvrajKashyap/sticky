@@ -307,6 +307,17 @@ export class StickyRepository {
     return task;
   }
 
+  async calendarOccurrences(actor: ActorContext, from: string, through: string) {
+    const reconcile = await this.db.rpc("reconcile_routine_occurrences", { p_request_user_id: actor.userId });
+    throwQuery(reconcile.error);
+    const result = await readAllPages<DataRow>((start, end) => this.db.from("tasks").select("*")
+      .eq("user_id", actor.userId).not("routine_id", "is", null)
+      .gte("scheduled_date", from).lte("scheduled_date", through)
+      .neq("occurrence_status", "not_scheduled").order("scheduled_date").order("id").range(start, end));
+    throwQuery(result.error);
+    return (result.data ?? []).map(mapTaskRow);
+  }
+
   async listRoutines(actor: ActorContext) {
     const result = await readAllPages<DataRow>((from, to) => this.db.from("routine_templates").select("id,template,tracking_since,retired,schedule")
       .eq("user_id", actor.userId).order("created_at").order("id").range(from, to));

@@ -8,6 +8,8 @@ Not completed means the occurrence was not checked off in Sticky; it is not evid
 
 Use the history icon in the workspace toolbar to select a routine and date range. The rate is completed / (completed + not completed). Pending, explicitly skipped, unknown and not-scheduled occurrences are excluded. A paused/cancelled scheduled date is labelled Not scheduled, separately from an explicit Skip. Days that never belonged to the schedule have no occurrence row.
 
+The calendar loads dated routine records separately for its visible range, including past incomplete, skipped and unknown occurrences. Known missed occurrences retain red styling; unknown and skipped dates are not presented as misses. Opening an older calendar occurrence edits that exact task. Calendar history never expands the active dashboard query. This provides an auditable basis for future life-tracking analytics without guessing behavior from absent data.
+
 ## Storage and reconciliation
 
 - `routine_templates` holds stable routine identity, future task fields, schedule snapshot, tracking boundary and generation cursor. Its ID matches the existing recurrence-rule ID.

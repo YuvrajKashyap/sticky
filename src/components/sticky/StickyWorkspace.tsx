@@ -5088,8 +5088,11 @@ export function StickyWorkspace({
               tasks={calendarTasks}
               lists={unarchivedLists}
               recurringTaskIds={recurringTaskIds}
-              onTaskSelect={(taskId) => {
-                setSelectedTaskId(calendarTasks.find(task => task.id === taskId)?.parentTaskId ?? taskId);
+              onTaskSelect={(taskId, occurrence) => {
+                if (occurrence && !workspace.tasks.some(task => task.id === taskId) && !occurrence.parentTaskId) {
+                  setWorkspace(current => ({ ...current, tasks: [...current.tasks, occurrence] }));
+                }
+                setSelectedTaskId(occurrence?.parentTaskId ?? calendarTasks.find(task => task.id === taskId)?.parentTaskId ?? taskId);
               }}
             />
           ) : (

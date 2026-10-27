@@ -33,6 +33,14 @@ test("dashboard retires yesterday and history corrects only that occurrence", as
     await page.screenshot({ path: testInfo.outputPath("dashboard.png"), fullPage: true });
     const todayBefore = await owner.client.from("tasks").select("*").eq("routine_id", id).eq("scheduled_date", today).single();
     expect(todayBefore.error).toBeNull();
+    await page.getByRole("button", { name: "Show calendar view", exact: true }).click();
+    await expect(page.locator(`[data-key="tk-${taskId}"]`).first()).toBeVisible();
+    await expect(page.locator(`[data-key="tk-${taskId}"]`).first()).toHaveClass(/overdue/);
+    await page.locator(`[data-key="tk-${taskId}"]`).first().click();
+    await expect(page.getByRole("complementary", { name: "Task details" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Show board view", exact: true }).click();
+    await expect(page.locator(".task-card", { hasText: "Morning practice" })).toHaveCount(1);
     await page.getByRole("button", { name: "Routine history", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Routine history", exact: true });
     await expect(dialog).toBeVisible();
