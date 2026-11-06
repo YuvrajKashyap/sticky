@@ -23,6 +23,11 @@ type ImportTask = {
 
 type ImportedTaskLink = {
   id: string;
+  title: string;
+  details: string;
+  due_date: string | null;
+  is_completed: boolean;
+  completed_at: string | null;
   sync_metadata: Record<string, unknown> | null;
 };
 
@@ -70,7 +75,7 @@ const defaultDependencies: GoogleTaskTransferDependencies = {
   },
   async listImportedTasks(current, sourceListId, targetListId) {
     const { data, error } = await getRuntime().db.from("tasks")
-      .select("id,sync_metadata")
+      .select("id,title,details,due_date,is_completed,completed_at,sync_metadata")
       .eq("user_id", current.userId)
       .eq("list_id", targetListId)
       .contains("sync_metadata", { source: "google_tasks", google_task_list_id: sourceListId });
@@ -289,6 +294,24 @@ export async function executeGoogleTaskTransfer(
     });
   }
 
+  if (input.mode === "move") {
+    const copies = new Map(linkedTasks.map((task) => [String(task.sync_metadata?.google_task_id ?? ""), task]));
+    const mismatchedCopies = importPayload(tasks).filter((task) => {
+      const copy = copies.get(task.external_task_id);
+      return !copy || copy.title !== task.title || copy.details !== task.details
+        || copy.due_date !== task.due_date || copy.is_completed !== task.is_completed
+        || (task.is_completed && task.completed_at !== null
+          && Date.parse(copy.completed_at ?? "") !== Date.parse(task.completed_at));
+    });
+    // Imports intentionally preserve existing copies. An ID alone cannot prove
+    // that their current contents safely preserve the Google originals.
+    if (mismatchedCopies.length) {
+      throw new StickyDomainError("conflict", "Sticky stopped before deleting anything because an existing copy differs from the Google original. Copy to a different Sticky list or reconcile the copies before moving.", 409, {
+        mismatchedGoogleTaskIds: mismatchedCopies.map((task) => task.external_task_id),
+      });
+    }
+  }
+
   const baseResult = {
     transferId,
     mode: input.mode,
@@ -305,8 +328,8 @@ export async function executeGoogleTaskTransfer(
   }
 
   // Delete children before parents so Google cannot make a successful child deletion look like a failure.
-  const deletionOrder = [...tasks.filter((task) => task.parentId), ...tasks.filter((task) => !task.parentId)];
-  const deletionFailures = await deleteInBatches(current, source.id, deletionOrder, dependencies);
+  const deletionFailures = await deleteInBatches(current, source.id, tasks.filter((task) => task.parentId), dependencies);
+  deletionFailures.push(...await deleteInBatches(current, source.id, tasks.filter((task) => !task.parentId), dependencies));
   const remaining = requiredGoogleTasks(await dependencies.listGoogleTasks(current, {
     taskListId: source.id,
     includeCompleted: input.includeCompleted,

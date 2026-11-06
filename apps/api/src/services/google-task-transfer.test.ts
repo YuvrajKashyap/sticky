@@ -64,6 +64,18 @@ const sourceTasks = [
   },
 ];
 
+function importedTasks() {
+  return sourceTasks.map((task, index) => ({
+    id: `sticky-${index}`,
+    title: task.title,
+    details: [task.notes, task.parentId ? "Originally a Google subtask of “Ship the build”." : ""].filter(Boolean).join("\n\n"),
+    due_date: task.dueDate,
+    is_completed: task.completed,
+    completed_at: task.completedAt,
+    sync_metadata: { source: "google_tasks", google_task_list_id: sourceList.id, google_task_id: task.id },
+  }));
+}
+
 function dependencies(overrides: Partial<GoogleTaskTransferDependencies> = {}): GoogleTaskTransferDependencies {
   return {
     listGoogleTaskLists: async () => [sourceList],
@@ -71,10 +83,7 @@ function dependencies(overrides: Partial<GoogleTaskTransferDependencies> = {}): 
     listStickyLists: async () => [stickyList],
     getStickyList: async () => stickyList,
     importTasks: async () => ({ createdCount: sourceTasks.length }),
-    listImportedTasks: async () => sourceTasks.map((task, index) => ({
-      id: `sticky-${index}`,
-      sync_metadata: { source: "google_tasks", google_task_list_id: sourceList.id, google_task_id: task.id },
-    })),
+    listImportedTasks: async () => importedTasks(),
     deleteGoogleTask: async () => ({ deleted: true }),
     ...overrides,
   };
@@ -143,10 +152,7 @@ describe("guarded Google Tasks to Sticky transfers", () => {
       confirmedDeleteGoogleOriginals: true,
       confirmationPhrase: "MOVE 2 GOOGLE TASKS TO STICKY AND DELETE GOOGLE ORIGINALS",
     }, dependencies({
-      listImportedTasks: async () => [{
-        id: "sticky-1",
-        sync_metadata: { source: "google_tasks", google_task_list_id: sourceList.id, google_task_id: sourceTasks[0].id },
-      }],
+      listImportedTasks: async () => importedTasks().slice(0, 1),
       deleteGoogleTask: deleteTask,
     }))).rejects.toMatchObject({ code: "internal_error" });
 
@@ -159,7 +165,7 @@ describe("guarded Google Tasks to Sticky transfers", () => {
     const transferDependencies = dependencies({
       listGoogleTasks: async () => remaining,
       importTasks: async () => { events.push("copy"); return { createdCount: sourceTasks.length }; },
-      listImportedTasks: async () => { events.push("verify"); return sourceTasks.map((task, index) => ({ id: `sticky-${index}`, sync_metadata: { google_task_id: task.id } })); },
+      listImportedTasks: async () => { events.push("verify"); return importedTasks(); },
       deleteGoogleTask: async (_current, _listId, taskId) => {
         events.push(`delete:${taskId}`);
         remaining = remaining.filter((task) => task.id !== taskId);
@@ -201,5 +207,88 @@ describe("guarded Google Tasks to Sticky transfers", () => {
     }, dependencies({ importTasks: async () => ({ createdCount: 0 }) }));
 
     expect(copied).toMatchObject({ status: "completed", createdCount: 0, alreadyCopiedCount: 2, deletedGoogleCount: 0 });
+  });
+
+  it("waits for child deletion to finish before starting parent deletion", async () => {
+    let remaining = [...sourceTasks];
+    let childFinished = false;
+    let parentStartedBeforeChildFinished = false;
+    await executeGoogleTaskTransfer(actor, {
+      googleTaskListId: sourceList.id,
+      stickyListId: stickyList.id,
+      mode: "move",
+      includeCompleted: false,
+      includeHidden: false,
+      expectedTaskCount: sourceTasks.length,
+      sourceFingerprint: googleTaskTransferFingerprint(sourceTasks),
+      acknowledgedSeparateSystems: true,
+      confirmedAfterPreview: true,
+      confirmedDeleteGoogleOriginals: true,
+      confirmationPhrase: "MOVE 2 GOOGLE TASKS TO STICKY AND DELETE GOOGLE ORIGINALS",
+    }, dependencies({
+      listGoogleTasks: async () => remaining,
+      deleteGoogleTask: async (_actor, _list, id) => {
+        if (id === "google-child") {
+          await Promise.resolve();
+          childFinished = true;
+        } else {
+          parentStartedBeforeChildFinished = !childFinished;
+        }
+        remaining = remaining.filter((task) => task.id !== id);
+        return { deleted: true };
+      },
+    }));
+    expect(parentStartedBeforeChildFinished).toBe(false);
+  });
+
+  it("does not delete changed Google originals when deduplication retains an older Sticky copy", async () => {
+    const changedTasks = sourceTasks.map((task) => ({ ...task, notes: "New notes that must survive the move" }));
+    const deleted: string[] = [];
+    await expect(executeGoogleTaskTransfer(actor, {
+      googleTaskListId: sourceList.id,
+      stickyListId: stickyList.id,
+      mode: "move",
+      includeCompleted: false,
+      includeHidden: false,
+      expectedTaskCount: changedTasks.length,
+      sourceFingerprint: googleTaskTransferFingerprint(changedTasks),
+      acknowledgedSeparateSystems: true,
+      confirmedAfterPreview: true,
+      confirmedDeleteGoogleOriginals: true,
+      confirmationPhrase: "MOVE 2 GOOGLE TASKS TO STICKY AND DELETE GOOGLE ORIGINALS",
+    }, dependencies({
+      listGoogleTasks: async () => changedTasks,
+      importTasks: async () => ({ createdCount: 0 }),
+      listImportedTasks: async () => importedTasks(),
+      deleteGoogleTask: async (_actor, _list, id) => { deleted.push(id); return { deleted: true }; },
+    }))).rejects.toMatchObject({ code: "conflict" });
+    expect(deleted).toEqual([]);
+  });
+
+  it.each([
+    { title: "Edited in Sticky" },
+    { details: "Edited notes in Sticky" },
+    { due_date: "2026-12-31" },
+    { is_completed: true },
+  ])("blocks deletion when the current Sticky copy was edited: %j", async (patch) => {
+    const deleted: string[] = [];
+    await expect(executeGoogleTaskTransfer(actor, {
+      googleTaskListId: sourceList.id,
+      stickyListId: stickyList.id,
+      mode: "move",
+      includeCompleted: false,
+      includeHidden: false,
+      expectedTaskCount: sourceTasks.length,
+      sourceFingerprint: googleTaskTransferFingerprint(sourceTasks),
+      acknowledgedSeparateSystems: true,
+      confirmedAfterPreview: true,
+      confirmedDeleteGoogleOriginals: true,
+      confirmationPhrase: "MOVE 2 GOOGLE TASKS TO STICKY AND DELETE GOOGLE ORIGINALS",
+    }, dependencies({
+      importTasks: async () => ({ createdCount: 0 }),
+      listImportedTasks: async () => importedTasks().map((copy, index) => index === 0 ? { ...copy, ...patch } : copy),
+      deleteGoogleTask: async (_actor, _list, id) => { deleted.push(id); return { deleted: true }; },
+    }))).rejects.toMatchObject({ code: "conflict" });
+    expect(deleted).toEqual([]);
   });
 });
