@@ -4,7 +4,9 @@ import { getRuntime } from "../runtime";
 
 export async function deliverReminder(reminderId: string, expectedRemindAt: string) {
   const { db } = getRuntime();
-  const { data: reminder } = await db.from("task_reminders").select("*,tasks(*)").eq("id", reminderId).maybeSingle();
+  const { data: reminder, error: reminderError } = await db.from("task_reminders").select("*,tasks(*)").eq("id", reminderId).maybeSingle();
+  // A failed lookup must remain retryable, not complete the workflow as obsolete.
+  if (reminderError) throw reminderError;
   if (!reminder || reminder.status !== "scheduled" || reminder.remind_at !== expectedRemindAt) return { skipped: "obsolete" };
   const task = reminder.tasks as Record<string, unknown>;
   if (!isActiveOccurrence(mapTaskRow(task))) return { skipped: "inactive_occurrence" };

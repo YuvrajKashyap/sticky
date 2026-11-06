@@ -326,6 +326,7 @@ export async function deliverDailyAgenda(userId: string, input: DailyAgendaDeliv
   const claim = await claimDelivery(userId, deliveryKey);
   if (!claim.delivery) return { skipped: claim.skipped, continue: true };
 
+  let deliveryRecorded = false;
   try {
     const items = await loadDailyAgendaItems(userId, input.date);
     const message = buildDailyAgendaMessage(input.date, input.timezone, items, { test: input.test });
@@ -348,6 +349,7 @@ export async function deliverDailyAgenda(userId: string, input: DailyAgendaDeliv
       error_message: null,
     }).eq("id", claim.delivery.id);
     if (deliveryError) throw deliveryError;
+    deliveryRecorded = true;
 
     if (!input.test && input.scheduleVersion !== undefined) {
       const { error: preferencesError } = await db.from("user_preferences").update({
@@ -365,6 +367,8 @@ export async function deliverDailyAgenda(userId: string, input: DailyAgendaDeliv
       continue: true,
     };
   } catch (error) {
+    // Schedule metadata is secondary: never make a recorded delivery retryable.
+    if (deliveryRecorded) throw error;
     const message = error instanceof Error ? error.message : "Daily agenda delivery failed";
     await db.from("notification_deliveries").update({
       status: "failed",
