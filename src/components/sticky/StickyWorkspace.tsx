@@ -71,6 +71,7 @@ import { mapWorkspaceRecords } from "@/lib/sticky/mappers";
 import type { WorkspaceRecords } from "@sticky/data";
 import { userFacingStickySaveMessage } from "@/lib/sticky/messages";
 import { WorkspacePersistence, settleWorkspaceOperations } from "@/lib/sticky/workspace-persistence";
+import { restoreDeletedTasks, taskInsertPayload, subtaskInsertPayload, recurrenceInsertPayload } from "@/lib/sticky/restore-deleted-tasks";
 import {
   WORKSPACE_AUTO_BIAS_MAX,
   WORKSPACE_AUTO_BIAS_MIN,
@@ -1068,30 +1069,6 @@ function listInsertPayload(list: StickyList) {
     id: list.id,
     user_id: list.userId,
     ...listToDb(list),
-  };
-}
-
-function taskInsertPayload(task: StickyTask) {
-  return {
-    id: task.id,
-    user_id: task.userId,
-    ...taskToDb(task),
-  };
-}
-
-function subtaskInsertPayload(subtask: StickySubtask) {
-  return {
-    id: subtask.id,
-    user_id: subtask.userId,
-    ...subtaskToDb(subtask),
-  };
-}
-
-function recurrenceInsertPayload(rule: StickyRecurrenceRule) {
-  return {
-    id: rule.id,
-    user_id: rule.userId,
-    ...recurrenceToDb(rule),
   };
 }
 
@@ -3671,57 +3648,10 @@ export function StickyWorkspace({
         }));
         void persist(
           "Undo delete",
-          () =>
-            settleWorkspaceOperations([
-              supabase!.from("tasks").insert({
-                id: task.id,
-                user_id: task.userId,
-                list_id: task.listId,
-                title: task.title,
-                details: task.details,
-                color: task.color,
-                due_date: task.dueDate,
-                due_time: task.dueTime,
-                timezone: task.timezone,
-                is_completed: task.isCompleted,
-                completed_at: task.completedAt,
-                sort_order: task.sortOrder,
-                completed_sort_order: task.completedSortOrder,
-              }),
-              deletedSubtasks.length
-                ? supabase!.from("subtasks").insert(
-                    deletedSubtasks.map((subtask) => ({
-                      id: subtask.id,
-                      user_id: subtask.userId,
-                      task_id: subtask.taskId,
-                      title: subtask.title,
-                      is_completed: subtask.isCompleted,
-                      completed_at: subtask.completedAt,
-                      sort_order: subtask.sortOrder,
-                    })),
-                  )
-                : Promise.resolve({ error: null }),
-              deletedRules.length
-                ? supabase!.from("task_recurrence_rules").insert(
-                    deletedRules.map((rule) => ({
-                      id: rule.id,
-                      user_id: rule.userId,
-                      task_id: rule.taskId,
-                      frequency: rule.frequency,
-                      interval_count: rule.intervalCount,
-                      days_of_week: rule.daysOfWeek,
-                      month_day: rule.monthDay,
-                      month_days: rule.monthDays ?? [],
-                      starts_on: rule.startsOn,
-                      end_type: rule.endType,
-                      end_date: rule.endDate,
-                      occurrence_count: rule.occurrenceCount,
-                      timezone: rule.timezone,
-                      paused: rule.paused,
-                    })),
-                  )
-                : Promise.resolve({ error: null }),
-            ]),
+          () => restoreDeletedTasks(
+            (table, rows) => supabase!.from(table).insert(rows),
+            [task], deletedSubtasks, deletedRules,
+          ),
           restoreBefore,
         );
       },
@@ -3914,59 +3844,10 @@ export function StickyWorkspace({
         }));
         void persist(
           "Undo clear",
-          () =>
-            settleWorkspaceOperations([
-              supabase!.from("tasks").insert(
-                deletedTasks.map((task) => ({
-                  id: task.id,
-                  user_id: task.userId,
-                  list_id: task.listId,
-                  title: task.title,
-                  details: task.details,
-                  color: task.color,
-                  due_date: task.dueDate,
-                  due_time: task.dueTime,
-                  timezone: task.timezone,
-                  is_completed: task.isCompleted,
-                  completed_at: task.completedAt,
-                  sort_order: task.sortOrder,
-                  completed_sort_order: task.completedSortOrder,
-                })),
-              ),
-              deletedSubtasks.length
-                ? supabase!.from("subtasks").insert(
-                    deletedSubtasks.map((subtask) => ({
-                      id: subtask.id,
-                      user_id: subtask.userId,
-                      task_id: subtask.taskId,
-                      title: subtask.title,
-                      is_completed: subtask.isCompleted,
-                      completed_at: subtask.completedAt,
-                      sort_order: subtask.sortOrder,
-                    })),
-                  )
-                : Promise.resolve({ error: null }),
-              deletedRules.length
-                ? supabase!.from("task_recurrence_rules").insert(
-                    deletedRules.map((rule) => ({
-                      id: rule.id,
-                      user_id: rule.userId,
-                      task_id: rule.taskId,
-                      frequency: rule.frequency,
-                      interval_count: rule.intervalCount,
-                      days_of_week: rule.daysOfWeek,
-                      month_day: rule.monthDay,
-                      month_days: rule.monthDays ?? [],
-                      starts_on: rule.startsOn,
-                      end_type: rule.endType,
-                      end_date: rule.endDate,
-                      occurrence_count: rule.occurrenceCount,
-                      timezone: rule.timezone,
-                      paused: rule.paused,
-                    })),
-                  )
-                : Promise.resolve({ error: null }),
-            ]),
+          () => restoreDeletedTasks(
+            (table, rows) => supabase!.from(table).insert(rows),
+            deletedTasks, deletedSubtasks, deletedRules,
+          ),
           restoreBefore,
         );
       },
