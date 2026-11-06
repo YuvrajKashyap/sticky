@@ -105,6 +105,18 @@ const MONTH_CELL_CAP = 5;
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const EASE = [0.16, 1, 0.3, 1] as const;
 
+const subscribeHydration = () => () => {};
+const clientHydrated = () => true;
+const serverHydrated = () => false;
+
+function useCalendarReducedMotion() {
+  const preference = useReducedMotion();
+  const hydrated = useSyncExternalStore(subscribeHydration, clientHydrated, serverHydrated);
+  // The server cannot read the OS preference. Keep the initial HTML visible
+  // and identical during hydration, then respect the preference for later motion.
+  return !hydrated || Boolean(preference);
+}
+
 const VIEW_MODES: Array<{ label: string; value: CalendarViewMode }> = [
   { label: "Month", value: "month" },
   { label: "Week", value: "week" },
@@ -338,7 +350,7 @@ function Segmented<T extends string>({
   label: string;
   className: string;
 }) {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useCalendarReducedMotion();
   return (
     <div className={`cal-segmented ${className}`} role="group" aria-label={label}>
       {options.map((option) => {
@@ -382,7 +394,7 @@ function EventStatusGlyph({ event }: { event: StickyCalendarEvent }) {
    ------------------------------------------------------------------------ */
 
 export function StickyCalendar({ tasks: currentTasks, lists, recurringTaskIds, onTaskSelect: selectTask, mode, initialViewMode, initialContent }: StickyCalendarProps) {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useCalendarReducedMotion();
   const calendarRef = useRef<HTMLElement>(null);
   const timeGridRef = useRef<HTMLDivElement>(null);
   const linkedKey = useRef<string | null>(null);
@@ -1150,7 +1162,7 @@ function TimeGrid({
   onCreateAt,
   onDayHeader,
 }: TimeGridProps) {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useCalendarReducedMotion();
   const todayKey = dayKey(new Date());
   const hours = Array.from({ length: 24 }, (_, hour) => hour);
   // A 30-minute ghost slot follows the pointer across empty lane space.
@@ -1464,7 +1476,7 @@ function CalendarAgenda({
   onOpenDay,
   rich,
 }: CalendarAgendaProps) {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useCalendarReducedMotion();
   const todayKey = dayKey(new Date());
   const listRank = useMemo(() => new Map(Array.from(listById.keys()).map((id, index) => [id, index])), [listById]);
   const busy = occurrences.reduce(
@@ -1646,7 +1658,7 @@ type EventEditorProps = {
 };
 
 function EventEditor({ draft, onChange, onClose, onSave, onDelete, saving, deleting }: EventEditorProps) {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useCalendarReducedMotion();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const invalidTime = !draft.allDay && draft.endTime <= draft.startTime;
   const canSave = Boolean(draft.title.trim()) && !invalidTime && !saving;
