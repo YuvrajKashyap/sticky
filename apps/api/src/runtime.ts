@@ -122,7 +122,8 @@ async function authenticateCredential(token: string, request: Request, requestId
   return {
     userId: data.user_id,
     actorType: "agent",
-    actorId: `${data.provider}:${data.provider_user_id ?? data.id}`,
+    // The first successful Poke binding must use the same retry namespace as later requests.
+    actorId: `${data.provider}:${data.provider === "poke" ? pokeUserId : data.provider_user_id ?? data.id}`,
     credentialId: data.id,
     scopes: new Set(data.scopes as StickyScope[]),
     requestId,
