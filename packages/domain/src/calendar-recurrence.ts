@@ -29,11 +29,15 @@ function ruleFor(event: Schedule) {
   if (!lines.length) throw recurrenceError();
   const normalized = lines.map((line) => {
     if (/^(RRULE|EXRULE):/.test(line)) {
+      // rrule resolves repeated keys differently from a first-match regex.
+      // Reject ambiguity before validating or expanding the stored rule.
+      const keys = line.slice(line.indexOf(":") + 1).split(";").map((component) => component.split("=", 1)[0].toUpperCase());
+      if (new Set(keys).size !== keys.length) throw recurrenceError();
       if (!/(?:^|:|;)FREQ=(DAILY|WEEKLY|MONTHLY|YEARLY)(?:;|$)/.test(line)) throw recurrenceError();
       // Sub-day cartesian products can generate millions of instances in one request.
       if (/BY(?:HOUR|MINUTE|SECOND)=[^;]*,/.test(line)) throw recurrenceError();
       const interval = /(?:;|:)INTERVAL=([^;]+)/.exec(line)?.[1];
-      if (interval !== undefined && (!/^\d+$/.test(interval) || Number(interval) < 1)) throw recurrenceError();
+      if (interval !== undefined && (!/^\d+$/.test(interval) || !Number.isSafeInteger(Number(interval)) || Number(interval) < 1)) throw recurrenceError();
       return line.replace(/UNTIL=([^;]+)/, (_, value: string) => {
         let until = parseDate(value);
         if (value.length === 8) until = new Date(until.getTime() + DAY - 1000);

@@ -10,3 +10,17 @@ it("rejects invalid intervals before they can stall calendar reads", () => {
 it("accepts standard RRULE components in any order", () => {
   expect(() => validateCalendarRecurrence({ ...schedule, recurrence: ["RRULE:BYDAY=MO,WE;FREQ=WEEKLY;COUNT=10"] })).not.toThrow();
 });
+
+it.each([
+  "RRULE:FREQ=DAILY;FREQ=SECONDLY",
+  "RRULE:FREQ=DAILY;INTERVAL=1;INTERVAL=0",
+  "RRULE:FREQ=DAILY;INTERVAL=1;INTERVAL=-1",
+  "EXRULE:FREQ=DAILY;FREQ=SECONDLY",
+  "RRULE:FREQ=DAILY;INTERVAL=999999999999999999999999999",
+])("rejects ambiguous or unsafe repeat components: %s", (line) => {
+  expect(() => validateCalendarRecurrence({ ...schedule, recurrence: [line] })).toThrow();
+});
+
+it("continues accepting legacy split repeat components", () => {
+  expect(() => validateCalendarRecurrence({ ...schedule, recurrence: ["FREQ=WEEKLY", "BYDAY=MO,WE", "COUNT=10"] })).not.toThrow();
+});
