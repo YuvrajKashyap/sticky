@@ -1,6 +1,7 @@
+import { createHash } from "node:crypto";
 import { calendar_v3, google, tasks_v1 } from "googleapis";
 import type { ActorContext } from "@sticky/contracts";
-import { fromGoogleTask, resolveFieldConflict, toGoogleTask } from "@sticky/domain";
+import { fromGoogleTask, resolveFieldConflict, StickyDomainError, toGoogleTask } from "@sticky/domain";
 import { getRuntime } from "../runtime";
 import { decryptJson, encryptJson, signState, verifyState } from "./encryption";
 
@@ -76,8 +77,9 @@ function oauthClient() {
   return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 }
 
-export function googleAuthorizationUrl(actor: ActorContext): string {
-  const state = signState({ userId: actor.userId, requestId: actor.requestId, expiresAt: Date.now() + 10 * 60_000 });
+export function googleAuthorizationUrl(actor: ActorContext, browserNonce: string): string {
+  const state = signState({ userId: actor.userId, requestId: actor.requestId, expiresAt: Date.now() + 10 * 60_000,
+    browserNonceHash: createHash("sha256").update(browserNonce).digest("hex") });
   return oauthClient().generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
@@ -93,8 +95,16 @@ export function googleAuthorizationUrl(actor: ActorContext): string {
   });
 }
 
-export async function finishGoogleConnection(code: string, state: string) {
-  const payload = verifyState<{ userId: string; requestId: string; expiresAt: number }>(state);
+export async function finishGoogleConnection(code: string, state: string, browserNonce?: string) {
+  // A signed user ID alone can be forwarded to another browser to link its Google account.
+  // Bind the callback to the initiating browser before exchanging any provider credentials.
+  if (!browserNonce || !/^[A-Za-z0-9_-]{43}$/.test(browserNonce)) {
+    throw new StickyDomainError("forbidden", "Start the Google connection again from this Sticky browser.", 403);
+  }
+  const payload = verifyState<{ userId: string; requestId: string; expiresAt: number; browserNonceHash: string }>(state);
+  if (payload.browserNonceHash !== createHash("sha256").update(browserNonce).digest("hex")) {
+    throw new StickyDomainError("forbidden", "Start the Google connection again from this Sticky browser.", 403);
+  }
   const client = oauthClient();
   const { tokens } = await client.getToken(code);
   client.setCredentials(tokens);

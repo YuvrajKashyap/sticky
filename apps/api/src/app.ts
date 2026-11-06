@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { readWorkspaceRecords } from "@sticky/data";
 import type { ActorContext, ApiSuccess } from "@sticky/contracts";
 import {
@@ -22,6 +23,7 @@ import {
 import { requireDestructiveConfirmation, requireScope, StickyDomainError } from "@sticky/domain";
 import { start } from "workflow/api";
 import { Hono, type Context } from "hono";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { secureHeaders } from "hono/secure-headers";
 import { z } from "zod";
 import { errorResponse } from "./errors";
@@ -49,6 +51,8 @@ import {
 import { outboxWorkflow } from "./workflows/outbox";
 
 type Env = { Variables: ApiVariables };
+const googleOAuthCookie = "sticky_google_oauth";
+const googleOAuthCookiePath = "/api/webhooks/google/oauth";
 
 const googleBulkSyncConfirmationSchema = z.object({
   acknowledgedSeparationPreference: z.literal(true),
@@ -165,7 +169,8 @@ const app = new Hono<Env>();
     const code = c.req.query("code");
     const state = c.req.query("state");
     if (!code || !state) throw new StickyDomainError("bad_request", "Google did not return the required OAuth values.", 400);
-    await finishGoogleConnection(code, state);
+    await finishGoogleConnection(code, state, getCookie(c, googleOAuthCookie));
+    deleteCookie(c, googleOAuthCookie, { path: googleOAuthCookiePath });
     const site = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(c.req.url).origin;
     return c.redirect(`${site}/?settings=integrations&google=connected`);
   });
@@ -548,7 +553,17 @@ const app = new Hono<Env>();
   });
   app.post("/api/v1/integrations/google/connect", async (c) => {
     const actor = c.get("actor"); requireScope(actor, "integrations:write");
-    return success(c, { authorizationUrl: googleAuthorizationUrl(actor) });
+    if (actor.actorType !== "human" || !actor.accessToken) {
+      throw new StickyDomainError("forbidden", "Only the signed-in web app can connect a Google account.", 403);
+    }
+    const browserNonce = randomBytes(32).toString("base64url");
+    const authorizationUrl = googleAuthorizationUrl(actor, browserNonce);
+    setCookie(c, googleOAuthCookie, browserNonce, {
+      httpOnly: true, secure: new URL(c.req.url).protocol === "https:", sameSite: "Lax",
+      path: googleOAuthCookiePath, maxAge: 600,
+    });
+    c.header("Cache-Control", "no-store");
+    return success(c, { authorizationUrl });
   });
   app.get("/api/v1/integrations/google/lists", async (c) => {
     const actor = c.get("actor"); requireScope(actor, "integrations:read");
