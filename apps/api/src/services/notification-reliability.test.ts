@@ -57,6 +57,7 @@ describe("notification failure recovery", () => {
           not: () => query,
           order: () => query,
           limit: () => query,
+          range: () => query,
           insert: (value: Record<string, unknown>) => { action = "insert"; payload = value; return query; },
           update: (value: Record<string, unknown>) => { action = "update"; payload = value; return query; },
           maybeSingle: execute,

@@ -1,4 +1,5 @@
 import { nextDailyAgendaOccurrence } from "@sticky/domain";
+import { readAllPages } from "@sticky/data";
 import { getRuntime } from "../runtime";
 import { pokeNotificationInstruction, sendPokeMessage } from "./notifications";
 
@@ -257,9 +258,9 @@ export function selectDailyAgendaItems(
 export async function loadDailyAgendaItems(userId: string, date: string): Promise<DailyAgendaItems> {
   const { db } = getRuntime();
   const [listsResult, tasksResult, subtasksResult] = await Promise.all([
-    db.from("lists").select("id,name,sort_order").eq("user_id", userId).is("archived_at", null).order("sort_order").limit(5000),
-    db.from("tasks").select("id,list_id,title,due_date,due_time,sort_order,is_completed").eq("user_id", userId).eq("is_completed", false).limit(5000),
-    db.from("subtasks").select("id,task_id,title,due_date,sort_order,is_completed").eq("user_id", userId).eq("is_completed", false).limit(5000),
+    readAllPages<Record<string, unknown>>((from, to) => db.from("lists").select("id,name,sort_order").eq("user_id", userId).is("archived_at", null).order("sort_order").order("id").range(from, to)),
+    readAllPages<Record<string, unknown>>((from, to) => db.from("tasks").select("id,list_id,title,due_date,due_time,sort_order,is_completed").eq("user_id", userId).eq("is_completed", false).order("id").range(from, to)),
+    readAllPages<Record<string, unknown>>((from, to) => db.from("subtasks").select("id,task_id,title,due_date,sort_order,is_completed").eq("user_id", userId).eq("is_completed", false).order("id").range(from, to)),
   ]);
   const firstError = listsResult.error ?? tasksResult.error ?? subtasksResult.error;
   if (firstError) throw firstError;
