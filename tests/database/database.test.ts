@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { StickyRepository } from "../../packages/data/src/repository";
+import type { ActorContext } from "@sticky/contracts";
 import { createApiApp } from "../../apps/api/src/app";
 import { createTestOwner, testEnvironment } from "./fixtures";
 
@@ -32,6 +34,42 @@ describe("authenticated Sticky persistence", () => {
     await command({ kind: "rpc", name: "set_task_completed", args: { p_task_id: id, p_completed: false } });
     row = await owner.client.from("tasks").select("title,is_completed").eq("id", id).single();
     expect(row.data?.is_completed).toBe(false);
+  });
+
+  it("rejects one of two concurrent moves using the same task version", async () => {
+    const { admin } = testEnvironment();
+    const repository = new StickyRepository(admin);
+    const taskId = randomUUID();
+    const targets = [randomUUID(), randomUUID()];
+    expect((await admin.from("lists").insert(targets.map((id, index) => ({ id, user_id: owner.userId, name: `Move target ${index}` })))).error).toBeNull();
+    const inserted = await admin.from("tasks").insert({ id: taskId, user_id: owner.userId, list_id: owner.listId, title: "Concurrent move" }).select("version").single();
+    expect(inserted.error).toBeNull();
+    const actor = { userId: owner.userId, actorType: "human", actorId: owner.userId, credentialId: null,
+      scopes: new Set(["tasks:read", "tasks:write"]), requestId: randomUUID(), idempotencyKey: null,
+      providerUserId: null, accessToken: owner.session.access_token } as ActorContext;
+    // Hold both initial reads until they see the same version. Real writes and
+    // locks still run in Postgres, so this deterministically tests the race.
+    const original = repository.getTask.bind(repository);
+    let reads = 0;
+    let release!: () => void;
+    const barrier = new Promise<void>(resolve => { release = resolve; });
+    vi.spyOn(repository, "getTask").mockImplementation(async (...args) => {
+      const task = await original(...args);
+      if (++reads <= 2) { if (reads === 2) release(); await barrier; }
+      return task;
+    });
+    const results = await Promise.allSettled(targets.map(id => repository.moveTask(actor, taskId, id, inserted.data!.version)));
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.find(result => result.status === "rejected"), JSON.stringify(results)).toMatchObject({ reason: { code: "conflict", status: 409 } });
+    const saved = await admin.from("tasks").select("list_id,version").eq("id", taskId).single();
+    const winner = results.findIndex(result => result.status === "fulfilled");
+    expect(saved.data).toEqual({ list_id: targets[winner], version: inserted.data!.version + 1 });
+    const args = { p_task_id: taskId, p_target_list_id: owner.listId, p_expected_version: saved.data!.version, p_request_user_id: owner.userId };
+    expect((await owner.client.rpc("move_task_versioned", args)).error).not.toBeNull();
+    expect((await testEnvironment().anonymous.rpc("move_task_versioned", args)).error).not.toBeNull();
+    expect((await admin.rpc("move_task_versioned", { ...args, p_request_user_id: other.userId })).error?.code).toBe("42501");
+    expect((await admin.rpc("move_task_versioned", { ...args, p_expected_version: null })).error?.code).toBe("PT409");
+    expect((await admin.from("tasks").select("list_id,version").eq("id", taskId).single()).data).toEqual(saved.data);
   });
 
   it("denies anonymous reads, cross-owner reads, and direct browser writes", async () => {

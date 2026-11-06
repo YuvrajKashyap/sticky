@@ -262,11 +262,13 @@ export class StickyRepository {
     const current = await this.getTask(actor, id);
     assertVersion(version, current.version, "Task");
     await this.getList(actor, targetListId);
-    const { error } = await this.db.rpc("move_task", {
+    const { error } = await this.db.rpc("move_task_versioned", {
       p_task_id: id,
       p_target_list_id: targetListId,
+      p_expected_version: version,
       p_request_user_id: actor.userId,
     });
+    if (error?.code === "PT409") throw conflict("Task changed somewhere else. Refresh and try again.");
     throwQuery(error, "Sticky could not move that task.");
     const task = await this.getTask(actor, id);
     await this.writeActivity(activity(actor, "task.moved", id, targetListId, { fromListId: current.listId }));
