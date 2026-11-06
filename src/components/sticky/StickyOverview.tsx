@@ -10,7 +10,7 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { addDays, format } from "date-fns";
 import { relativeDueDateLabel } from "@/lib/sticky/due-date-label";
 import type {
@@ -79,6 +79,10 @@ const DECK_EASE = [0.16, 1, 0.3, 1] as const;
 /** How far (px) the horizon proximity flashlight reaches from the cursor. */
 const HORIZON_GLOW_REACH = 150;
 
+const subscribeHydration = () => () => {};
+const clientHydrated = () => true;
+const serverHydrated = () => false;
+
 function polarPoint(radius: number, angleDegrees: number): [number, number] {
   const radians = ((angleDegrees - 90) * Math.PI) / 180;
   return [
@@ -144,6 +148,9 @@ function trackPointerGlow(event: React.PointerEvent<HTMLElement>) {
 
 /** Live wall clock for the deck header — hours, minutes, pulsing seconds. */
 function DeckClock() {
+  // A live clock cannot share an exact second or timezone with server rendering.
+  // Reserve its space until hydration, then show and update the local clock.
+  const hydrated = useSyncExternalStore(subscribeHydration, clientHydrated, serverHydrated);
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -154,13 +161,13 @@ function DeckClock() {
   return (
     <div className="deck-clock" aria-hidden="true">
       <span className="deck-clock-time">
-        {format(now, "HH")}
+        {hydrated ? format(now, "HH") : "--"}
         <i className="deck-clock-colon">:</i>
-        {format(now, "mm")}
+        {hydrated ? format(now, "mm") : "--"}
         <i className="deck-clock-colon">:</i>
-        {format(now, "ss")}
+        {hydrated ? format(now, "ss") : "--"}
       </span>
-      <span className="deck-clock-date">{format(now, "EEE dd MMM yyyy").toUpperCase()}</span>
+      <span className="deck-clock-date">{hydrated ? format(now, "EEE dd MMM yyyy").toUpperCase() : "\u00a0"}</span>
     </div>
   );
 }
@@ -177,7 +184,10 @@ export function StickyOverview({
   onOpenCalendar,
   instant = false,
 }: StickyOverviewProps) {
-  const reduceMotion = useReducedMotion();
+  const motionPreference = useReducedMotion();
+  const hydrated = useSyncExternalStore(subscribeHydration, clientHydrated, serverHydrated);
+  // Match the server's visible initial markup before reading browser preferences.
+  const reduceMotion = !hydrated || Boolean(motionPreference);
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const reactorRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
