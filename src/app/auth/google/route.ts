@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { userFacingStickyMessage } from "@/lib/sticky/messages";
-import { getAppBaseUrl, getAuthCallbackUrl } from "@/lib/supabase/redirect";
+import { getAppBaseUrl, getAuthCallbackUrl, getAuthReturnPath } from "@/lib/supabase/redirect";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function redirectWithAuthError(baseUrl: string, message: string) {
@@ -11,7 +11,7 @@ function redirectWithAuthError(baseUrl: string, message: string) {
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
-  const baseUrl = getAppBaseUrl(requestUrl.origin);
+  const baseUrl = new URL(getAuthReturnPath(requestUrl.searchParams.get("next")), getAppBaseUrl(requestUrl.origin)).toString();
   const supabase = await createSupabaseServerClient();
 
   if (!supabase) {
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: getAuthCallbackUrl(requestUrl.origin),
+      redirectTo: getAuthCallbackUrl(requestUrl.origin, requestUrl.searchParams.get("next")),
       skipBrowserRedirect: true,
     },
   });

@@ -31,6 +31,15 @@ export function getAppBaseUrl(currentOrigin?: string | null) {
   );
 }
 
-export function getAuthCallbackUrl(currentOrigin?: string | null) {
-  return `${getAppBaseUrl(currentOrigin)}/auth/callback`;
+export function getAuthReturnPath(value?: string | null) {
+  if (!value || !/^\/connect\/chatgpt(?:\?|$)/.test(value) || /[\\\r\n]/.test(value)) return "/";
+  const url = new URL(value, "https://sticky.invalid");
+  return url.pathname === "/connect/chatgpt" ? `${url.pathname}${url.search}` : "/";
+}
+
+export function getAuthCallbackUrl(currentOrigin?: string | null, next?: string | null) {
+  const url = new URL(`${getAppBaseUrl(currentOrigin)}/auth/callback`);
+  const returnPath = getAuthReturnPath(next);
+  if (returnPath !== "/") url.searchParams.set("next", returnPath);
+  return url.toString();
 }

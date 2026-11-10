@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { userFacingStickyMessage } from "@/lib/sticky/messages";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getAppBaseUrl } from "@/lib/supabase/redirect";
+import { getAppBaseUrl, getAuthReturnPath } from "@/lib/supabase/redirect";
 
 function redirectWithAuthError(baseUrl: string, message: string) {
   const url = new URL(baseUrl);
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
   const code = requestUrl.searchParams.get("code");
   const tokenHash = requestUrl.searchParams.get("token_hash");
   const otpType = requestUrl.searchParams.get("type") as EmailOtpType | null;
-  const baseUrl = getAppBaseUrl(requestUrl.origin);
+  const baseUrl = new URL(getAuthReturnPath(requestUrl.searchParams.get("next")), getAppBaseUrl(requestUrl.origin)).toString();
   const providerError =
     requestUrl.searchParams.get("error_description") ??
     requestUrl.searchParams.get("error");
