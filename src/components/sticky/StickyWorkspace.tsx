@@ -1,5 +1,7 @@
 "use client";
 
+import { pointerPercent } from "@/lib/sticky/pointer-position";
+
 /* eslint-disable react-hooks/refs, react-hooks/set-state-in-effect */
 
 import {
@@ -1554,8 +1556,8 @@ export function StickyWorkspace({
       if (frame) return;
       frame = window.requestAnimationFrame(() => {
         frame = 0;
-        root.style.setProperty("--spot-x", `${x}px`);
-        root.style.setProperty("--spot-y", `${y}px`);
+        root.style.setProperty("--spot-x", pointerPercent(x, 0, window.innerWidth));
+        root.style.setProperty("--spot-y", pointerPercent(y, 0, window.innerHeight));
       });
     };
 
@@ -5358,8 +5360,8 @@ function StickyBoardColumn({
         const node = columnRef.current;
         if (!node) return;
         const rect = node.getBoundingClientRect();
-        node.style.setProperty("--mx", `${event.clientX - rect.left}px`);
-        node.style.setProperty("--my", `${event.clientY - rect.top}px`);
+        node.style.setProperty("--mx", pointerPercent(event.clientX, rect.left, rect.width));
+        node.style.setProperty("--my", pointerPercent(event.clientY, rect.top, rect.height));
       }}
     >
       <span className="column-paper-stack" aria-hidden="true" />
