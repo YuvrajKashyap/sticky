@@ -8,21 +8,35 @@ describe("OAuth transactional security", () => {
   let owner: Awaited<ReturnType<typeof createTestOwner>>;
   beforeAll(async () => { owner = await createTestOwner(); });
   afterAll(async () => { await owner?.cleanup(); });
-  async function exchange() {
+  async function exchange(clientId = "client") {
     const { admin } = testEnvironment();
     const id = randomUUID(), code = randomUUID();
     const insert = await admin.from("oauth_codes").insert({ code_hash: code, user_id: owner.userId,
-      client_id: "client", redirect_uri: "callback", resource: "resource", scopes: ["tasks:read"],
+      client_id: clientId, redirect_uri: "callback", resource: "resource", scopes: ["tasks:read"],
       challenge: "challenge", expires_at: new Date(Date.now() + 300000).toISOString() });
     expect(insert.error).toBeNull();
-    const args = { p_code_hash: code, p_client_id: "client", p_redirect_uri: "callback", p_resource: "resource",
+    const args = { p_code_hash: code, p_client_id: clientId, p_redirect_uri: "callback", p_resource: "resource",
       p_challenge: "challenge", p_id: id, p_access_hash: hashCredential("access"), p_refresh_hash: randomUUID() };
     expect((await admin.rpc("exchange_oauth_code", { ...args, p_challenge: "wrong" })).data).toBeNull();
+    expect((await admin.rpc("exchange_oauth_code", { ...args, p_redirect_uri: "unlisted" })).data).toBeNull();
+    expect((await admin.rpc("exchange_oauth_code", { ...args, p_client_id: "wrong-client" })).data).toBeNull();
     const results = await Promise.all([admin.rpc("exchange_oauth_code", args), admin.rpc("exchange_oauth_code", args)]);
     expect(results.every(result => !result.error)).toBe(true);
     expect(results.filter(result => result.data !== null)).toHaveLength(1);
     return args;
   }
+  it("isolates two OAuth clients when refreshing and revoking", async () => {
+    const { admin } = testEnvironment();
+    const chatgpt = await exchange("https://chatgpt.com/oauth/client.json");
+    const grok = await exchange("synthetic-grok-fixture");
+    const refresh = { p_refresh_hash: grok.p_refresh_hash, p_client_id: chatgpt.p_client_id, p_resource: "resource",
+      p_access_hash: "replacement", p_next_refresh_hash: randomUUID() };
+    expect((await admin.rpc("rotate_oauth_token", refresh)).data).toBeNull();
+    expect((await admin.rpc("revoke_oauth_token", { p_client_id: grok.p_client_id,
+      p_token_hash: grok.p_refresh_hash, p_token_prefix: "" })).error).toBeNull();
+    expect((await admin.from("api_credentials").select("revoked_at").eq("id", grok.p_id).single()).data?.revoked_at).not.toBeNull();
+    expect((await admin.from("api_credentials").select("revoked_at").eq("id", chatgpt.p_id).single()).data?.revoked_at).toBeNull();
+  });
   it("consumes a code once, rotates refresh tokens, and revokes the family on replay", async () => {
     const { admin } = testEnvironment(); const args = await exchange();
     const refresh = { p_refresh_hash: args.p_refresh_hash, p_client_id: "client", p_resource: "resource",

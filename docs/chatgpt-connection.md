@@ -1,5 +1,8 @@
 # Sticky in ChatGPT / dot
 
+For additional trusted clients and restricted dynamic registration, see
+[OAuth clients](oauth-clients.md). ChatGPT's existing entry remains unchanged.
+
 ## Status and scope
 
 This implements a private OAuth 2.1 connection to the existing `/api/mcp` server.

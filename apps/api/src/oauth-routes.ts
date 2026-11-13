@@ -2,11 +2,12 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { Hono } from "hono";
 import { z } from "zod";
 import { authenticateRequest, getRuntime, hashCredential, parseCredentialToken } from "./runtime";
-import { CHATGPT_CLIENT, oauthIssuer, oauthResource, pkceChallenge, validateAuthorization } from "./oauth";
+import { OAUTH_SCOPES, oauthIssuer, oauthResource, pkceChallenge, validateAuthorization } from "./oauth";
+import { trustedOAuthClient, trustedOAuthClients, logOAuthCandidate } from "./oauth-clients";
 
 const opaque = () => randomBytes(32).toString("base64url");
 const tokenSchema = z.object({
-  client_id: z.literal(CHATGPT_CLIENT), resource: z.literal(oauthResource()),
+  client_id: z.string().refine(id => Boolean(trustedOAuthClient(id))), resource: z.literal(oauthResource()),
   grant_type: z.enum(["authorization_code", "refresh_token"]),
   code: z.string().max(256).optional(), redirect_uri: z.string().max(512).optional(),
   code_verifier: z.string().regex(/^[A-Za-z0-9._~-]{43,128}$/).optional(),
@@ -21,12 +22,32 @@ export function createOAuthApp() {
     if (Number(c.req.header("content-length") ?? 0) > 16384) return c.json({ error: "invalid_request" }, 413);
     await next();
   });
-  app.onError(() => new Response(JSON.stringify({ error: "invalid_request", error_description: "The authorization request could not be completed. Start again from ChatGPT." }),
+  app.onError(() => new Response(JSON.stringify({ error: "invalid_request", error_description: "The authorization request could not be completed. Start again from your MCP client." }),
     { status: 400, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } }));
 
+  app.post("/register", async c => {
+    const text = await c.req.text();
+    if (text.length > 16384) return c.json({ error: "invalid_client_metadata" }, 400);
+    const candidate = JSON.parse(text);
+    if (candidate && typeof candidate === "object") logOAuthCandidate("register-attempt", candidate.client_name, candidate.redirect_uris);
+    const body = z.object({ redirect_uris: z.array(z.string().url()).min(1).max(10),
+      token_endpoint_auth_method: z.literal("none").default("none"),
+      grant_types: z.array(z.enum(["authorization_code", "refresh_token"])).optional(),
+      response_types: z.array(z.literal("code")).optional(), scope: z.string().optional(),
+      client_name: z.string().max(80).optional(),
+    }).parse(candidate);
+    const client = trustedOAuthClients().find(item => item.registration && body.redirect_uris.every(uri => item.redirectUris.includes(uri)));
+    if (!client) {
+      logOAuthCandidate("register", body.client_name, body.redirect_uris);
+      return c.json({ error: "invalid_redirect_uri", error_description: "This client's exact callback must first be approved by the Sticky owner." }, 400);
+    }
+    if (body.scope && body.scope.split(/\s+/).some(scope => !(OAUTH_SCOPES as readonly string[]).includes(scope))) return c.json({ error: "invalid_client_metadata" }, 400);
+    return c.json({ client_id: client.id, client_name: client.name, redirect_uris: client.redirectUris,
+      token_endpoint_auth_method: "none", grant_types: ["authorization_code", "refresh_token"], response_types: ["code"], scope: OAUTH_SCOPES.join(" ") }, 201);
+  });
   app.get("/request", async c => {
     const request = await validateAuthorization(new URL(c.req.url).searchParams);
-    return c.json({ data: { scopes: request.scopes, client: "ChatGPT / dot" } });
+    return c.json({ data: { scopes: request.scopes, client: request.clientName } });
   });
   app.post("/consent", async c => {
     // Browser authorization is an explicit same-origin, authenticated action.
@@ -61,6 +82,7 @@ export function createOAuthApp() {
     let exchanged;
     if (body.grant_type === "authorization_code") {
       if (!body.code || !body.code_verifier || !body.redirect_uri) return c.json({ error: "invalid_request" }, 400);
+      if (!trustedOAuthClient(body.client_id)?.redirectUris.includes(body.redirect_uri)) return c.json({ error: "invalid_grant" }, 400);
       exchanged = await db.rpc("exchange_oauth_code", { p_code_hash: hashCredential(body.code), p_client_id: body.client_id,
         p_redirect_uri: body.redirect_uri, p_resource: body.resource, p_challenge: pkceChallenge(body.code_verifier),
         p_id: id, p_access_hash: hashCredential(secret), p_refresh_hash: hashCredential(refresh) });
@@ -75,7 +97,7 @@ export function createOAuthApp() {
       refresh_token: refresh, scope: exchanged.data.scopes.join(" ") });
   });
   app.post("/revoke", async c => {
-    const body = z.object({ client_id: z.literal(CHATGPT_CLIENT), token: z.string().min(1).max(512),
+    const body = z.object({ client_id: z.string().refine(id => Boolean(trustedOAuthClient(id))), token: z.string().min(1).max(512),
       token_type_hint: z.string().optional() }).parse(await c.req.parseBody());
     const access = parseCredentialToken(body.token);
     const { error } = await getRuntime().db.rpc("revoke_oauth_token", { p_client_id: body.client_id,

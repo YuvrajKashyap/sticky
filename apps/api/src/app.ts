@@ -31,6 +31,7 @@ import { idempotent } from "./idempotency";
 import { agentRateLimit, authenticate, enforceOrigin, requestContext, type ApiVariables } from "./middleware";
 import { createMcpApp } from "./mcp";
 import { createOAuthApp } from "./oauth-routes";
+import { trustedOAuthClient } from "./oauth-clients";
 import { createCredentialToken, getRuntime } from "./runtime";
 import { dailyAgendaSettingsSchema, getDailyAgendaSettings, sendDailyAgendaTest, updateDailyAgendaSettings } from "./services/daily-agenda-settings";
 import {
@@ -613,7 +614,13 @@ const app = new Hono<Env>();
     const actor = c.get("actor"); requireScope(actor, "credentials:manage");
     const { data, error } = await getRuntime().db.from("api_credentials").select("id,name,provider,provider_user_id,token_prefix,scopes,last_used_at,expires_at,revoked_at,created_at").eq("user_id", actor.userId).order("created_at", { ascending: false });
     if (error) throw error;
-    return success(c, { credentials: data });
+    const ids = (data ?? []).filter(item => item.provider === "chatgpt_oauth").map(item => item.id);
+    const grants = ids.length ? await getRuntime().db.from("oauth_grants").select("id,client_id").in("id", ids) : { data: [], error: null };
+    if (grants.error) throw grants.error;
+    return success(c, { credentials: (data ?? []).map(item => {
+      const grant = grants.data?.find(grant => grant.id === item.id);
+      return grant ? { ...item, oauth_client_id: grant.client_id, name: trustedOAuthClient(grant.client_id)?.name ?? "OAuth client" } : item;
+    }) });
   });
   app.post("/api/v1/credentials", async (c) => {
     const actor = c.get("actor"); requireScope(actor, "credentials:manage");

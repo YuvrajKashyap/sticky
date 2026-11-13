@@ -13,6 +13,7 @@ const labels: Record<string, string> = {
 };
 
 export default function ConnectChatGPT() {
+  const [clientName, setClientName] = useState("MCP client");
   const [scopes, setScopes] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -43,8 +44,8 @@ export default function ConnectChatGPT() {
     window.addEventListener("focus", checkSession);
     void fetch(`/api/oauth/request?${query}`, { cache: "no-store" }).then(async response => {
       const body = await response.json();
-      if (!response.ok) throw new Error("Invalid or expired connection request. Start again from ChatGPT Plugins.");
-      if (!cancelled) setScopes(body.data.scopes);
+      if (!response.ok) throw new Error("Invalid, unapproved, or expired connection request. Start again from your MCP client. New clients require owner approval of their callback.");
+      if (!cancelled) { setScopes(body.data.scopes); setClientName(body.data.client); }
     }).catch(reason => { if (!cancelled) setError(reason.message); });
     const subscription = client?.auth.onAuthStateChange((_event, session) => setSignedIn(Boolean(session)));
     return () => { cancelled = true; window.removeEventListener("focus", checkSession); subscription?.data.subscription.unsubscribe(); };
@@ -67,10 +68,10 @@ export default function ConnectChatGPT() {
   return (
     <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: 24 }}>
       <section className="connections-panel" style={{ width: "min(100%, 560px)", padding: 28 }} aria-labelledby="connect-title">
-        <header className="connections-head"><div><span>Sticky · account connection</span><h1 id="connect-title">Connect ChatGPT / dot</h1></div></header>
-        <p>Allow ChatGPT to use your Sticky workspace with these permissions:</p>
+        <header className="connections-head"><div><span>Sticky · account connection</span><h1 id="connect-title">Connect {clientName}</h1></div></header>
+        <p>Allow {clientName} to use your Sticky workspace with these permissions:</p>
         {scopes ? <ul style={{ paddingLeft: 24, lineHeight: 1.7 }}>{scopes.map(scope => <li key={scope}>{labels[scope] ?? scope}</li>)}</ul> : !error ? <p role="status">Checking connection request…</p> : null}
-        <p>Access applies only to your account. Disconnect any time in Sticky → Connections → ChatGPT / dot. Reconnect after 30 days of inactivity or 90 days.</p>
+        <p>Access applies only to your account. Disconnect this client any time in Sticky → Connections. Reconnect after 30 days of inactivity or 90 days.</p>
         <p>Existing Poke and Codex connections remain separate. Account administration and credential management stay under your control.</p>
         {error ? <p role="alert">{error}</p> : null}
         {checkingSession ? <p role="status">Checking your Sticky sign-in…</p> : !signedIn && scopes ? <div>

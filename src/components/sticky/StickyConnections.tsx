@@ -46,7 +46,7 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const disconnectChatGPT = useMutation({
     mutationFn: (id: string) => client!.request(`/api/v1/credentials/${id}`, { method: "DELETE", body: "{}" }),
-    onSuccess: () => { setStatusMessage("ChatGPT access revoked, including refresh access."); void queryClient.invalidateQueries({ queryKey: ["credentials"] }); },
+    onSuccess: () => { setStatusMessage("This client's OAuth access revoked, including refresh access. Other connections are unchanged."); void queryClient.invalidateQueries({ queryKey: ["credentials"] }); },
     onError: (error) => setStatusMessage(error.message),
   });
   const [googleSyncStep, setGoogleSyncStep] = useState<0 | 1 | 2>(0);
@@ -232,7 +232,7 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
         {credentials.data?.credentials.filter(item => item.provider === "chatgpt_oauth" && !item.revoked_at).map(item => (
           <div className="connection-row" key={item.id}>
             <div className="connection-copy"><strong>{item.name}</strong><small>{item.last_used_at ? "OAuth access used" : "Authorized · awaiting first use"}</small></div>
-            <button className="connection-secondary" disabled={disconnectChatGPT.isPending} onClick={() => disconnectChatGPT.mutate(item.id)}>Disconnect ChatGPT</button>
+            <button className="connection-secondary" disabled={disconnectChatGPT.isPending} onClick={() => disconnectChatGPT.mutate(item.id)}>Disconnect {item.name === "ChatGPT / dot" ? "ChatGPT" : item.name}</button>
           </div>
         ))}
 
