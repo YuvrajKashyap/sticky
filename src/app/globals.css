@@ -10849,3 +10849,233 @@ button.cal-timegrid-day:hover {
   .boot-status > span:nth-child(3) { opacity: 1; }
   .boot-progress i { transform: scaleX(0.9); }
 }
+
+/* ----------------------------------------------------------------------
+   15b · Access gate — Signal field
+   A flat ink-navy field with a living canvas of fine lines, a twelve
+   column grid, a kinetic serif headline whose letters change weight, and
+   an inverting cursor. Overrides the earlier gate stage styling.
+   ---------------------------------------------------------------------- */
+
+.gate {
+  --gate-ink: #0b1124;
+  --gate-paper: #f3f5ff;
+  --gate-soft: #a9b4d6;
+  --gate-faint: #6c779b;
+  --gate-accent: #63e6ff;
+  --gate-warm: #ffb86b;
+  --gate-serif: "Alegreya Variable", "Iowan Old Style", Georgia, serif;
+  --gate-gutter: clamp(16px, 4vw, 72px);
+  --gate-gap: clamp(10px, 1.6vw, 28px);
+  padding-inline: var(--gate-gutter);
+  background:
+    radial-gradient(90% 70% at 12% 0%, #162048 0%, transparent 62%),
+    radial-gradient(70% 60% at 100% 100%, #1a1640 0%, transparent 60%),
+    var(--gate-ink);
+  color: var(--gate-paper);
+}
+
+.gate ::selection {
+  background: var(--gate-accent);
+  color: var(--gate-ink);
+}
+
+.gate-canvas {
+  z-index: 1;
+}
+
+.gate-lines {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  padding-inline: var(--gate-gutter);
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--gate-gap);
+  color: #fff;
+}
+
+.gate-lines i {
+  border-left: 1px solid currentColor;
+  opacity: 0.07;
+}
+
+.gate-lines i:last-child {
+  border-right: 1px solid currentColor;
+}
+
+.gate-stage {
+  z-index: 3;
+  width: min(1320px, 100%);
+  grid-template-columns: minmax(0, 1.25fr) minmax(380px, 460px);
+  gap: clamp(28px, 5vw, 88px);
+}
+
+.gate-brand {
+  gap: clamp(18px, 3vh, 34px);
+}
+
+.gate-toprow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 28px;
+}
+
+.gate-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--gate-soft);
+}
+
+.gate-eyebrow img {
+  border-radius: 6px;
+}
+
+.gate-eyebrow-dot {
+  background: var(--gate-accent);
+  box-shadow: 0 0 12px var(--gate-accent);
+}
+
+/* Kinetic headline */
+.gate-kinetic {
+  margin: 0 0 0 -0.035em;
+  font: 500 clamp(54px, 8.6vw, 168px) / 0.86 var(--gate-serif);
+  letter-spacing: -0.05em;
+  color: var(--gate-paper);
+  user-select: none;
+}
+
+.gate-line {
+  display: block;
+  overflow: hidden;
+  padding: 0.07em 0.05em 0.13em 0.035em;
+  margin: -0.07em -0.05em -0.13em -0.035em;
+}
+
+.gate-kinetic.is-in .gate-line {
+  overflow: visible;
+}
+
+.gate-line-in {
+  display: block;
+  white-space: nowrap;
+}
+
+.gate-line-em {
+  font-style: italic;
+  color: var(--gate-accent);
+}
+
+.gate-word {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.gate-ch {
+  display: inline-block;
+  font-weight: 500;
+}
+
+.gate-tagline {
+  font-size: 1.1rem;
+  color: var(--gate-soft);
+}
+
+.gate-decrypt {
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+  letter-spacing: 0.06em;
+  color: var(--gate-paper);
+  text-shadow: none;
+}
+
+.gate-readouts {
+  color: var(--gate-soft);
+  text-shadow: none;
+}
+
+.gate-readouts li::before {
+  background: linear-gradient(90deg, var(--gate-warm), transparent);
+  box-shadow: none;
+}
+
+.gate-readout-clock i {
+  background: var(--gate-warm);
+  box-shadow: 0 0 10px var(--gate-warm);
+}
+
+/* Inverting cursor */
+.gate-cursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 40;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  mix-blend-mode: difference;
+  opacity: 0;
+  transition: opacity 240ms var(--ease-out);
+}
+
+.gate-cursor.is-on {
+  opacity: 1;
+}
+
+.gate-cursor::before {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 320ms cubic-bezier(0.16, 1, 0.3, 1), border-radius 240ms var(--ease-out);
+}
+
+.gate-cursor[data-over="hot"]::before {
+  transform: scale(3.1);
+}
+
+.gate-cursor[data-over="text"]::before {
+  transform: scale(0.18, 1.5);
+  border-radius: 2px;
+}
+
+@media (max-width: 960px) {
+  .gate-stage {
+    grid-template-columns: 1fr;
+    width: min(560px, 100%);
+  }
+
+  .gate-brand {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .gate-kinetic {
+    font-size: clamp(48px, 15vw, 96px);
+  }
+
+  .gate-readouts {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 560px) {
+  .gate-lines {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .gate-lines i:nth-child(n + 5) {
+    display: none;
+  }
+}

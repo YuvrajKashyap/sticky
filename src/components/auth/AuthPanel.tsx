@@ -32,7 +32,6 @@ const GATE_EASE = [0.16, 1, 0.3, 1] as const;
 const TILT_SPRING = { stiffness: 240, damping: 20, mass: 0.55 };
 const MAGNET_SPRING = { stiffness: 260, damping: 22, mass: 0.5 };
 const MAGNET_REACH = 120;
-const WORDMARK = "STICKY";
 const DECRYPT_GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<>/\\|=+*#";
 const FINE_POINTER_QUERY = "(hover: hover) and (pointer: fine)";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -68,35 +67,167 @@ function greetingForHour(hour: number) {
   return "Late shift";
 }
 
-/** Oversized wordmark: letters flip up like tiles, then ripple on hover. */
-function Wordmark() {
+const HEADLINE: Array<{ text: string; em?: boolean }> = [
+  { text: "Your lists." },
+  { text: "Your time." },
+  { text: "In order.", em: true },
+];
+const HEADLINE_LABEL = HEADLINE.map((line) => line.text).join(" ");
+
+/**
+ * Kinetic headline: lines slide up from behind a mask, then every letter owns
+ * its weight. Near the pointer the glyphs swell; when the pointer rests they
+ * breathe in a slow wave that travels through the words.
+ */
+function KineticHeadline({ finePointer }: { finePointer: boolean }) {
   const reduceMotion = useReducedMotion();
+  const rootRef = useRef<HTMLParagraphElement>(null);
+  const [settled, setSettled] = useState(false);
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    const settle = window.setTimeout(() => setSettled(true), 1750);
+    return () => window.clearTimeout(settle);
+  }, [reduceMotion]);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root || reduceMotion || !settled) return;
+    const letters = Array.from(root.querySelectorAll<HTMLElement>(".gate-ch"));
+    const weight = letters.map(() => 500);
+    const shown = letters.map(() => 0);
+    let centres: Array<[number, number]> = [];
+    let pointerX = -9999;
+    let pointerY = -9999;
+    let moved = -1e9;
+    let frame = 0;
+    let raf = 0;
+
+    const onMove = (event: PointerEvent) => {
+      pointerX = event.clientX;
+      pointerY = event.clientY;
+      moved = performance.now();
+    };
+    if (finePointer) window.addEventListener("pointermove", onMove, { passive: true });
+
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      if (document.hidden) return;
+      if (frame % 24 === 0) {
+        centres = letters.map((letter) => {
+          const box = letter.getBoundingClientRect();
+          return [box.left + box.width / 2, box.top + box.height / 2];
+        });
+      }
+      frame += 1;
+      const clock = performance.now();
+      const near = clock - moved < 2200;
+      const reach = Math.max(180, window.innerWidth * 0.2);
+      for (let i = 0; i < letters.length; i += 1) {
+        let goal: number;
+        if (near) {
+          const distance = Math.hypot(pointerX - centres[i][0], pointerY - centres[i][1]);
+          const pull = Math.max(0, 1 - distance / reach);
+          goal = 420 + 480 * pull * pull;
+        } else {
+          goal = 540 + 190 * Math.sin(clock / 900 - i * 0.42);
+        }
+        weight[i] += (goal - weight[i]) * 0.1;
+        const value = Math.round(weight[i] / 5) * 5;
+        if (value !== shown[i]) {
+          shown[i] = value;
+          letters[i].style.fontWeight = String(value);
+        }
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("pointermove", onMove);
+    };
+  }, [finePointer, reduceMotion, settled]);
+
   return (
-    <p className="gate-wordmark" aria-label={WORDMARK}>
-      {WORDMARK.split("").map((letter, index) => (
-        <span
-          key={`${letter}-${index}`}
-          className="gate-letter"
-          style={{ "--wave-i": index } as React.CSSProperties}
-          aria-hidden="true"
-        >
-          <motion.span
-            className="gate-letter-face"
-            initial={reduceMotion ? false : { opacity: 0, rotateX: -95, y: 18 }}
-            animate={{ opacity: 1, rotateX: 0, y: 0 }}
-            transition={
-              reduceMotion
-                ? { duration: 0 }
-                : { type: "spring", stiffness: 290, damping: 19, mass: 0.7, delay: 0.35 + index * 0.075 }
-            }
-            style={{ transformOrigin: "50% 100%", transformPerspective: 700 }}
-          >
-            {letter}
-          </motion.span>
-        </span>
-      ))}
+    <p ref={rootRef} className={`gate-kinetic${settled || reduceMotion ? " is-in" : ""}`} aria-label={HEADLINE_LABEL}>
+      <span aria-hidden="true">
+        {HEADLINE.map((line, lineIndex) => (
+          <span key={line.text} className={`gate-line${line.em ? " gate-line-em" : ""}`}>
+            <motion.span
+              className="gate-line-in"
+              initial={reduceMotion ? false : { y: "108%" }}
+              animate={{ y: "0%" }}
+              transition={reduceMotion ? { duration: 0 } : { duration: 1.3, ease: GATE_EASE, delay: 0.15 + lineIndex * 0.11 }}
+            >
+              {line.text.split(" ").map((word, wordIndex) => (
+                <span key={wordIndex}>
+                  {wordIndex > 0 ? " " : null}
+                  <span className="gate-word">
+                    {[...word].map((letter, letterIndex) => (
+                      <span className="gate-ch" key={letterIndex}>
+                        {letter}
+                      </span>
+                    ))}
+                  </span>
+                </span>
+              ))}
+            </motion.span>
+          </span>
+        ))}
+      </span>
     </p>
   );
+}
+
+/** Inverting cursor: a difference-blended dot that trails the pointer. */
+function GateCursor({ enabled }: { enabled: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const cursor = ref.current;
+    if (!cursor || !enabled) return;
+    let targetX = 0;
+    let targetY = 0;
+    let x = 0;
+    let y = 0;
+    let raf = 0;
+    let seen = false;
+
+    const onMove = (event: PointerEvent) => {
+      if (event.pointerType !== "mouse") return;
+      targetX = event.clientX;
+      targetY = event.clientY;
+      if (!seen) {
+        seen = true;
+        x = targetX;
+        y = targetY;
+        cursor.classList.add("is-on");
+      }
+      const target = event.target instanceof Element ? event.target : null;
+      const next = target?.closest("input, textarea") ? "text" : target?.closest("a, button") ? "hot" : "";
+      if (cursor.dataset.over !== next) cursor.dataset.over = next;
+    };
+    const onLeave = () => {
+      seen = false;
+      cursor.classList.remove("is-on");
+    };
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      if (!seen) return;
+      x += (targetX - x) * 0.24;
+      y += (targetY - y) * 0.24;
+      cursor.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
+    };
+    window.addEventListener("pointermove", onMove, { passive: true });
+    document.documentElement.addEventListener("pointerleave", onLeave);
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("pointermove", onMove);
+      document.documentElement.removeEventListener("pointerleave", onLeave);
+    };
+  }, [enabled]);
+
+  return <div ref={ref} className="gate-cursor" aria-hidden="true" />;
 }
 
 /** Terminal decrypt: glyphs cycle, then lock to the real text left to right. */
@@ -345,27 +476,38 @@ export function AuthPanel({ configurationMissing, accessMessage }: AuthPanelProp
   return (
     <main className={`gate${finePointer ? " gate-fine" : ""}`}>
       <GateField />
-      <div className="gate-aurora" aria-hidden="true">
-        <i className="gate-aurora-a" />
-        <i className="gate-aurora-b" />
+      <div className="gate-lines" aria-hidden="true">
+        {Array.from({ length: 12 }, (_, index) => (
+          <i key={index} />
+        ))}
       </div>
-      <div className="gate-vignette" aria-hidden="true" />
+      <GateCursor enabled={finePointer && !reduceMotion} />
 
       <section className="gate-stage">
         <div className="gate-brand">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/sticky-192.png" width={80} height={80} alt="Sticky" style={{ borderRadius: 16 }} />
-          <motion.p
-            className="gate-eyebrow"
-            initial={reduceMotion ? false : { opacity: 0, clipPath: "inset(0 100% 0 0)" }}
-            animate={{ opacity: 1, clipPath: "inset(0 0% 0 0)" }}
-            transition={reduceMotion ? { duration: 0 } : { duration: 0.9, ease: GATE_EASE, delay: 0.15 }}
-          >
-            <span className="gate-eyebrow-dot" aria-hidden="true" />
-            Access gate // Private workspace
-          </motion.p>
+          <div className="gate-toprow">
+            <motion.p
+              className="gate-eyebrow"
+              initial={reduceMotion ? false : { opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={reduceMotion ? { duration: 0 } : { duration: 1, ease: GATE_EASE, delay: 0.7 }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/sticky-192.png" width={22} height={22} alt="" />
+              Sticky
+            </motion.p>
+            <motion.p
+              className="gate-eyebrow"
+              initial={reduceMotion ? false : { opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={reduceMotion ? { duration: 0 } : { duration: 1, ease: GATE_EASE, delay: 0.78 }}
+            >
+              <span className="gate-eyebrow-dot" aria-hidden="true" />
+              Private workspace
+            </motion.p>
+          </div>
 
-          <Wordmark />
+          <KineticHeadline finePointer={finePointer} />
 
           <p className="gate-tagline">
             <DecryptText text="Your lists are right where you left them." delay={0.9} />
