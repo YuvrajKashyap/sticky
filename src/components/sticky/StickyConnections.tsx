@@ -215,6 +215,8 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
     setStatusMessage("Poke integrations opened. Choose Sticky Focused Workspace, then click Refresh Connection to resync its tools.");
   };
 
+  const oauthClients = credentials.data?.credentials.filter(item => item.provider === "chatgpt_oauth" && !item.revoked_at) ?? [];
+
   return (
     <div className="dialog-backdrop connections-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section className="connections-panel" role="dialog" aria-modal="true" aria-label="Connections and notifications">
@@ -223,18 +225,30 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
           <button type="button" className="icon-chip" onClick={onClose} aria-label="Close connections"><X size={18} /></button>
         </header>
 
-        <div className="connection-row">
-          <span className="connection-icon codex"><Bot size={20} /></span>
-          <div className="connection-copy"><strong>ChatGPT / dot</strong><small>Connect through ChatGPT Plugins using OAuth. No key to copy.</small></div>
-          <a className="connection-secondary" href="https://chatgpt.com/plugins" target="_blank" rel="noopener noreferrer">Set up</a>
-        </div>
-        <div className="connection-inline-form"><code>https://sticky.yuvrajkashyap.com/api/mcp</code></div>
-        {credentials.data?.credentials.filter(item => item.provider === "chatgpt_oauth" && !item.revoked_at).map(item => (
-          <div className="connection-row" key={item.id}>
-            <div className="connection-copy"><strong>{item.name}</strong><small>{item.last_used_at ? "OAuth access used" : "Authorized · awaiting first use"}</small></div>
-            <button className="connection-secondary" disabled={disconnectChatGPT.isPending} onClick={() => disconnectChatGPT.mutate(item.id)}>Disconnect {item.name === "ChatGPT / dot" ? "ChatGPT" : item.name}</button>
+        <section className="connection-oauth" aria-label="ChatGPT and MCP clients">
+          <div className="connection-oauth-head">
+            <span className="connection-icon codex"><Bot size={20} /></span>
+            <div className="connection-copy"><strong>ChatGPT / dot</strong><small>Connect through ChatGPT Plugins using OAuth. No key to copy.</small></div>
+            <a className="connection-secondary" href="https://chatgpt.com/plugins" target="_blank" rel="noopener noreferrer"><ExternalLink size={14} />Set up</a>
           </div>
-        ))}
+          <div className="connection-token connection-oauth-url">
+            <code>https://sticky.yuvrajkashyap.com/api/mcp</code>
+            <button type="button" onClick={() => void navigator.clipboard.writeText("https://sticky.yuvrajkashyap.com/api/mcp").then(() => setStatusMessage("Server URL copied."))} aria-label="Copy MCP server URL"><Copy size={15} /></button>
+          </div>
+          {oauthClients.length ? (
+            <ul className="connection-oauth-clients">
+              {oauthClients.map(item => (
+                <li key={item.id}>
+                  <i className={item.last_used_at ? "live" : ""} aria-hidden="true" />
+                  <div className="connection-copy"><strong>{item.name}</strong><small>{item.last_used_at ? "OAuth access used" : "Authorized · awaiting first use"}</small></div>
+                  <button className="connection-secondary" disabled={disconnectChatGPT.isPending} onClick={() => disconnectChatGPT.mutate(item.id)}><Unplug size={14} />Disconnect {item.name === "ChatGPT / dot" ? "ChatGPT" : item.name}</button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="connection-oauth-empty">No clients connected yet. Add the server URL in your client, then approve it here.</p>
+          )}
+        </section>
 
         <div className="connection-row">
           <span className="connection-icon poke"><Send size={20} /></span>
