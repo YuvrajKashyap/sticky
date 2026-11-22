@@ -11511,3 +11511,306 @@ button.cal-timegrid-day:hover {
   font-weight: 600;
   color: var(--ink-faint);
 }
+
+/* ----------------------------------------------------------------------
+   14c · Connections panel — gate style
+   The settings panel adopts the sign-in surface: ink-navy glass, a serif
+   title, mono eyebrows, hairline-ruled rows, and the gradient primary.
+   Scoped to .connections-panel; structure and class names are unchanged.
+   ---------------------------------------------------------------------- */
+
+.connections-backdrop {
+  background: rgba(5, 8, 20, 0.66);
+  backdrop-filter: blur(12px);
+}
+
+.connections-panel {
+  --gate-ink: #0b1124;
+  --gate-paper: #f3f5ff;
+  --gate-soft: #a9b4d6;
+  --gate-faint: #6c779b;
+  --gate-accent: #63e6ff;
+  --gate-warm: #ffb86b;
+  --gate-serif: "Alegreya Variable", "Iowan Old Style", Georgia, serif;
+  --gate-rule: rgba(206, 216, 255, 0.12);
+  position: relative;
+  gap: 14px;
+  width: min(520px, 100%);
+  padding: 26px 26px 22px;
+  border-radius: 24px;
+  border: 1px solid rgba(206, 216, 255, 0.16);
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px calc(100% / 6)),
+    radial-gradient(90% 60% at 0% 0%, rgba(99, 230, 255, 0.1), transparent 60%),
+    linear-gradient(165deg, rgba(22, 30, 62, 0.94), rgba(10, 14, 32, 0.97));
+  backdrop-filter: blur(26px) saturate(140%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 40px 100px -40px rgba(0, 0, 0, 0.9);
+  color: var(--gate-paper);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(206, 216, 255, 0.2) transparent;
+  animation: consent-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.connections-panel ::selection {
+  background: var(--gate-accent);
+  color: var(--gate-ink);
+}
+
+.connections-panel .connections-head {
+  align-items: center;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--gate-rule);
+}
+
+.connections-panel .connections-head span {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 400;
+  letter-spacing: 0.24em;
+  color: var(--gate-faint);
+}
+
+.connections-panel .connections-head h3 {
+  margin-top: 4px;
+  font: 500 2.1rem / 1 var(--gate-serif);
+  letter-spacing: -0.03em;
+  color: var(--gate-paper);
+}
+
+.connections-panel .icon-chip {
+  border: 1px solid rgba(206, 216, 255, 0.2);
+  background: transparent;
+  color: var(--gate-soft);
+  box-shadow: none;
+}
+
+.connections-panel .icon-chip:hover {
+  border-color: var(--gate-accent);
+  color: var(--gate-paper);
+}
+
+/* Rows: flat, hairline-ruled, no card-in-card */
+.connections-panel .connection-row,
+.connections-panel .connection-oauth {
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(9, 13, 30, 0.55);
+  box-shadow: inset 0 0 0 1px var(--gate-rule);
+  transition: box-shadow 220ms var(--ease-out);
+}
+
+.connections-panel .connection-row:hover,
+.connections-panel .connection-oauth:hover {
+  box-shadow: inset 0 0 0 1px rgba(99, 230, 255, 0.3);
+}
+
+.connections-panel .daily-agenda-row {
+  box-shadow: inset 0 0 0 1px var(--gate-rule), inset 3px 0 0 var(--gate-warm);
+}
+
+.connections-panel .connection-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  border: 1px solid rgba(206, 216, 255, 0.18);
+  background: rgba(9, 13, 30, 0.7);
+  color: var(--gate-accent);
+}
+
+.connections-panel .connection-icon.poke {
+  color: #b9a8ff;
+}
+
+.connections-panel .connection-icon.agenda {
+  color: var(--gate-warm);
+}
+
+.connections-panel .connection-icon.push {
+  color: #8fb4ff;
+}
+
+.connections-panel .connection-copy strong {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--gate-paper);
+}
+
+.connections-panel .connection-copy small {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--gate-soft);
+}
+
+/* Buttons */
+.connections-panel .connection-primary,
+.connections-panel .connection-secondary,
+.connections-panel .connection-refresh-button {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 11px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.connections-panel .connection-primary {
+  color: var(--gate-ink);
+  background: linear-gradient(135deg, #a6f1ff, var(--gate-accent) 50%, #7c8cff);
+  box-shadow: 0 12px 28px -14px var(--gate-accent);
+}
+
+.connections-panel .connection-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+}
+
+.connections-panel .connection-secondary,
+.connections-panel .connection-refresh-button {
+  border: 1px solid rgba(206, 216, 255, 0.22);
+  background: transparent;
+  color: var(--gate-soft);
+  box-shadow: none;
+}
+
+.connections-panel .connection-secondary:hover:not(:disabled),
+.connections-panel .connection-refresh-button:hover {
+  border-color: var(--gate-accent);
+  background: rgba(99, 230, 255, 0.06);
+  color: var(--gate-paper);
+  transform: none;
+}
+
+.connections-panel .connection-primary:disabled,
+.connections-panel .connection-secondary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.connections-panel .connection-icon-button {
+  border: 1px solid rgba(206, 216, 255, 0.18);
+  background: transparent;
+  color: var(--gate-faint);
+}
+
+.connections-panel .connection-icon-button:hover {
+  border-color: rgba(255, 122, 144, 0.6);
+  background: rgba(255, 122, 144, 0.08);
+  color: #ffb3c0;
+}
+
+/* Setup blocks, keys, and URLs */
+.connections-panel .connection-setup {
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(99, 230, 255, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(99, 230, 255, 0.22);
+}
+
+.connections-panel .connection-setup p {
+  font-size: 0.84rem;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--gate-soft);
+}
+
+.connections-panel .connection-token {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(5, 8, 20, 0.7);
+  box-shadow: inset 0 0 0 1px rgba(206, 216, 255, 0.16);
+}
+
+.connections-panel .connection-token code {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--gate-paper);
+}
+
+.connections-panel .connection-token button {
+  color: var(--gate-soft);
+}
+
+.connections-panel .connection-token button:hover {
+  background: rgba(99, 230, 255, 0.12);
+  color: var(--gate-accent);
+}
+
+.connections-panel .connection-oauth-clients li {
+  background: rgba(5, 8, 20, 0.55);
+  box-shadow: inset 0 0 0 1px var(--gate-rule);
+}
+
+.connections-panel .connection-oauth-empty {
+  font-weight: 500;
+  color: var(--gate-faint);
+}
+
+/* Daily agenda controls */
+.connections-panel .daily-agenda-toggle {
+  border: 1px solid rgba(206, 216, 255, 0.2);
+  background: transparent;
+  color: var(--gate-soft);
+  box-shadow: none;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.connections-panel .daily-agenda-toggle input {
+  accent-color: var(--gate-accent);
+}
+
+.connections-panel .daily-agenda-fields label,
+.connections-panel .daily-agenda-fields span {
+  color: var(--gate-faint);
+}
+
+.connections-panel .daily-agenda-fields input,
+.connections-panel .daily-agenda-fields select {
+  border-radius: 11px;
+  border: 1px solid rgba(206, 216, 255, 0.18);
+  background: rgba(5, 8, 20, 0.7);
+  color: var(--gate-paper);
+  box-shadow: none;
+  color-scheme: dark;
+}
+
+.connections-panel .daily-agenda-fields input:focus,
+.connections-panel .daily-agenda-fields select:focus {
+  outline: none;
+  border-color: var(--gate-accent);
+  box-shadow: 0 0 0 3px rgba(99, 230, 255, 0.18);
+}
+
+.connections-panel .daily-agenda-warning {
+  border-radius: 12px;
+  background: rgba(255, 184, 107, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 184, 107, 0.3);
+  color: #ffd9ad;
+}
+
+.connections-panel .connection-status {
+  border-radius: 12px;
+  background: rgba(60, 232, 168, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(60, 232, 168, 0.28);
+  color: #9af0c8;
+}
+
+@media (max-width: 560px) {
+  .connections-panel {
+    padding: 20px 16px 16px;
+    border-radius: 20px;
+  }
+
+  .connections-panel .connections-head h3 {
+    font-size: 1.8rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .connections-panel {
+    animation: none;
+  }
+}
