@@ -52,7 +52,7 @@ export default function ConnectChatGPT() {
     window.addEventListener("focus", checkSession);
     void fetch(`/api/oauth/request?${query}`, { cache: "no-store" }).then(async response => {
       const body = await response.json();
-      if (!response.ok) throw new Error("Invalid, unapproved, or expired connection request. Start again from your MCP client. New clients require owner approval of their callback.");
+      if (!response.ok) throw new Error("Invalid, unapproved, or expired connection request. Start again from your MCP client.");
       if (!cancelled) { setScopes(body.data.scopes); setClientName(body.data.client); }
     }).catch(reason => { if (!cancelled) setError(reason.message); });
     const subscription = client?.auth.onAuthStateChange((_event, session) => setSignedIn(Boolean(session)));

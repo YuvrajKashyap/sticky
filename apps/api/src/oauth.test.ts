@@ -10,10 +10,11 @@ const parameters = () => new URLSearchParams({
 });
 describe("ChatGPT OAuth boundary", () => {
   afterEach(() => vi.unstubAllGlobals());
-  it("advertises PKCE, refresh, CIMD, and a canonical resource", () => {
+  it("advertises PKCE, refresh and registration for independent MCP clients", () => {
     expect(oauthMetadata().code_challenge_methods_supported).toEqual(["S256"]);
     expect(oauthMetadata().grant_types_supported).toContain("refresh_token");
-    expect(oauthMetadata().client_id_metadata_document_supported).toBe(true);
+    expect(oauthMetadata().client_id_metadata_document_supported).toBe(false);
+    expect(oauthMetadata().registration_endpoint).toContain("/api/oauth/register");
     expect(oauthResource()).toBe("https://sticky.yuvrajkashyap.com/api/mcp");
   });
   it("validates the published ChatGPT client and exact callback", async () => {

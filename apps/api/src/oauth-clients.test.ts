@@ -8,14 +8,14 @@ afterEach(() => vi.unstubAllEnvs());
 const register = (redirect_uris: string[]) => createOAuthApp().request("https://sticky.test/register", {
   method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ redirect_uris }),
 });
-it("registers only an exact approved callback and grants dot's six scopes", async () => {
+it("preserves configured identities and rejects mixing their callbacks with public registrations", async () => {
   vi.stubEnv("STICKY_OAUTH_CLIENTS", JSON.stringify([fixture]));
   const result = await register(fixture.redirectUris);
   expect(result.status).toBe(201);
   const body = await result.json();
   expect(body.client_id).toBe(fixture.id);
   expect(body.scope.split(" ")).toEqual(OAUTH_SCOPES);
-  for (const uri of ["https://evil.example/callback", "https://client.example/callback/", "https://client.example/callback?evil=1"]) {
+  for (const uri of ["http://nonlocal.example/callback", "https://user@client.example/path", "https://client.example/callback#fragment"]) {
     expect((await register([uri])).status).toBe(400);
   }
   expect((await register([...fixture.redirectUris, "https://evil.example/callback"])).status).toBe(400);
@@ -28,7 +28,7 @@ it("authorizes a configured client without fetching arbitrary metadata", async (
   params.set("redirect_uri", "https://client.example/not-approved");
   await expect(validateAuthorization(params)).rejects.toThrow();
 });
-it("fails closed before any additional clients are configured", async () => {
+it("registers a new public identity without configuration", async () => {
   vi.stubEnv("STICKY_OAUTH_CLIENTS", "[]");
-  expect((await register(fixture.redirectUris)).status).toBe(400);
+  expect((await register(fixture.redirectUris)).status).toBe(201);
 });

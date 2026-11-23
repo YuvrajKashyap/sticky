@@ -4,7 +4,7 @@ import { POKE_MANUAL_CAPABILITIES } from "./poke-capabilities";
 import { hashCredential, setRuntimeForTests } from "./runtime";
 import { pushOutboxEvent } from "./services/google";
 
-function setAgentCredentialRuntime(provider: "codex" | "littlebird" | "poke" = "littlebird") {
+function setAgentCredentialRuntime(provider: "codex" | "littlebird" | "poke" | "chatgpt_oauth" = "littlebird") {
   const credentialId = "4d1cc3fa-546d-4618-8c6f-2191f29e0fc9";
   const secret = "test-secret";
   const pokeUserId = "de01e3f2-ce70-4377-ab25-7c6a6e91e83a";
@@ -71,8 +71,8 @@ describe("Sticky MCP source isolation", () => {
     expect(response.headers.get("www-authenticate")).toContain("/.well-known/oauth-protected-resource");
   });
 
-  it("gives Codex separate Sticky and live Google tool sets", async () => {
-    const { credentialId, secret } = setAgentCredentialRuntime("codex");
+  it.each(["codex", "chatgpt_oauth"] as const)("gives %s the full Sticky and live Google tool sets", async (provider) => {
+    const { credentialId, secret } = setAgentCredentialRuntime(provider);
 
     const response = await createMcpApp().request("http://localhost/", {
       method: "POST",

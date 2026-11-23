@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { authenticateRequest, getRuntime, hashCredential, parseCredentialToken } from "./runtime";
 import { OAUTH_SCOPES, oauthIssuer, oauthResource, pkceChallenge, validateAuthorization } from "./oauth";
-import { trustedOAuthClient, trustedOAuthClients, logOAuthCandidate } from "./oauth-clients";
+import { trustedOAuthClient, trustedOAuthClients, publicOAuthClient, logOAuthCandidate } from "./oauth-clients";
 
 const opaque = () => randomBytes(32).toString("base64url");
 const tokenSchema = z.object({
@@ -29,17 +29,18 @@ export function createOAuthApp() {
     const text = await c.req.text();
     if (text.length > 16384) return c.json({ error: "invalid_client_metadata" }, 400);
     const candidate = JSON.parse(text);
-    if (candidate && typeof candidate === "object") logOAuthCandidate("register-attempt", candidate.client_name, candidate.redirect_uris);
     const body = z.object({ redirect_uris: z.array(z.string().url()).min(1).max(10),
       token_endpoint_auth_method: z.literal("none").default("none"),
       grant_types: z.array(z.enum(["authorization_code", "refresh_token"])).optional(),
       response_types: z.array(z.literal("code")).optional(), scope: z.string().optional(),
       client_name: z.string().max(80).optional(),
     }).parse(candidate);
-    const client = trustedOAuthClients().find(item => item.registration && body.redirect_uris.every(uri => item.redirectUris.includes(uri)));
+    const configured = trustedOAuthClients();
+    const client = configured.find(item => item.registration && body.redirect_uris.every(uri => item.redirectUris.includes(uri)))
+      ?? publicOAuthClient(body.redirect_uris, configured);
     if (!client) {
       logOAuthCandidate("register", body.client_name, body.redirect_uris);
-      return c.json({ error: "invalid_redirect_uri", error_description: "This client's exact callback must first be approved by the Sticky owner." }, 400);
+      return c.json({ error: "invalid_redirect_uri", error_description: "Use an exact HTTPS or HTTP loopback callback for this public client." }, 400);
     }
     if (body.scope && body.scope.split(/\s+/).some(scope => !(OAUTH_SCOPES as readonly string[]).includes(scope))) return c.json({ error: "invalid_client_metadata" }, 400);
     return c.json({ client_id: client.id, client_name: client.name, redirect_uris: client.redirectUris,

@@ -17,7 +17,7 @@ export function oauthMetadata() {
     response_types_supported: ["code"], grant_types_supported: ["authorization_code", "refresh_token"],
     token_endpoint_auth_methods_supported: ["none"], revocation_endpoint_auth_methods_supported: ["none"],
     code_challenge_methods_supported: ["S256"], scopes_supported: [...OAUTH_SCOPES],
-    client_id_metadata_document_supported: true, authorization_response_iss_parameter_supported: true,
+    client_id_metadata_document_supported: false, authorization_response_iss_parameter_supported: true,
   };
 }
 export function protectedResourceMetadata() {
@@ -26,10 +26,10 @@ export function protectedResourceMetadata() {
 }
 
 const requestSchema = z.object({
-  client_id: z.string().min(1).max(512), redirect_uri: z.string().url().max(2048),
+  client_id: z.string().min(1).max(4096), redirect_uri: z.string().url().max(2048),
   response_type: z.literal("code"), resource: z.string().refine(value => value === oauthResource()),
   code_challenge: z.string().regex(/^[A-Za-z0-9_-]{43}$/), code_challenge_method: z.literal("S256"),
-  state: z.string().min(1).max(2048), scope: z.string().min(1).max(512),
+  state: z.string().min(1).max(2048), scope: z.string().min(1).max(512).default(OAUTH_SCOPES.join(" ")),
 });
 
 export async function validateAuthorization(params: URLSearchParams) {
@@ -43,7 +43,7 @@ export async function validateAuthorization(params: URLSearchParams) {
   const scopes = [...new Set(request.scope.split(/\s+/))];
   if (scopes.some(scope => !(OAUTH_SCOPES as readonly string[]).includes(scope))) throw new Error("Unsupported permission requested.");
   // A fixed HTTPS client URL avoids SSRF and arbitrary client/callback registration.
-  if (request.client_id !== CHATGPT_CLIENT) return { ...request, scopes, clientName: trusted.name };
+  if (request.client_id !== CHATGPT_CLIENT) return { ...request, scopes, clientName: request.client_id.startsWith("mcp1.") ? new URL(request.redirect_uri).origin : trusted.name };
   const response = await fetch(CHATGPT_CLIENT, { redirect: "error", signal: AbortSignal.timeout(8000) });
   if (!response.ok) throw new Error("ChatGPT client metadata is unavailable. Try again.");
   const client = await response.json();
