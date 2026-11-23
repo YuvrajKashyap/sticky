@@ -31,7 +31,7 @@ import { idempotent } from "./idempotency";
 import { agentRateLimit, authenticate, enforceOrigin, requestContext, type ApiVariables } from "./middleware";
 import { createMcpApp } from "./mcp";
 import { createOAuthApp } from "./oauth-routes";
-import { trustedOAuthClient } from "./oauth-clients";
+import { oauthConnectionName } from "./oauth-clients";
 import { createCredentialToken, getRuntime } from "./runtime";
 import { dailyAgendaSettingsSchema, getDailyAgendaSettings, sendDailyAgendaTest, updateDailyAgendaSettings } from "./services/daily-agenda-settings";
 import {
@@ -610,6 +610,27 @@ const app = new Hono<Env>();
     });
   });
 
+  app.get("/api/v1/agent-activity", async c => {
+    const actor = c.get("actor");
+    if (actor.actorType !== "human") throw new StickyDomainError("forbidden", "Sign in to view connection activity.", 403);
+    c.header("Cache-Control", "private, no-store");
+    const credential = z.uuid().optional().parse(c.req.query("credential"));
+    let query = getRuntime().db.from("task_activity")
+      .select("id,created_at,action,credential_id,metadata,tasks(title),lists(name)")
+      .eq("user_id", actor.userId).eq("actor_type", "agent")
+      .eq("tasks.user_id", actor.userId).eq("lists.user_id", actor.userId)
+      .order("created_at", { ascending: false }).order("id", { ascending: false }).limit(30);
+    if (credential) query = query.eq("credential_id", credential);
+    const { data, error } = await query;
+    if (error) throw error;
+    return success(c, { events: (data ?? []).map(row => {
+      const task = row.tasks as unknown as { title: string } | null;
+      const list = row.lists as unknown as { name: string } | null;
+      return { id: row.id, at: row.created_at, action: row.action, credentialId: row.credential_id,
+        subject: row.metadata?.subjectTitle ?? task?.title ?? list?.name ?? null };
+    }) });
+  });
+
   app.get("/api/v1/credentials", async (c) => {
     const actor = c.get("actor"); requireScope(actor, "credentials:manage");
     const { data, error } = await getRuntime().db.from("api_credentials").select("id,name,provider,provider_user_id,token_prefix,scopes,last_used_at,expires_at,revoked_at,created_at").eq("user_id", actor.userId).order("created_at", { ascending: false });
@@ -619,7 +640,7 @@ const app = new Hono<Env>();
     if (grants.error) throw grants.error;
     return success(c, { credentials: (data ?? []).map(item => {
       const grant = grants.data?.find(grant => grant.id === item.id);
-      return grant ? { ...item, oauth_client_id: grant.client_id, name: trustedOAuthClient(grant.client_id)?.name ?? "OAuth client" } : item;
+      return grant ? { ...item, oauth_client_id: grant.client_id, name: oauthConnectionName(grant.client_id) } : item;
     }) });
   });
   app.post("/api/v1/credentials", async (c) => {

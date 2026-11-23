@@ -115,10 +115,10 @@ export class StickyRepository {
   }
 
   async deleteList(actor: ActorContext, id: string): Promise<void> {
-    await this.getList(actor, id);
+    const list = await this.getList(actor, id);
     const { error } = await this.db.from("lists").delete().eq("id", id).eq("user_id", actor.userId);
     throwQuery(error);
-    await this.writeActivity(activity(actor, "list.deleted", undefined, undefined, { deletedListId: id }));
+    await this.writeActivity(activity(actor, "list.deleted", undefined, undefined, { deletedListId: id, subjectTitle: list.name }));
   }
 
   async reorderLists(actor: ActorContext, listIds: string[]): Promise<ListDto[]> {
@@ -571,7 +571,7 @@ export class StickyRepository {
     const { error } = await this.db.from("tasks").delete().eq("id", id).eq("user_id", actor.userId);
     throwQuery(error);
     await this.writeActivity(activity(actor, "task.deleted", undefined, undefined, {
-      deletedTaskId: id,
+      deletedTaskId: id, subjectTitle: task.title,
       listId: task.listId,
     }));
   }
@@ -619,7 +619,7 @@ export class StickyRepository {
       sort_order: input.sortOrder ?? (await this.nextOrder("subtasks", actor.userId, taskId)),
     }).select("*").single();
     throwQuery(error);
-    await this.writeActivity(activity(actor, "subtask.created", taskId, undefined, { subtaskId: (data as DataRow).id }));
+    await this.writeActivity(activity(actor, "subtask.created", taskId, undefined, { subtaskId: (data as DataRow).id, subjectTitle: input.title }));
     return mapSubtaskRow(data as DataRow);
   }
 
@@ -635,7 +635,7 @@ export class StickyRepository {
     throwQuery(error);
     if (!data) throw conflict("Subtask changed somewhere else. Refresh and try again.");
     const subtask = mapSubtaskRow(data as DataRow);
-    await this.writeActivity(activity(actor, "subtask.updated", subtask.taskId, undefined, { subtaskId: id }));
+    await this.writeActivity(activity(actor, "subtask.updated", subtask.taskId, undefined, { subtaskId: id, subjectTitle: subtask.title }));
     return subtask;
   }
 
@@ -649,7 +649,7 @@ export class StickyRepository {
     throwQuery(error);
     if (!data) throw conflict("Subtask changed somewhere else. Refresh and try again.");
     const subtask = mapSubtaskRow(data as DataRow);
-    await this.writeActivity(activity(actor, completed ? "subtask.completed" : "subtask.restored", subtask.taskId, undefined, { subtaskId: id }));
+    await this.writeActivity(activity(actor, completed ? "subtask.completed" : "subtask.restored", subtask.taskId, undefined, { subtaskId: id, subjectTitle: subtask.title }));
     return subtask;
   }
 
@@ -675,7 +675,7 @@ export class StickyRepository {
     const subtask = await this.getSubtask(actor, id);
     const { error } = await this.db.from("subtasks").delete().eq("id", id).eq("user_id", actor.userId);
     throwQuery(error);
-    await this.writeActivity(activity(actor, "subtask.deleted", subtask.taskId, undefined, { deletedSubtaskId: id }));
+    await this.writeActivity(activity(actor, "subtask.deleted", subtask.taskId, undefined, { deletedSubtaskId: id, subjectTitle: subtask.title }));
   }
 
   async createReminder(
@@ -864,7 +864,7 @@ export class StickyRepository {
     }).select("*").single();
     throwQuery(error);
     const calendar = mapCalendarRow(data as DataRow);
-    await this.writeActivity(activity(actor, "calendar.created", undefined, undefined, { calendarId: calendar.id }));
+    await this.writeActivity(activity(actor, "calendar.created", undefined, undefined, { calendarId: calendar.id, subjectTitle: calendar.name }));
     return calendar;
   }
 
@@ -929,7 +929,7 @@ export class StickyRepository {
     }).select("*").single();
     throwQuery(error);
     const event = mapCalendarEventRow(data as DataRow);
-    await this.writeActivity(activity(actor, "calendar_event.created", event.taskId ?? undefined, undefined, { calendarEventId: event.id, calendarId: event.calendarId }));
+    await this.writeActivity(activity(actor, "calendar_event.created", event.taskId ?? undefined, undefined, { calendarEventId: event.id, calendarId: event.calendarId, subjectTitle: event.title }));
     return event;
   }
 
@@ -970,7 +970,7 @@ export class StickyRepository {
     throwQuery(error);
     if (!data) throw conflict("Calendar event changed somewhere else. Refresh and try again.");
     const event = mapCalendarEventRow(data as DataRow);
-    await this.writeActivity(activity(actor, "calendar_event.updated", event.taskId ?? undefined, undefined, { calendarEventId: id, calendarId: event.calendarId }));
+    await this.writeActivity(activity(actor, "calendar_event.updated", event.taskId ?? undefined, undefined, { calendarEventId: id, calendarId: event.calendarId, subjectTitle: event.title }));
     return event;
   }
 
@@ -978,7 +978,7 @@ export class StickyRepository {
     const event = await this.getCalendarEvent(actor, id);
     const { error } = await this.db.from("calendar_events").delete().eq("id", id).eq("user_id", actor.userId);
     throwQuery(error);
-    await this.writeActivity(activity(actor, "calendar_event.deleted", event.taskId ?? undefined, undefined, { deletedCalendarEventId: id, calendarId: event.calendarId }));
+    await this.writeActivity(activity(actor, "calendar_event.deleted", event.taskId ?? undefined, undefined, { deletedCalendarEventId: id, calendarId: event.calendarId, subjectTitle: event.title }));
   }
 
   async timeBlockTask(actor: ActorContext, taskId: string, input: TimeBlockTaskInput): Promise<CalendarEventDto> {

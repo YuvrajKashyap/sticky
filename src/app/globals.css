@@ -11814,3 +11814,18 @@ button.cal-timegrid-day:hover {
     animation: none;
   }
 }
+
+.connections-panel .agent-activity {
+  padding: 0 14px;
+  color: var(--gate-paper);
+  border: 1px solid var(--gate-rule);
+  border-radius: 14px;
+}
+.agent-activity summary { padding: 13px 0; cursor: pointer; font-weight: 650; }
+.agent-activity-body { padding-bottom: 14px; font-size: .85rem; }
+.agent-activity-body label, .agent-activity-body li div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; }
+.agent-activity-body select { max-width: 100%; min-height: 36px; color-scheme: dark; }
+.agent-activity-body p, .agent-activity-body time { color: var(--gate-soft); }
+.agent-activity-body ol { list-style: none; padding: 0; margin: 0; max-height: min(40vh, 320px); overflow: auto; }
+.agent-activity-body li { padding: 9px 0; border-top: 1px solid var(--gate-rule); overflow-wrap: anywhere; }
+.agent-activity-body time { font-size: .75rem; }

@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Bird, Bot, CalendarSync, Check, Clock3, Copy, ExternalLink, KeyRound, RefreshCw, Send, Unplug, X } from "lucide-react";
 import { useMemo, useState } from "react";
+import { AgentActivity } from "./AgentActivity";
 import { createStickyPlatformClient } from "@/lib/sticky/api-client";
 
 type Credential = { id: string; name: string; provider: string; provider_user_id: string | null; token_prefix: string; last_used_at: string | null; revoked_at: string | null };
@@ -224,6 +225,8 @@ export function StickyConnections({ open, onClose }: { open: boolean; onClose: (
           <div><span>Settings</span><h3>Connections</h3></div>
           <button type="button" className="icon-chip" onClick={onClose} aria-label="Close connections"><X size={18} /></button>
         </header>
+
+        <AgentActivity client={client} credentials={credentials.data?.credentials ?? []} />
 
         <section className="connection-oauth" aria-label="ChatGPT and MCP clients">
           <div className="connection-oauth-head">

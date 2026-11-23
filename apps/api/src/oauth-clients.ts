@@ -66,3 +66,15 @@ export function publicOAuthClient(callbacks: unknown[], configured = trustedOAut
   if (id.length > 4096) return undefined;
   return { id, name: [...origins].sort().join(", "), redirectUris, registration: true };
 }
+
+// Cursor hosts Grok Bot's connector. Other clients may share this callback.
+export function oauthConnectionName(id: string) {
+  const client = trustedOAuthClient(id);
+  if (!client) return "OAuth client";
+  if (!id.startsWith("mcp1.")) return client.name;
+  const grokCallbacks = ["https://www.cursor.com/agents/mcp/oauth/callback", "http://localhost:8787/callback"];
+  if (client.redirectUris.length === grokCallbacks.length && grokCallbacks.every(uri => client.redirectUris.includes(uri))) {
+    return "Grok Bot / Cursor";
+  }
+  return [...new Set(client.redirectUris.map(uri => new URL(uri).host))].join(", ");
+}
